@@ -62,9 +62,12 @@ interface ChatProps {
 // Composer cap (~5 lines at 14.5px / 1.5 line-height + padding). Beyond this
 // the textarea grows scroll-internally instead of pushing the messages list.
 const MAX_COMPOSER_HEIGHT = 140;
-// How close to the bottom (in px) counts as "pinned". Anything within this
-// distance keeps auto-anchor on; scrolling further up disengages it.
-const PIN_THRESHOLD_PX = 40;
+// Forgiveness around the bottom — the user is treated as "at bottom" until
+// they're more than this many px away from it. Implemented via rootMargin on
+// the IntersectionObserver: positive bottom margin extends the root's
+// effective bottom edge, keeping the sentinel "intersecting" for a bit of
+// slop above the true bottom.
+const PIN_SLOP_PX = 80;
 
 export function Chat({ conversationId, onMessageSent, onBusyChange, onConversationLoaded }: ChatProps) {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
@@ -72,18 +75,20 @@ export function Chat({ conversationId, onMessageSent, onBusyChange, onConversati
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const messagesContentRef = useRef<HTMLDivElement | null>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // Anchor-to-bottom state. Ref (not state) — updated from a scroll listener
-  // dozens of times per gesture, no need to re-render on every change.
-  const pinnedRef = useRef(true);
+  // Whether the bottom sentinel is currently visible to the user. Updated by
+  // an IntersectionObserver. Ref because we read from non-React callbacks and
+  // don't need re-renders on every change.
+  const isAtBottomRef = useRef(true);
 
   // Load history on conversation switch.
   useEffect(() => {
     let cancelled = false;
     setEntries([]);
     // Re-engage auto-anchor on conversation switch so we land at the bottom.
-    pinnedRef.current = true;
+    isAtBottomRef.current = true;
     ConversationsService.getApiConversations1({ id: conversationId })
       .then(conv => {
         if (cancelled) return;
@@ -101,46 +106,39 @@ export function Chat({ conversationId, onMessageSent, onBusyChange, onConversati
     };
   }, [conversationId]);
 
-  // Track whether the user is pinned to the bottom. Disengages only on UPWARD
-  // scroll (user intent). Programmatic re-anchors below always go downward and
-  // can re-pin — never unpin — which avoids a race where a scroll event fires
-  // after the SSE stream has appended more text, making `distFromBottom` look
-  // larger than the threshold and silently turning the anchor off.
+  // Track whether the user is at the bottom via an IntersectionObserver on a
+  // sentinel placed at the very end of the message content. This is the
+  // canonical pattern for chat stick-to-bottom — no scroll-event race, no
+  // scrollHeight/scrollTop arithmetic, and the browser handles edge cases like
+  // sub-pixel zoom and content shrinking for us.
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    let lastScrollTop = el.scrollTop;
-    const onScroll = () => {
-      const ct = el.scrollTop;
-      const distFromBottom = el.scrollHeight - ct - el.clientHeight;
-      if (ct < lastScrollTop) {
-        // Scrolled up — disengage if past threshold.
-        pinnedRef.current = distFromBottom <= PIN_THRESHOLD_PX;
-      } else if (distFromBottom <= PIN_THRESHOLD_PX) {
-        // Scrolled down to within the threshold — re-engage.
-        pinnedRef.current = true;
-      }
-      lastScrollTop = ct;
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    const root = scrollRef.current;
+    const sentinel = bottomSentinelRef.current;
+    if (!root || !sentinel) return;
+    const io = new IntersectionObserver(
+      ([entry]) => { isAtBottomRef.current = entry.isIntersecting; },
+      { root, rootMargin: `0px 0px ${PIN_SLOP_PX}px 0px`, threshold: 0 },
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
   }, []);
 
-  // Anchor to the bottom whenever the content height grows (streaming text,
-  // new entries) OR the container shrinks (composer growing). Re-scroll only
-  // when pinned, so a user who's read scrolled-up doesn't get yanked.
+  // When content grows (new messages, streaming text) OR the container shrinks
+  // (composer expanding), re-anchor to the bottom — but only if the user
+  // hasn't scrolled away. Direct scrollTop assignment is more predictable than
+  // scrollIntoView (which can pick a different scrollable ancestor in some
+  // layout edge cases). The browser clamps `scrollTop` to scrollHeight - clientHeight.
   useEffect(() => {
-    const el = scrollRef.current;
+    const root = scrollRef.current;
     const content = messagesContentRef.current;
-    if (!el || !content) return;
+    if (!root || !content) return;
     const ro = new ResizeObserver(() => {
-      if (pinnedRef.current) {
-        // Instant, not smooth — smooth scroll lags behind streaming and never catches up.
-        el.scrollTop = el.scrollHeight;
+      if (isAtBottomRef.current) {
+        root.scrollTop = root.scrollHeight;
       }
     });
     ro.observe(content); // fires on content growth (streaming, new messages)
-    ro.observe(el);      // fires on container resize (composer growing)
+    ro.observe(root);    // fires on container resize (composer growing)
     return () => ro.disconnect();
   }, []);
 
@@ -208,6 +206,8 @@ export function Chat({ conversationId, onMessageSent, onBusyChange, onConversati
             <div className="empty">Say hi to get started.</div>
           )}
           {entries.map(renderEntry)}
+          {/* Stick-to-bottom sentinel — IntersectionObserver above watches it. */}
+          <div ref={bottomSentinelRef} className="messages-bottom" aria-hidden="true" />
         </div>
       </div>
       <form className="composer" onSubmit={onSubmit}>

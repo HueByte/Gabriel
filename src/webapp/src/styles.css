@@ -445,20 +445,24 @@ button { font: inherit; color: inherit; }
 
 /* Inner wrapper so a ResizeObserver has an element whose box tracks content
    growth (streaming text, new entries). Keeps the same vertical stacking the
-   .messages flex column previously provided directly. */
+   .messages flex column previously provided directly.
+   IMPORTANT: no `min-height: 100%` here. With min-height, the wrapper stays
+   pinned to the viewport size while children grow, and the ResizeObserver
+   doesn't fire during in-viewport streaming. Letting it size to content keeps
+   the observer reliable. */
 .messages-content {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-height: 100%;
 }
-/* Anchor the message stack to the bottom of the box when content is shorter
-   than the viewport — so new messages slide in just above the composer instead
-   of stacking down from the top of an empty chat area. Once content overflows
-   the auto-top-margin collapses to 0 and normal scroll takes over. The :not
-   exclusion keeps the empty state's own `margin: auto` centering working. */
-.messages-content > *:first-child:not(.empty) {
-  margin-top: auto;
+
+/* Zero-height anchor watched by the IntersectionObserver for stick-to-bottom.
+   It must be the last child of .messages-content; its visibility tells us
+   whether the user is currently looking at the bottom of the chat. */
+.messages-bottom {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 1px;
 }
 
 .message {
