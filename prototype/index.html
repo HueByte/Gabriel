@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>PulsePixel</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0b0b10;
+      color: #d4d4dc;
+      font: 14px/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+    canvas {
+      width: 320px;
+      height: 320px;
+      image-rendering: pixelated;
+      background: #000;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    select, button {
+      background: #1a1a22;
+      color: #d4d4dc;
+      border: 1px solid #2a2a35;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover, select:hover { background: #22222e; }
+    .label { opacity: 0.6; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <canvas id="stage" width="320" height="320"></canvas>
+  <div class="controls">
+    <span class="label">pattern</span>
+    <select id="pattern"></select>
+    <span class="label">palette</span>
+    <select id="palette"></select>
+    <button id="reroll">Reroll</button>
+  </div>
+
+  <script src="palettes.js"></script>
+  <script src="patterns.js"></script>
+  <script>
+    const SIZE = 16;
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    const CANVAS_PX = canvas.width;
+    const PIXEL_PX = CANVAS_PX / SIZE;
+
+    // Slow t increment so transitions feel ambient, not busy.
+    const SPEED = 0.0025;
+
+    let pattern, params, palette, ambient;
+    let t = 0;
+
+    function findPalette(name) {
+      return PALETTES.find(p => p.name === name) || PALETTES[0];
+    }
+
+    function setup({ patternName, paletteName, rerollParams = true } = {}) {
+      const picked = pickPattern(patternName);
+      pattern = picked;
+      if (rerollParams || !params) params = pattern.def.init(SIZE);
+      palette = paletteName ? findPalette(paletteName) : pickPalette();
+      // Lower ambient than Node default so highlights pop; noise pattern already lifts the floor.
+      ambient = 0.08;
+      patternSel.value = pattern.name;
+      paletteSel.value = palette.name;
+    }
+
+    function draw() {
+      const time = performance.now() / 1000;
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          let v = pattern.def.sample(t, x, y, params, time);
+          v = ambient + v * (1 - ambient);
+          if (v < 0) v = 0; else if (v > 1) v = 1;
+          const [r, g, b] = sampleGradient(palette.stops, v);
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.fillRect(x * PIXEL_PX, y * PIXEL_PX, PIXEL_PX, PIXEL_PX);
+        }
+      }
+
+      t += SPEED;
+      if (t >= 1) t -= 1;
+      requestAnimationFrame(draw);
+    }
+
+    // Populate dropdowns.
+    const patternSel = document.getElementById('pattern');
+    for (const name of Object.keys(PATTERNS)) {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = name;
+      patternSel.appendChild(opt);
+    }
+    const paletteSel = document.getElementById('palette');
+    for (const p of PALETTES) {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = p.name;
+      paletteSel.appendChild(opt);
+    }
+
+    patternSel.onchange = () => setup({ patternName: patternSel.value, paletteName: palette.name });
+    paletteSel.onchange = () => setup({ patternName: pattern.name, paletteName: paletteSel.value, rerollParams: false });
+    document.getElementById('reroll').onclick = () => setup();
+
+    // Default to the Grok-like look.
+    setup({ patternName: 'noise', paletteName: 'grok' });
+    requestAnimationFrame(draw);
+  </script>
+</body>
+</html>

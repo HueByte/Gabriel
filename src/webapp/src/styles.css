@@ -1,0 +1,919 @@
+:root {
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --bg-elev: #111111;
+  --surface: #161616;
+  --surface-2: #1a1a1a;
+  --border: #222222;
+  --border-soft: #1b1b1b;
+  --border-hover: #333333;
+  --text: #e8e8e8;
+  --text-dim: #888888;
+  --text-faint: #555555;
+  --accent: #d63b8f;
+  --accent-soft: rgba(214, 59, 143, 0.18);
+  --accent-dim: rgba(255, 255, 255, 0.08);
+  --active-bg: rgba(255, 255, 255, 0.06);
+  --sidebar-w: 260px;
+  --sidebar-w-collapsed: 48px;
+  --content-max: 760px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.55 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button { font: inherit; color: inherit; }
+
+/* ---------- App shell ---------- */
+
+.app {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ---------- Sidebar (EchoHub-style overlay panel) ---------- */
+
+/* Burger button — fixed top-left, only meaningful when the panel is closed. */
+.sidebar-burger {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  background: rgba(10, 10, 10, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  animation: fade-in 0.4s ease-out both;
+}
+.sidebar-burger:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: rgba(20, 20, 20, 0.85);
+}
+.sidebar-burger[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Backdrop — fades + blurs the rest of the app when the panel is open. */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.sidebar-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Panel — fixed, off-canvas by default, slides in on .open. */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 160;
+  width: var(--sidebar-w);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(14, 14, 14, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid var(--border);
+  padding: 1.25rem;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar.open {
+  transform: translateX(0);
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    width: 100%;
+    border-right: none;
+  }
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+.sidebar-brand {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  padding: 0.3rem 0.4rem;
+}
+
+.sidebar-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+.sidebar-close:hover {
+  color: var(--text);
+  background: var(--accent-dim);
+}
+
+.new-chat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 400;
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: -0.005em;
+  margin-bottom: 0.75rem;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.new-chat svg {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+.new-chat:hover {
+  color: var(--text);
+  background: var(--accent-dim);
+  border-color: var(--border-hover);
+}
+
+.sidebar-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0 0 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.sidebar-body::-webkit-scrollbar { width: 6px; }
+.sidebar-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.sidebar-error {
+  color: #ffb4b4;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.sidebar-empty {
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 8px 12px;
+  font-weight: 300;
+}
+
+.conv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.conv-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+}
+.conv-row:hover {
+  background: var(--accent-dim);
+}
+.conv-row.active {
+  background: var(--active-bg);
+}
+.conv-row.active .conv-item {
+  color: var(--text);
+}
+
+.conv-item {
+  flex: 1 1 auto;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  letter-spacing: -0.005em;
+  transition: color 0.15s;
+}
+.conv-row:hover .conv-item {
+  color: var(--text);
+}
+
+.conv-edit {
+  flex: 1 1 auto;
+  margin: 2px 4px;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  min-width: 0;
+}
+
+.conv-actions {
+  display: none;
+  gap: 2px;
+  padding-right: 0.35rem;
+  flex: 0 0 auto;
+}
+.conv-row:hover .conv-actions {
+  display: flex;
+}
+
+.conv-action {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.conv-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+/* ---------- Main column ---------- */
+
+.main-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  align-items: center;
+  padding: 24px 16px 0;
+  overflow: hidden;
+}
+
+.avatar-wrap {
+  position: relative;
+  width: 200px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  isolation: isolate;
+  animation: fade-in-up 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: 0.1s;
+}
+
+/* Thinking glow — blurred radial halo behind the avatar canvas.
+   Sits at z-index -1 so the canvas and reroll button render on top. */
+.avatar-wrap::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 280px;
+  height: 280px;
+  transform: translate(-50%, -50%) scale(0.85);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(214, 59, 143, 0.55) 0%,
+    rgba(214, 59, 143, 0.25) 35%,
+    rgba(214, 59, 143, 0) 70%
+  );
+  filter: blur(28px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity 500ms ease;
+}
+
+.avatar-wrap.thinking::before {
+  opacity: 1;
+  animation: avatar-glow-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes avatar-glow-pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-wrap.thinking::before {
+    animation: none;
+    opacity: 0.85;
+  }
+}
+
+/* Canvas size is locked via an inline `style` prop on the R3F Canvas component
+   in Avatar.tsx (external CSS can't beat R3F's inline width/height defaults).
+   This rule is just a safety net for `display: block` to avoid any inline-
+   whitespace surprises around the canvas. */
+.avatar-wrap canvas {
+  display: block;
+}
+
+.reroll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  transition: color 0.15s, border-color 0.15s, transform 0.3s ease;
+}
+.reroll:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: rotate(60deg);
+}
+.reroll:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Chat (borderless, merged with background) ---------- */
+
+.chat {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--content-max);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: transparent;
+  border: none;
+  animation: fade-in-up 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: 0.22s;
+}
+
+.messages {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 4px 16px;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  /* Smoother native scroll; avoid jank when the auto-anchor sets scrollTop. */
+  scroll-behavior: auto;
+  overscroll-behavior: contain;
+}
+.messages::-webkit-scrollbar { width: 8px; }
+.messages::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* Inner wrapper so a ResizeObserver has an element whose box tracks content
+   growth (streaming text, new entries). Keeps the same vertical stacking the
+   .messages flex column previously provided directly. */
+.messages-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+}
+/* Anchor the message stack to the bottom of the box when content is shorter
+   than the viewport — so new messages slide in just above the composer instead
+   of stacking down from the top of an empty chat area. Once content overflows
+   the auto-top-margin collapses to 0 and normal scroll takes over. The :not
+   exclusion keeps the empty state's own `margin: auto` centering working. */
+.messages-content > *:first-child:not(.empty) {
+  margin-top: auto;
+}
+
+.message {
+  max-width: 85%;
+  padding: 8px 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 14px;
+  max-width: 75%;
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  padding: 4px 0;
+  max-width: 100%;
+}
+
+.message.pending {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.empty {
+  color: var(--text-faint);
+  text-align: center;
+  margin: auto;
+  font-size: 13px;
+}
+
+/* ---------- Composer ---------- */
+
+.composer {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 18px;
+  background: transparent;
+  border-top: none;
+  animation: fade-in-up 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: 0.34s;
+}
+
+.composer-shell {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  width: 100%;
+  max-width: var(--content-max);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  padding: 8px 8px 8px 14px;
+  transition: border-color 120ms ease;
+}
+.composer-shell:focus-within {
+  border-color: var(--border);
+}
+
+.composer-shell textarea {
+  flex: 1 1 auto;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.5;
+  /* Mirrors MAX_COMPOSER_HEIGHT in Chat.tsx (~5 lines). Beyond this the
+     textarea scrolls internally instead of pushing the messages list. */
+  max-height: 140px;
+  min-height: 24px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.composer-shell textarea::-webkit-scrollbar { width: 6px; }
+.composer-shell textarea::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.composer-shell textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.composer-shell button {
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  flex: 0 0 auto;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+.composer-shell button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.composer-shell button:not(:disabled):hover {
+  background: var(--accent);
+  color: white;
+}
+
+/* ---------- Streaming caret + tool messages ---------- */
+
+.caret {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--text-dim);
+  animation: caret-blink 900ms steps(2, end) infinite;
+  transform: translateY(1px);
+}
+
+@keyframes caret-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.tool-call, .tool-result {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  padding: 4px 0;
+}
+
+.tool-call code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 2px 8px;
+  color: var(--text);
+}
+
+.tool-result pre {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 4px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 18px;
+  padding: 0 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex: 0 0 auto;
+}
+
+/* ---------- Galactic typewriter ---------- */
+
+.gtw {
+  display: inline;
+}
+
+.gtw-galactic {
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  font-feature-settings: "calt" off;
+  opacity: 0.95;
+}
+
+.gtw-caret {
+  display: inline-block;
+  margin-left: 1px;
+  color: var(--text-dim);
+  animation: gtw-blink 900ms steps(2, end) infinite;
+  transform: translateY(1px);
+}
+
+@keyframes gtw-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ---------- Sidebar footer (user + logout) ---------- */
+
+.sidebar-foot {
+  margin-top: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-user {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 0 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-logout {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.sidebar-logout svg {
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+.sidebar-logout:hover {
+  color: var(--text);
+  background: var(--accent-dim);
+  border-color: var(--border-hover, var(--border));
+}
+
+/* ---------- Auth screens ---------- */
+
+.auth-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.auth-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.auth-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.auth-field > span {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.auth-field input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.auth-field input:focus {
+  border-color: var(--accent);
+}
+
+.auth-submit {
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.auth-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.auth-error {
+  background: rgba(255, 80, 80, 0.08);
+  color: #ffb4b4;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.auth-switch {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.auth-link {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* ---------- Errors ---------- */
+
+.error {
+  width: 100%;
+  max-width: var(--content-max);
+  background: rgba(255, 80, 80, 0.08);
+  color: #ffb4b4;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin: 6px auto 0;
+  font-size: 13px;
+}
+
+/* ---------- Intro / page-load animations ---------- */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-burger,
+  .avatar-wrap,
+  .chat,
+  .composer {
+    animation: none !important;
+  }
+  .sidebar {
+    transition: none !important;
+  }
+  .sidebar-backdrop {
+    transition: none !important;
+  }
+}
+
+/* ---------- Send button icon sizing ---------- */
+
+.composer-shell button svg {
+  font-size: 16px;
+}
+
+/* ---------- react-toastify dark theme override ---------- */
+
+.Toastify__toast.gbr-toast {
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 13.5px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.Toastify__toast-body {
+  color: var(--text);
+}
+.Toastify__close-button {
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+.Toastify__close-button:hover {
+  color: var(--text);
+  opacity: 1;
+}
+.Toastify__toast--error {
+  border-color: rgba(255, 80, 80, 0.4);
+}
+.Toastify__toast--error .Toastify__toast-icon svg {
+  fill: #ff7878;
+}
+.Toastify__toast--success {
+  border-color: rgba(80, 200, 120, 0.35);
+}
+.Toastify__toast--success .Toastify__toast-icon svg {
+  fill: #6ee7a8;
+}
+.Toastify__toast--info .Toastify__toast-icon svg {
+  fill: var(--accent);
+}
+.Toastify__progress-bar--error {
+  background: linear-gradient(90deg, #ff7878, #ffb4b4);
+}
+.Toastify__progress-bar--success {
+  background: linear-gradient(90deg, #6ee7a8, #b6f5d2);
+}
+.Toastify__progress-bar--info {
+  background: linear-gradient(90deg, var(--accent), #f8af8e);
+}

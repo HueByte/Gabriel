@@ -1,0 +1,364 @@
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { HiOutlineArrowUp } from 'react-icons/hi2';
+import {
+  ConversationsService,
+  type ConversationResponse,
+  type MessageResponse,
+  type MessageToolCall,
+} from '../api/generated';
+import { toast } from 'react-toastify';
+import { streamChat } from '../api/streamChat';
+import { notifyError } from '../lib/notify';
+import { StreamingText } from './StreamingText';
+
+// Chat entries are heterogeneous — text bubbles (user/assistant), individual
+// tool calls, and tool results — so we model them as a discriminated union
+// instead of trying to cram everything into a single message shape.
+type ChatEntry =
+  | { kind: 'text'; id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean }
+  | { kind: 'toolCall'; id: string; toolCallId: string; name: string; argumentsJson: string }
+  | { kind: 'toolResult'; id: string; toolCallId: string; content: string };
+
+function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
+  const entries: ChatEntry[] = [];
+  for (const m of messages) {
+    if (m.role === 'user') {
+      if (m.content) entries.push({ kind: 'text', id: m.id, role: 'user', content: m.content });
+    } else if (m.role === 'assistant') {
+      if (m.content) entries.push({ kind: 'text', id: m.id, role: 'assistant', content: m.content });
+      if (m.toolCalls) {
+        for (const tc of m.toolCalls) {
+          entries.push(toolCallEntry(m.id, tc));
+        }
+      }
+    } else if (m.role === 'tool' && m.toolCallId && m.content != null) {
+      entries.push({ kind: 'toolResult', id: m.id, toolCallId: m.toolCallId, content: m.content });
+    }
+    // role === 'system' — not rendered.
+  }
+  return entries;
+}
+
+function toolCallEntry(messageId: string, tc: MessageToolCall): ChatEntry {
+  return {
+    kind: 'toolCall',
+    id: `${messageId}-call-${tc.id}`,
+    toolCallId: tc.id,
+    name: tc.name,
+    argumentsJson: tc.argumentsJson,
+  };
+}
+
+interface ChatProps {
+  conversationId: string;
+  onMessageSent?: () => void;
+  onBusyChange?: (busy: boolean) => void;
+  // Fired once per conversation switch as soon as the conversation metadata is
+  // loaded — lets the parent pick up things like the avatar seed without doing
+  // its own duplicate fetch.
+  onConversationLoaded?: (conv: ConversationResponse) => void;
+}
+
+// Composer cap (~5 lines at 14.5px / 1.5 line-height + padding). Beyond this
+// the textarea grows scroll-internally instead of pushing the messages list.
+const MAX_COMPOSER_HEIGHT = 140;
+// How close to the bottom (in px) counts as "pinned". Anything within this
+// distance keeps auto-anchor on; scrolling further up disengages it.
+const PIN_THRESHOLD_PX = 40;
+
+export function Chat({ conversationId, onMessageSent, onBusyChange, onConversationLoaded }: ChatProps) {
+  const [entries, setEntries] = useState<ChatEntry[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const messagesContentRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  // Anchor-to-bottom state. Ref (not state) — updated from a scroll listener
+  // dozens of times per gesture, no need to re-render on every change.
+  const pinnedRef = useRef(true);
+
+  // Load history on conversation switch.
+  useEffect(() => {
+    let cancelled = false;
+    setEntries([]);
+    // Re-engage auto-anchor on conversation switch so we land at the bottom.
+    pinnedRef.current = true;
+    ConversationsService.getApiConversations1({ id: conversationId })
+      .then(conv => {
+        if (cancelled) return;
+        setEntries(historyToEntries(conv.messages ?? []));
+        onConversationLoaded?.(conv);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) notifyError(e);
+      });
+    return () => {
+      cancelled = true;
+      // If a stream was in flight from the previous conversation, abort it.
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, [conversationId]);
+
+  // Track whether the user is pinned to the bottom. Disengages only on UPWARD
+  // scroll (user intent). Programmatic re-anchors below always go downward and
+  // can re-pin — never unpin — which avoids a race where a scroll event fires
+  // after the SSE stream has appended more text, making `distFromBottom` look
+  // larger than the threshold and silently turning the anchor off.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let lastScrollTop = el.scrollTop;
+    const onScroll = () => {
+      const ct = el.scrollTop;
+      const distFromBottom = el.scrollHeight - ct - el.clientHeight;
+      if (ct < lastScrollTop) {
+        // Scrolled up — disengage if past threshold.
+        pinnedRef.current = distFromBottom <= PIN_THRESHOLD_PX;
+      } else if (distFromBottom <= PIN_THRESHOLD_PX) {
+        // Scrolled down to within the threshold — re-engage.
+        pinnedRef.current = true;
+      }
+      lastScrollTop = ct;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Anchor to the bottom whenever the content height grows (streaming text,
+  // new entries) OR the container shrinks (composer growing). Re-scroll only
+  // when pinned, so a user who's read scrolled-up doesn't get yanked.
+  useEffect(() => {
+    const el = scrollRef.current;
+    const content = messagesContentRef.current;
+    if (!el || !content) return;
+    const ro = new ResizeObserver(() => {
+      if (pinnedRef.current) {
+        // Instant, not smooth — smooth scroll lags behind streaming and never catches up.
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+    ro.observe(content); // fires on content growth (streaming, new messages)
+    ro.observe(el);      // fires on container resize (composer growing)
+    return () => ro.disconnect();
+  }, []);
+
+  // Auto-grow the textarea up to MAX_COMPOSER_HEIGHT; beyond that, the
+  // textarea's own overflow-y handles scrolling.
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, MAX_COMPOSER_HEIGHT)}px`;
+  }, [input]);
+
+  // Surface thinking/streaming state to the parent so the avatar can react.
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || busy) return;
+
+    setInput('');
+    setBusy(true);
+
+    const tempUserId = `tmp-${crypto.randomUUID()}`;
+    const userEntry: ChatEntry = { kind: 'text', id: tempUserId, role: 'user', content: text };
+    setEntries(prev => [...prev, userEntry]);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      for await (const evt of streamChat(conversationId, text, { signal: controller.signal })) {
+        applyAgentEvent(evt, setEntries);
+        if (evt.type === 'done' || evt.type === 'error') break;
+      }
+      onMessageSent?.();
+    } catch (e: unknown) {
+      // Network failure / pre-flight 4xx — drop the streaming placeholder if any.
+      notifyError(e);
+      setEntries(prev => prev.filter(e2 => !(e2.kind === 'text' && e2.role === 'assistant' && e2.streaming)));
+    } finally {
+      setBusy(false);
+      abortRef.current = null;
+    }
+  };
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    void send();
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void send();
+    }
+  };
+
+  return (
+    <div className="chat">
+      <div className="messages" ref={scrollRef}>
+        <div className="messages-content" ref={messagesContentRef}>
+          {entries.length === 0 && !busy && (
+            <div className="empty">Say hi to get started.</div>
+          )}
+          {entries.map(renderEntry)}
+        </div>
+      </div>
+      <form className="composer" onSubmit={onSubmit}>
+        <div className="composer-shell">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Message Gabriel…"
+            disabled={busy}
+            rows={1}
+          />
+          <button type="submit" disabled={busy || input.trim().length === 0} aria-label="Send">
+            <HiOutlineArrowUp aria-hidden="true" />
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function renderEntry(e: ChatEntry) {
+  switch (e.kind) {
+    case 'text': {
+      // Assistant text gets the two-cursor typewriter (galactic lead + english
+      // translation trailing). User text and history render statically.
+      // `animate` is captured at mount in StreamingText, so it only matters at
+      // first render — switching from streaming → done doesn't abort the loop.
+      // `caret` stays true for assistant entries; StreamingText hides it once
+      // typing has caught up to text.
+      const isLiveAssistant = e.role === 'assistant' && e.streaming === true;
+      return (
+        <div key={e.id} className={`message ${e.role}${e.streaming ? ' streaming' : ''}`}>
+          {e.role === 'assistant' ? (
+            <StreamingText text={e.content} animate={isLiveAssistant} caret galactic />
+          ) : (
+            e.content
+          )}
+        </div>
+      );
+    }
+    case 'toolCall':
+      return (
+        <div key={e.id} className="tool-call">
+          <span className="tool-badge">tool</span>
+          <code>{e.name}({prettyArgs(e.argumentsJson)})</code>
+        </div>
+      );
+    case 'toolResult':
+      return (
+        <div key={e.id} className="tool-result">
+          <span className="tool-badge">→</span>
+          <pre>{e.content}</pre>
+        </div>
+      );
+  }
+}
+
+function prettyArgs(json: string): string {
+  if (!json || json === '{}') return '';
+  try {
+    return JSON.stringify(JSON.parse(json));
+  } catch {
+    return json;
+  }
+}
+
+// Mutates the entries array based on a single streamed agent event.
+function applyAgentEvent(
+  evt: import('../api/streamChat').AgentEvent,
+  setEntries: React.Dispatch<React.SetStateAction<ChatEntry[]>>,
+) {
+  switch (evt.type) {
+    case 'textDelta':
+      setEntries(prev => {
+        const last = prev[prev.length - 1];
+        if (last?.kind === 'text' && last.role === 'assistant' && last.streaming) {
+          // Append to the active streaming bubble.
+          const updated: ChatEntry = { ...last, content: last.content + evt.delta };
+          return [...prev.slice(0, -1), updated];
+        }
+        // Start a fresh streaming bubble.
+        return [
+          ...prev,
+          {
+            kind: 'text',
+            id: `streaming-${crypto.randomUUID()}`,
+            role: 'assistant',
+            content: evt.delta,
+            streaming: true,
+          },
+        ];
+      });
+      break;
+
+    case 'toolCall':
+      setEntries(prev => {
+        // Finalize the current streaming bubble (the iteration that asked for tools).
+        // Keep its id stable so the StreamingText component instance survives
+        // the streaming → !streaming transition and can finish typing.
+        const finalized = prev.map((e, i) => {
+          if (i === prev.length - 1 && e.kind === 'text' && e.role === 'assistant' && e.streaming) {
+            return { ...e, streaming: false };
+          }
+          return e;
+        });
+        return [...finalized, toolCallEntry(evt.messageId, {
+          id: evt.toolCallId,
+          name: evt.name,
+          argumentsJson: evt.argumentsJson,
+        })];
+      });
+      break;
+
+    case 'toolResult':
+      setEntries(prev => [
+        ...prev,
+        { kind: 'toolResult', id: evt.messageId, toolCallId: evt.toolCallId, content: evt.content },
+      ]);
+      break;
+
+    case 'assistantMessage':
+      setEntries(prev => {
+        const last = prev[prev.length - 1];
+        if (last?.kind === 'text' && last.role === 'assistant' && last.streaming) {
+          // Keep id stable so the in-flight StreamingText keeps typing.
+          return [
+            ...prev.slice(0, -1),
+            { ...last, content: evt.content, streaming: false },
+          ];
+        }
+        return [
+          ...prev,
+          { kind: 'text', id: evt.messageId, role: 'assistant', content: evt.content },
+        ];
+      });
+      break;
+
+    case 'error':
+      // In-stream error — surface via toast. Pre-flight errors are caught at
+      // the top of send() and toasted there.
+      toast.error(evt.message);
+      break;
+
+    case 'done':
+      // Loop finished — just make sure no entry is still marked streaming.
+      setEntries(prev => prev.map(e =>
+        e.kind === 'text' && e.streaming ? { ...e, streaming: false } : e,
+      ));
+      break;
+  }
+}
+

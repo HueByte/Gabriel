@@ -1,0 +1,60 @@
+MIT License (with No-AI-Training Addendum)
+
+Copyright (c) 2026 HueByte
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice, this permission notice, and the No-AI-Training
+Addendum below shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+===============================================================================
+No-AI-Training Addendum
+===============================================================================
+
+Notwithstanding the permissions granted above, the Software — including its
+source code, documentation, assets, and any verbatim or substantially similar
+derivative thereof — may not be used as training data, fine-tuning data,
+reinforcement-learning data, or evaluation data for any machine learning
+model or system, including but not limited to large language models,
+code-generation models, image- or video-generation models, embedding models,
+and any other form of generative or predictive AI.
+
+The following uses are explicitly permitted and are NOT considered training:
+
+  * Reading, displaying, and indexing the Software for human-facing purposes
+    such as search, navigation, documentation, and code review.
+  * Running the Software, modifying it, and shipping software built on top
+    of it, subject to the MIT terms above.
+  * Submitting the Software (or excerpts of it) to an AI assistant as
+    context for the purpose of helping a human work on this Software or a
+    direct fork of it.
+
+Anyone who incorporates this Software, in whole or in part, into a larger
+work agrees to preserve this addendum in the resulting LICENSE / NOTICE file.
+
+
+===============================================================================
+A note on terminology
+===============================================================================
+
+The MIT body above is a recognized OSI open-source license. The No-AI-Training
+Addendum adds a field-of-use restriction, which under the Open Source
+Definition makes the overall license "source-available" rather than strictly
+"open source". The intent is to keep the project freely usable, modifiable,
+and redistributable for humans and human-built software while opting out of
+inclusion in AI training corpora.

@@ -1,0 +1,57 @@
+# Normalize all text files to LF on commit, regardless of contributor OS.
+# Git will still check out with native line endings on Windows only if
+# core.autocrlf is set; this file enforces LF in the repository itself.
+
+* text=auto eol=lf
+
+# Explicit text files (defensive — covers cases where auto-detection misfires)
+*.cs            text eol=lf
+*.csproj        text eol=lf
+*.slnx          text eol=lf
+*.sln           text eol=lf
+*.props         text eol=lf
+*.targets       text eol=lf
+*.json          text eol=lf
+*.config        text eol=lf
+*.xml           text eol=lf
+*.editorconfig  text eol=lf
+
+*.ts            text eol=lf
+*.tsx           text eol=lf
+*.js            text eol=lf
+*.jsx           text eol=lf
+*.mjs           text eol=lf
+*.cjs           text eol=lf
+*.html          text eol=lf
+*.css           text eol=lf
+*.scss          text eol=lf
+
+*.md            text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.toml          text eol=lf
+*.sh            text eol=lf
+
+# Windows-only files: keep CRLF so they remain runnable on Windows.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Binary files (no EOL conversion, no diff noise)
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.webp          binary
+*.svg           text eol=lf
+*.pdf           binary
+*.zip           binary
+*.gz            binary
+*.7z            binary
+*.dll           binary
+*.exe           binary
+*.so            binary
+*.dylib         binary
+*.pdb           binary
+*.snk           binary
