@@ -125,17 +125,20 @@ export function Chat({ conversationId, onMessageSent, onBusyChange, onConversati
 
   // When content grows (new messages, streaming text) OR the container shrinks
   // (composer expanding), re-anchor to the bottom — but only if the user
-  // hasn't scrolled away. Direct scrollTop assignment is more predictable than
-  // scrollIntoView (which can pick a different scrollable ancestor in some
-  // layout edge cases). The browser clamps `scrollTop` to scrollHeight - clientHeight.
+  // hasn't scrolled away. Smooth scroll for small deltas (the common streaming
+  // case feels gentle), instant for large jumps (conversation switch, big
+  // catch-ups) where smooth would noticeably lag.
   useEffect(() => {
     const root = scrollRef.current;
     const content = messagesContentRef.current;
     if (!root || !content) return;
     const ro = new ResizeObserver(() => {
-      if (isAtBottomRef.current) {
-        root.scrollTop = root.scrollHeight;
-      }
+      if (!isAtBottomRef.current) return;
+      const delta = root.scrollHeight - root.scrollTop - root.clientHeight;
+      root.scrollTo({
+        top: root.scrollHeight,
+        behavior: delta < 600 ? 'smooth' : 'auto',
+      });
     });
     ro.observe(content); // fires on content growth (streaming, new messages)
     ro.observe(root);    // fires on container resize (composer growing)
@@ -162,6 +165,11 @@ export function Chat({ conversationId, onMessageSent, onBusyChange, onConversati
 
     setInput('');
     setBusy(true);
+
+    // Sending always re-engages stick-to-bottom, even if the user was scrolled
+    // up reading older content. The ResizeObserver below will scroll on the
+    // next layout (the new user entry + incoming streaming reply).
+    isAtBottomRef.current = true;
 
     const tempUserId = `tmp-${crypto.randomUUID()}`;
     const userEntry: ChatEntry = { kind: 'text', id: tempUserId, role: 'user', content: text };
