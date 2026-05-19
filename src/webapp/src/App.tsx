@@ -54,6 +54,11 @@ export function App() {
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [sequenceRefresh, setSequenceRefresh] = useState(0);
   const [thinking, setThinking] = useState(false);
+  // Server-driven palette pulled from the latest GabrielSequence response. Used
+  // as the source of truth for accent / gradient / thinking-pulse colors when
+  // present; falls back to the seed-derived pulse palette before the first
+  // sequence fetch resolves.
+  const [sequenceStops, setSequenceStops] = useState<readonly RGB[] | null>(null);
   const bootRef = useRef(false);
 
   // Single setter that also persists. Always use this — never setConversationIdState directly.
@@ -93,6 +98,25 @@ export function App() {
   const handleConversationLoaded = useCallback((conv: ConversationResponse) => {
     setAvatarSeed(conv.avatarSeed);
   }, []);
+
+  // GabrielSequenceView fires this once per successful sequence fetch. The
+  // sequence's palette is the canonical visual identity now that the avatar is
+  // server-driven — capture it so accent / gradient / thinking-pulse colors
+  // match what the user actually sees on the avatar.
+  const handleSequenceLoaded = useCallback((seq: GabrielSequence) => {
+    // The wire format is number[][] (each row 3 numbers). Map to RGB tuples so
+    // the rest of the pipeline keeps strong typing.
+    const stops: RGB[] = seq.palette.map(c => [c[0], c[1], c[2]] as const);
+    setSequenceStops(stops);
+  }, []);
+
+  // When the active conversation changes, clear the previous server palette so
+  // we fall back to seed-derived colors until the new sequence resolves.
+  // Without this the old conversation's palette would briefly bleed into the
+  // new one's UI on switch.
+  useEffect(() => {
+    setSequenceStops(null);
+  }, [conversationId]);
 
   const startNewConversation = useCallback(() => {
     setConversationId(null);
@@ -166,18 +190,22 @@ export function App() {
     />
   );
 
-  // Derive the avatar palette from the seed so the UI (galactic trail color,
-  // thinking glow, link accents) stays in lockstep with the avatar visuals.
-  // The avatar internally re-derives the same palette via the same seed/RNG
-  // order, so they always agree.
-  const palette = useMemo(() => paletteForSeed(avatarSeed), [avatarSeed]);
+  // Active palette stops, in priority order:
+  //   1) The server-driven Gabriel Sequence palette — canonical visual identity
+  //      once the avatar finishes its first fetch.
+  //   2) The seed-derived pulse palette — fallback during boot / between
+  //      conversation switch and the new sequence arriving.
+  // Both feed paletteVarsFromStops so .palette-scope's CSS vars (--palette-accent,
+  // --palette-accent-soft, --palette-gradient) are recomputed every time the
+  // active source changes. Galactic text, thinking-pulse glow, links, blockquote
+  // borders all read from those vars and re-tint automatically.
+  const activeStops = useMemo<readonly RGB[]>(
+    () => sequenceStops ?? paletteForSeed(avatarSeed).stops,
+    [sequenceStops, avatarSeed],
+  );
   const paletteVars = useMemo(
-    () => ({
-      ['--palette-accent' as string]: rgbToCss(paletteAccent(palette)),
-      ['--palette-accent-soft' as string]: rgbToCss(paletteAccent(palette), 0.22),
-      ['--palette-gradient' as string]: paletteGradientCss(palette),
-    }) as React.CSSProperties,
-    [palette],
+    () => paletteVarsFromStops(activeStops) as React.CSSProperties,
+    [activeStops],
   );
 
   return (
@@ -193,6 +221,7 @@ export function App() {
             <GabrielSequenceView
               conversationId={conversationId}
               refreshKey={sequenceRefresh}
+              onSequenceLoaded={handleSequenceLoaded}
             />
           ) : (
             // Booting / no active conversation yet — show the procedural avatar
@@ -215,6 +244,7 @@ export function App() {
           <Chat
             conversationId={conversationId}
             avatarSeed={avatarSeed}
+            paletteStops={sequenceStops}
             // onTurnComplete bumps BOTH sidebar (list re-sort by updatedAt)
             // AND the Gabriel Sequence (Live State just changed) in one stable
             // callback. Chat sees a single stable prop instead of two.

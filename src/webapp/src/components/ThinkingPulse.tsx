@@ -1,7 +1,7 @@
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import { PlaneGeometry, type Mesh, type MeshBasicMaterial } from 'three';
-import { pickPalette, sampleGradient, type Palette } from '../pulse/palettes';
+import { pickPalette, sampleGradient, type Palette, type RGB } from '../pulse/palettes';
 import { pickPattern, type Pattern } from '../pulse/patterns';
 import { mulberry32 } from '../pulse/rng';
 
@@ -22,18 +22,24 @@ interface PulseState {
   params: unknown;
 }
 
-function buildState(seed: number): PulseState {
+function buildState(seed: number, paletteStops?: readonly RGB[]): PulseState {
   // Mirror Avatar.tsx's RNG order (palette, then pattern, then params) so a
-  // shared seed yields the same palette+pattern as the big avatar.
+  // shared seed yields the same pattern as the old procedural avatar. The
+  // palette is replaced by paletteStops when provided so the indicator's
+  // colors track the server-driven Gabriel Sequence palette instead of the
+  // local pulse palette.
   const rng = mulberry32(seed);
-  const palette = pickPalette(rng);
+  const seedPalette = pickPalette(rng);
   const picked = pickPattern(rng);
   const params = picked.def.init(BARS, rng);
+  const palette: Palette = paletteStops && paletteStops.length > 0
+    ? { name: 'sequence', stops: [...paletteStops] }
+    : seedPalette;
   return { palette, pattern: picked.def, params };
 }
 
-function Bars({ seed }: { seed: number }) {
-  const state = useMemo(() => buildState(seed), [seed]);
+function Bars({ seed, paletteStops }: { seed: number; paletteStops?: readonly RGB[] }) {
+  const state = useMemo(() => buildState(seed, paletteStops), [seed, paletteStops]);
   const meshRefs = useRef<(Mesh | null)[]>([]);
 
   // Bottom-anchored geometry — translating the plane up by MAX_H/2 puts its
@@ -81,9 +87,11 @@ function Bars({ seed }: { seed: number }) {
 /**
  * Mini three.js indicator shown between "user submitted" and "first token". Renders
  * a 16-bar mini equalizer driven by the same pattern + palette as the conversation's
- * avatar — same identity, different visual language.
+ * avatar — same identity, different visual language. When `paletteStops` is
+ * supplied (e.g. lifted from the server's GabrielSequence response) those colors
+ * are used instead of the seed-derived pulse palette.
  */
-export function ThinkingPulse({ seed }: { seed: number }) {
+export function ThinkingPulse({ seed, paletteStops }: { seed: number; paletteStops?: readonly RGB[] }) {
   return (
     <Canvas
       style={{ width: 96, height: 18, flex: '0 0 auto' }}
@@ -91,7 +99,7 @@ export function ThinkingPulse({ seed }: { seed: number }) {
       camera={{ zoom: 96, position: [0, 0, 5], near: 0.1, far: 100 }}
       gl={{ antialias: false, alpha: true }}
     >
-      <Bars seed={seed} />
+      <Bars seed={seed} paletteStops={paletteStops} />
     </Canvas>
   );
 }

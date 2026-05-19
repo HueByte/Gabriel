@@ -4,13 +4,14 @@ The agent runtime. Everything LLM-, tool-, and personality-related lives here. `
 
 ## What's in this project
 
-| Folder           | Purpose                                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `Providers/`     | `IChatProvider` streaming abstraction + the transport-neutral DTOs the agent loop consumes.          |
-| `Tools/`         | `ITool` contract, `IToolRegistry` for DI-driven tool discovery, the starter `GetCurrentTimeTool`.    |
-| `Services/`      | `IAgentService` / `AgentService` (the ReAct loop), `AgentEvent` wire DTOs, `AgentOptions`, token-estimator.  |
-| `Personality/`   | Conversation-state updater, system prompt builder, response post-processor, `PersonalityOptions`.    |
-| `DependencyInjection.cs` | One-call `AddEngineServices(IConfiguration)` that wires every interface above.               |
+| Folder | Purpose |
+| --- | --- |
+| `Providers/` | `IChatProvider` streaming abstraction + the transport-neutral DTOs the agent loop consumes. |
+| `Tools/` | `ITool` contract, `IToolRegistry` for DI-driven tool discovery, the starter `GetCurrentTimeTool`. |
+| `Services/` | `IAgentService` / `AgentService` (the ReAct loop), `AgentEvent` wire DTOs, `AgentOptions`, token-estimator. |
+| `Personality/` | Conversation-state updater, system prompt builder, response post-processor, `PersonalityOptions`. |
+| `Sequence/` | Gabriel Sequence — 64-frame avatar engine: palette templates, pattern primitives, generator, service. |
+| `DependencyInjection.cs` | One-call `AddEngineServices(IConfiguration)` that wires every interface above. |
 
 ## Mental model in one diagram
 
@@ -42,15 +43,17 @@ Five things to know that aren't obvious from the diagram:
 
 ## Key types at a glance
 
-| Type                              | Lifetime  | Role                                                                                     |
-| --------------------------------- | --------- | ---------------------------------------------------------------------------------------- |
-| `IChatProvider`                   | singleton | Streams `ChatProviderEvent`s. Implemented by `GrokChatProvider` / `MockChatProvider` in Infrastructure.    |
-| `IToolRegistry`                   | scoped    | Discovers `ITool` implementations via `IEnumerable<ITool>` constructor injection.        |
-| `IConversationStateUpdater`       | singleton | Stateless heuristic — mood, length EMA, topic extraction, emoji/lowercase flags.         |
-| `ISystemPromptBuilder`            | singleton | Stateless. Assembles persona + dynamic guidance per turn.                                |
-| `IResponsePostProcessor`          | singleton | Stateless. AI-ism opener/closer strip + token-budget length cap.                         |
-| `ITokenEstimator`                 | singleton | Naive `⌈chars / 4⌉` approximation; behind an interface so a real BPE tokenizer can slot in later. |
-| `IAgentService`                   | scoped    | Owns the ReAct loop. Reads everything above, writes to `IConversationRepository`.        |
+| Type | Lifetime | Role |
+| --- | --- | --- |
+| `IChatProvider` | singleton | Streams `ChatProviderEvent`s. Implemented by `GrokChatProvider` / `MockChatProvider` in Infrastructure. |
+| `IToolRegistry` | scoped | Discovers `ITool` implementations via `IEnumerable<ITool>` constructor injection. |
+| `IConversationStateUpdater` | singleton | Stateless heuristic — mood, length EMA, topic extraction, emoji/lowercase flags. |
+| `ISystemPromptBuilder` | singleton | Stateless. Assembles persona + dynamic guidance per turn. |
+| `IResponsePostProcessor` | singleton | Stateless. AI-ism opener/closer strip + token-budget length cap. |
+| `ITokenEstimator` | singleton | Naive `⌈chars / 4⌉` approximation; behind an interface so a real BPE tokenizer can slot in later. |
+| `IGabrielSequenceGenerator` | singleton | Stateless. Picks palette + pattern from seed, renders 64 frames, applies Live State modulation. |
+| `IGabrielSequenceService` | scoped | Loads conversation user-scoped, hands `(AvatarSeed, ConversationState)` to the generator. |
+| `IAgentService` | scoped | Owns the ReAct loop. Reads everything above, writes to `IConversationRepository`. |
 
 ## Config sections consumed
 
@@ -79,6 +82,8 @@ Five things to know that aren't obvious from the diagram:
 ## Reading order
 
 1. [architecture.md](architecture.md) — where Engine sits in the onion, and the dependency graph between projects.
-2. [agent-loop.md](agent-loop.md) — the ReAct iteration, streaming events, and rolling compact.
-3. [personality-stack.md](personality-stack.md) — how the natural-DM persona is built, including the math behind length matching and token estimation.
-4. [variants-and-history.md](variants-and-history.md) — how regenerate / delete / variant-picker work at the data and history-filter level.
+2. [agent-loop.md](agent-loop.md) — the ReAct iteration, streaming events, rolling compact, and the regenerate path. Math for token estimation and compact triggering.
+3. [personality-stack.md](personality-stack.md) — the emotion-system pipeline: ConversationState → SystemPromptBuilder → ResponsePostProcessor. Mood detection rules, length-cap math, task-mode handling.
+4. [gabriel-sequence.md](gabriel-sequence.md) — the 64-frame avatar engine. Frame layers (DNA / Traits / Context / Live), palette templates, pattern primitives (plasma / waves / spiral / pulse / shimmer) with formulas, Live State modulation by mood, client renderer.
+5. [tools.md](tools.md) — `ITool` / `IToolRegistry`, the five shipped tools (`get_current_time`, `web_search`, `web_fetch`, `docs_list`, `docs_read`), SSRF defense for fetch, the "authoritative source" framing for docs.
+6. [variants-and-history.md](variants-and-history.md) — how regenerate / delete / variant-picker work at the data and history-filter level.

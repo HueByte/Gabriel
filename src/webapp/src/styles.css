@@ -1146,36 +1146,11 @@ button {
 /* ---------- Thinking pulse (post-submit, pre-stream) ---------- */
 
 /* Wrapper for the mini three.js equalizer. Aligns left like the assistant
-   bubbles so it reads as "Gabriel is preparing a reply". A soft palette glow
-   underneath ties it to the conversation's identity. */
+   bubbles so it reads as "Gabriel is preparing a reply". */
 .thinking-pulse {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
   padding: 4px 6px;
-  border-radius: 12px;
-  position: relative;
-  isolation: isolate;
   animation: fade-in 0.25s ease-out both;
-}
-.thinking-pulse::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(
-    ellipse at center,
-    color-mix(in srgb, var(--palette-accent, var(--accent)) 18%, transparent),
-    transparent 70%
-  );
-  filter: blur(8px);
-  z-index: -1;
-  opacity: 0.9;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .thinking-pulse::before {
-    opacity: 0.6;
-  }
 }

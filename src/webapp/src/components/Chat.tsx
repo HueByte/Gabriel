@@ -52,9 +52,14 @@ function toolCallEntry(messageId: string, tc: MessageToolCall): ChatEntry {
 
 interface ChatProps {
   conversationId: string;
-  /** Avatar seed — drives the thinking-pulse pattern/palette so it visually
-   *  matches the big avatar above. */
+  /** Avatar seed — drives the thinking-pulse pattern so motion stays
+   *  deterministic per conversation. Colors come from `paletteStops` when
+   *  available, otherwise fall back to the seed-derived palette. */
   avatarSeed: number;
+  /** Optional server-driven palette stops. When provided, the thinking pulse
+   *  recolors its bars from this instead of the seed-derived palette so the
+   *  indicator matches the active Gabriel Sequence's actual colors. */
+  paletteStops?: readonly import('../pulse/palettes').RGB[] | null;
   onMessageSent?: () => void;
   onBusyChange?: (busy: boolean) => void;
   // Fired once per conversation switch as soon as the conversation metadata is
@@ -73,7 +78,7 @@ const MAX_COMPOSER_HEIGHT = 140;
 // slop above the true bottom.
 const PIN_SLOP_PX = 80;
 
-export function Chat({ conversationId, avatarSeed, onMessageSent, onBusyChange, onConversationLoaded }: ChatProps) {
+export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, onBusyChange, onConversationLoaded }: ChatProps) {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -238,7 +243,7 @@ export function Chat({ conversationId, avatarSeed, onMessageSent, onBusyChange, 
               flowing yet. Once a delta lands the streaming bubble takes over. */}
           {busy && !hasActiveAssistantStream(entries) && (
             <div className="thinking-pulse" aria-label="Thinking">
-              <ThinkingPulse seed={avatarSeed} />
+              <ThinkingPulse seed={avatarSeed} paletteStops={paletteStops ?? undefined} />
             </div>
           )}
           {/* Stick-to-bottom sentinel — IntersectionObserver above watches it. */}
