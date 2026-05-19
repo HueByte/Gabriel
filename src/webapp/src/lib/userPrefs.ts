@@ -1,5 +1,5 @@
 // User-scoped client preferences persisted in localStorage. No server round-
-// trips today — kept here so any component can read/write the same value, and
+// trips today - kept here so any component can read/write the same value, and
 // a future migration to server-side preferences only has to swap this module.
 //
 // All values are tiny strings ('1' / '0'); using JSON.stringify everywhere is
@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 // `hideReactDetails` so users can keep e.g. tool calls visible while hiding
 // the model's chain-of-thought (or any other combination). One key per kind
 // keeps the storage shape trivial and the storage-event listener (below)
-// simple — toggling one doesn't perturb the others.
+// simple - toggling one doesn't perturb the others.
 const HIDE_THINKING_KEY = 'gabriel.prefs.hideThinking';
 const HIDE_TOOL_CALLS_KEY = 'gabriel.prefs.hideToolCalls';
 const HIDE_TOOL_RESULTS_KEY = 'gabriel.prefs.hideToolResults';
@@ -19,13 +19,13 @@ const HIDE_TOOL_RESULTS_KEY = 'gabriel.prefs.hideToolResults';
 // Legacy single-boolean key (pre-split). Migrated on first read of any of
 // the new keys: if the new key is absent but the legacy key was `1`, treat
 // the new key as `1` so we don't surprise users who had toggled the old
-// flag on. We DON'T write back the legacy value — once any of the new keys
+// flag on. We DON'T write back the legacy value - once any of the new keys
 // is touched, the legacy entry can be cleaned up via removeItem.
 const LEGACY_HIDE_REACT_DETAILS_KEY = 'gabriel.prefs.hideReactDetails';
 
 // Storage-event channel for cross-component sync within a single tab.
 // localStorage's native 'storage' event only fires across tabs, so we
-// dispatch a custom event whenever we write — same shape, single hook.
+// dispatch a custom event whenever we write - same shape, single hook.
 const PREFS_CHANGED_EVENT = 'gabriel:prefs-changed';
 
 function readBool(key: string, fallback: boolean): boolean {
@@ -75,7 +75,7 @@ export function useBoolPref(key: string, fallback: boolean): [boolean, (next: bo
 
   const set = (next: boolean) => {
     writeBool(key, next);
-    setValue(next);  // optimistic — event listener would set this too
+    setValue(next);  // optimistic - event listener would set this too
   };
 
   return [value, set];

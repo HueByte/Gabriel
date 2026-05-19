@@ -18,7 +18,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(m => m.ReasoningContent);                // nullable: model "thinking" stream, when the provider supplies one
         builder.Property(m => m.CreatedAt).IsRequired();
 
-        // Variant grouping — same value for all regen siblings; equals Id for singletons.
+        // Variant grouping - same value for all regen siblings; equals Id for singletons.
         builder.Property(m => m.VariantGroupId).IsRequired();
         builder.Property(m => m.IsActiveVariant).IsRequired();
 

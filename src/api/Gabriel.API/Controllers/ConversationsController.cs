@@ -98,7 +98,7 @@ public class ConversationsController : ControllerBase
         return Ok(conv.ToResponse(includeMessages: false, project: project));
     }
 
-    // Pin (or clear) the conversation's avatar skin — meaningful for standalone
+    // Pin (or clear) the conversation's avatar skin - meaningful for standalone
     // (Default-project) chats only. Real-project chats render the project's
     // skin, so a pinned conversation-skin is silently ignored at render time
     // (still persisted, so a future "promote chat to project" flow could
@@ -123,7 +123,7 @@ public class ConversationsController : ControllerBase
         return Ok(conv.ToResponse(includeMessages: false, project: project));
     }
 
-    // Gabriel Sequence — the 64-frame, 16×16 RGB representation of this
+    // Gabriel Sequence - the 64-frame, 16×16 RGB representation of this
     // conversation's personality. Generated server-side from AvatarSeed +
     // ConversationState; not persisted. Cheap to call as often as the client
     // wants a fresh Live State (e.g. once per turn).
@@ -134,7 +134,7 @@ public class ConversationsController : ControllerBase
         return Ok(sequence.ToResponse());
     }
 
-    // Context-window metrics — current tokens, provider window, the threshold
+    // Context-window metrics - current tokens, provider window, the threshold
     // at which the next turn would trigger MaybeCompactAsync, and whether any
     // compact has already rolled. Used by the chat UI to draw a usage strip
     // under the avatar; the numbers match the backend's compact decision.
@@ -238,7 +238,7 @@ public class ConversationsController : ControllerBase
         }
     }
 
-    // SSE endpoint — yields AgentEvent JSON frames (textDelta, toolCall, toolResult,
+    // SSE endpoint - yields AgentEvent JSON frames (textDelta, toolCall, toolResult,
     // assistantMessage, done, error). Each frame is a single `data: ...\n\n` line.
     // Pre-flight validation (empty input, missing conversation) throws before any
     // bytes are written so 4xx/ProblemDetails responses still work.
@@ -303,7 +303,7 @@ public class ConversationsController : ControllerBase
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // Client disconnected mid-stream — nothing to send back.
+            // Client disconnected mid-stream - nothing to send back.
         }
         catch (Exception ex)
         {

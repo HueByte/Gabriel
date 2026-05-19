@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace Gabriel.Engine.Personality;
 
-// Markdown stripping was intentionally removed — the persona allows discord-style
+// Markdown stripping was intentionally removed - the persona allows discord-style
 // inline emphasis (bold, italic, code, quotes) because users expect it. Only
 // AI-ism openers/closers and a length cap remain as safety nets; the persona
 // prompt is the primary defense.
@@ -20,7 +20,7 @@ public sealed class ResponsePostProcessor : IResponsePostProcessor
         _options = options.Value;
     }
 
-    // AI-ism opener patterns — checked at the very start of the response (case-insensitive).
+    // AI-ism opener patterns - checked at the very start of the response (case-insensitive).
     // We strip the matching prefix and trim, leaving the substantive content.
     private static readonly Regex[] OpenerRegexes =
     [
@@ -36,7 +36,7 @@ public sealed class ResponsePostProcessor : IResponsePostProcessor
         new(@"^here['']?s the thing[,.\s]*", RegexOptions.IgnoreCase | RegexOptions.Compiled),
     ];
 
-    // AI-ism closer patterns — checked at the very end. Match optionally trailing
+    // AI-ism closer patterns - checked at the very end. Match optionally trailing
     // punctuation so "Hope that helps!" gets caught.
     private static readonly Regex[] CloserRegexes =
     [
@@ -67,7 +67,7 @@ public sealed class ResponsePostProcessor : IResponsePostProcessor
                 (int)(lastUserTokens * _options.MaxResponseMultiplier),
                 _options.MaxResponseTokenCap);
 
-        // Don't cap to zero — short user messages still allow a minimum reply.
+        // Don't cap to zero - short user messages still allow a minimum reply.
         cap = Math.Max(cap, 30);
 
         var currentTokens = _tokens.EstimateText(text);

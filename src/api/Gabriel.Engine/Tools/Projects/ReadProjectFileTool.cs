@@ -28,7 +28,7 @@ public sealed class ReadProjectFileTool : ITool
         "Accepts either the file's GUID (from list_project_files) OR its filename " +
         "(case-insensitive). " +
         "Only text-like files (code, markdown, JSON, plain text, etc.) can be read; " +
-        "binary files (PDFs, DOCX, images) are refused — ask the user to convert. " +
+        "binary files (PDFs, DOCX, images) are refused - ask the user to convert. " +
         "Output is capped at ~20,000 chars by default; pass `max_bytes` up to 80,000 " +
         "for larger files.";
 
@@ -72,13 +72,13 @@ public sealed class ReadProjectFileTool : ITool
         Guid fileId;
         if (Guid.TryParse(raw, out fileId))
         {
-            // good — direct id path
+            // good - direct id path
         }
         else
         {
             IReadOnlyList<Core.Entities.ProjectFile> files;
             try { files = await _files.ListAsync(projectId, ct); }
-            catch (Exception ex) { return $"Error: could not resolve filename — {ex.Message}"; }
+            catch (Exception ex) { return $"Error: could not resolve filename - {ex.Message}"; }
 
             var match = files.FirstOrDefault(f =>
                 string.Equals(f.Name, raw, StringComparison.OrdinalIgnoreCase));
@@ -93,7 +93,7 @@ public sealed class ReadProjectFileTool : ITool
 
         string? content;
         try { content = await _files.ReadTextAsync(projectId, fileId, maxBytes, ct); }
-        catch (Exception ex) { return $"Error: could not read file — {ex.Message}"; }
+        catch (Exception ex) { return $"Error: could not read file - {ex.Message}"; }
 
         if (content is null)
             return "Error: this file is not text-like (binary content type). Refusing to dump bytes into the conversation.";

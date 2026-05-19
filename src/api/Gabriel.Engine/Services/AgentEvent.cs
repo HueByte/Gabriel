@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Gabriel.Engine.Services;
 
-// Events yielded by AgentService.RunAsync — also the SSE wire format. Polymorphic
+// Events yielded by AgentService.RunAsync - also the SSE wire format. Polymorphic
 // JSON discriminator is "type", so clients switch on that string.
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(AgentTextDelta),        "textDelta")]
@@ -17,7 +17,7 @@ public abstract record AgentEvent;
 // Incremental assistant-text token. Clients concatenate to build the current message.
 public sealed record AgentTextDelta(string Delta) : AgentEvent;
 
-// Incremental "thinking" token — the model's chain-of-thought stream. Surfaced by
+// Incremental "thinking" token - the model's chain-of-thought stream. Surfaced by
 // reasoning-capable providers (Grok 4 reasoning_content, DeepSeek-R1, etc.). The UI
 // can render this in a separate panel; the final assistant message carries the
 // accumulated reasoning alongside its content for persistence.
@@ -38,5 +38,5 @@ public sealed record AgentAssistantMessage(Guid MessageId, string Content, strin
 // In-stream error (lookup failures throw before streaming starts and surface as HTTP 4xx/5xx).
 public sealed record AgentError(string Message) : AgentEvent;
 
-// Terminal event — the loop has finished and the SSE stream will close.
+// Terminal event - the loop has finished and the SSE stream will close.
 public sealed record AgentDone() : AgentEvent;

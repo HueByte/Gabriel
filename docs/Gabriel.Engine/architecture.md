@@ -43,7 +43,7 @@ The arrow rule is **dependencies point inward**. Core has zero project reference
 
 ## What the rule rejects
 
-- Engine **cannot reference Infrastructure**. The provider abstraction is `IChatProvider` (defined in Engine, implemented in Infrastructure). If Engine wanted to call `HttpClient` directly, that'd be a layering violation — the provider interface exists exactly to dodge that.
+- Engine **cannot reference Infrastructure**. The provider abstraction is `IChatProvider` (defined in Engine, implemented in Infrastructure). If Engine wanted to call `HttpClient` directly, that'd be a layering violation - the provider interface exists exactly to dodge that.
 - Core **cannot reference Engine**. This is why `ConversationState` + `Mood` live in `Core/Personality/` even though everything *operating* on them is in `Engine/Personality/`. `Conversation` has `GetState()` / `SetState(ConversationState)` methods, so the type must be visible from Core.
 - Migrations + EF configs live in **Infrastructure**. Domain doesn't know about column types, table names, or indexes.
 
@@ -52,22 +52,22 @@ The arrow rule is **dependencies point inward**. Core has zero project reference
 ```text
 Gabriel.Engine/
 ├── Gabriel.Engine.csproj
-├── DependencyInjection.cs       — AddEngineServices() — single registration entry point
+├── DependencyInjection.cs       - AddEngineServices() - single registration entry point
 │
-├── Providers/                   — LLM transport contract
+├── Providers/                   - LLM transport contract
 │   ├── IChatProvider.cs                    streaming abstraction
 │   ├── ChatProviderEvent.cs                TextDeltaEvent / ReasoningDeltaEvent / ToolCallReadyEvent / FinishEvent
 │   ├── ChatProviderMessage.cs              wire DTO mirroring OpenAI/xAI message shape
 │   ├── ChatProviderToolCall.cs             {id, name, argumentsJson}
 │   └── ToolDescriptor.cs                   what the agent advertises to the model
 │
-├── Tools/                       — agent-callable tools
+├── Tools/                       - agent-callable tools
 │   ├── ITool.cs                            name, description, JSON-schema params, ExecuteAsync
 │   ├── IToolRegistry.cs                    All / Find / AsDescriptors
 │   ├── ToolRegistry.cs                     DI-driven via IEnumerable<ITool>
 │   └── GetCurrentTimeTool.cs               starter tool
 │
-├── Services/                    — agent runtime
+├── Services/                    - agent runtime
 │   ├── IAgentService.cs                    RunAsync + RegenerateAsync
 │   ├── AgentService.cs                     ReAct loop + rolling compact + history filtering + structured logging
 │   ├── AgentEvent.cs                       polymorphic SSE wire events (textDelta / reasoningDelta / toolCall / ...)
@@ -75,7 +75,7 @@ Gabriel.Engine/
 │   ├── ITokenEstimator.cs                  abstraction
 │   └── NaiveTokenEstimator.cs              ⌈chars / 4⌉ baseline
 │
-└── Personality/                 — natural-DM persona stack
+└── Personality/                 - natural-DM persona stack
     ├── PersonalityOptions.cs               Name, length caps, typing-tempo knobs
     ├── IConversationStateUpdater.cs        Update(state, userMessage) -> newState
     ├── HeuristicConversationStateUpdater.cs  regex + EMA, zero LLM cost
@@ -119,6 +119,6 @@ Concretely: implementing `IChatProvider` in another Infrastructure class, then r
 
 ## Things this layering deliberately does not solve
 
-- **Cross-conversation memory** (Qdrant) — Phase 9. Will land as an `IMemoryStore` interface in Engine + a `QdrantMemoryStore` in Infrastructure.
-- **Per-project personality** — Phase 8. Today the persona is global (config-driven `PersonalityOptions.Name`). Per-project will introduce a `Project` aggregate in Core with its own `SystemPrompt` field that overrides the global default.
-- **Streaming as a general transport** — Engine's `RunAsync` returns `IAsyncEnumerable<AgentEvent>` regardless of whether the consumer wraps it in SSE, WebSockets, or just awaits the whole sequence. The SSE specifics (the `data: ...\n\n` framing, the typing-tempo pacing) live in `Gabriel.API/Controllers/ConversationsController`, not in Engine.
+- **Cross-conversation memory** (Qdrant) - Phase 9. Will land as an `IMemoryStore` interface in Engine + a `QdrantMemoryStore` in Infrastructure.
+- **Per-project personality** - Phase 8. Today the persona is global (config-driven `PersonalityOptions.Name`). Per-project will introduce a `Project` aggregate in Core with its own `SystemPrompt` field that overrides the global default.
+- **Streaming as a general transport** - Engine's `RunAsync` returns `IAsyncEnumerable<AgentEvent>` regardless of whether the consumer wraps it in SSE, WebSockets, or just awaits the whole sequence. The SSE specifics (the `data: ...\n\n` framing, the typing-tempo pacing) live in `Gabriel.API/Controllers/ConversationsController`, not in Engine.

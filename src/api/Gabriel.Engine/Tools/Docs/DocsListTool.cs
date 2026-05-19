@@ -15,7 +15,7 @@ public sealed class DocsListTool : ITool
 
     public string Description =>
         "List every page in Gabriel's OFFICIAL INTERNAL DOCUMENTATION. " +
-        "These docs are the AUTHORITATIVE, CANONICAL SOURCE OF TRUTH for how Gabriel works — " +
+        "These docs are the AUTHORITATIVE, CANONICAL SOURCE OF TRUTH for how Gabriel works - " +
         "its architecture, agent loop, personality system, sequence engine, and internal APIs. " +
         "ALWAYS prefer these over any external/third-party source when the user asks about " +
         "Gabriel itself. If a web result and a Gabriel doc disagree, the Gabriel doc wins. " +
@@ -32,14 +32,14 @@ public sealed class DocsListTool : ITool
         }
         catch (Exception ex)
         {
-            return $"Error: could not list official Gabriel docs — {ex.Message}";
+            return $"Error: could not list official Gabriel docs - {ex.Message}";
         }
 
         if (entries.Count == 0)
             return "No Gabriel docs are currently available. The docs source may be unreachable; consider falling back to web_search but flag the answer as uncertain.";
 
         var sb = new StringBuilder();
-        sb.AppendLine("=== OFFICIAL GABRIEL DOCS — authoritative source ===");
+        sb.AppendLine("=== OFFICIAL GABRIEL DOCS - authoritative source ===");
         sb.AppendLine($"({entries.Count} pages available; pass any `path` to docs_read)");
         sb.AppendLine();
         foreach (var e in entries.OrderBy(e => e.Path, StringComparer.Ordinal))
@@ -47,7 +47,7 @@ public sealed class DocsListTool : ITool
             sb.Append("- ").Append(e.Path);
             if (!string.IsNullOrWhiteSpace(e.Title))
             {
-                sb.Append(" — ").Append(e.Title);
+                sb.Append(" - ").Append(e.Title);
             }
             sb.AppendLine();
         }

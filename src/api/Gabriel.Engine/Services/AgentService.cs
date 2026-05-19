@@ -65,7 +65,7 @@ public class AgentService : IAgentService
         string userInput,
         CancellationToken ct = default)
     {
-        // Validate up-front so we throw cleanly BEFORE the SSE headers are sent —
+        // Validate up-front so we throw cleanly BEFORE the SSE headers are sent -
         // this lets the global exception handler return 4xx with ProblemDetails.
         if (string.IsNullOrWhiteSpace(userInput))
             throw new DomainException("Message content cannot be empty.");
@@ -82,7 +82,7 @@ public class AgentService : IAgentService
 
         // Persist the user message before starting the stream so the timeline is
         // consistent even if the client disconnects mid-loop. State is updated in
-        // the same save — the new state feeds the per-turn system prompt and the
+        // the same save - the new state feeds the per-turn system prompt and the
         // post-processor when the reply lands.
         var userMessage = conversation.AppendUserMessage(userInput);
         _conversations.AddMessage(userMessage);
@@ -91,7 +91,7 @@ public class AgentService : IAgentService
         _conversations.Update(conversation);
         await _uow.SaveChangesAsync(ct);
 
-        // Compact here (between turns), never mid-iteration — cutting between an
+        // Compact here (between turns), never mid-iteration - cutting between an
         // assistant's tool_calls and its tool results would orphan them.
         await MaybeCompactAsync(conversation, ct);
 
@@ -130,7 +130,7 @@ public class AgentService : IAgentService
             throw new DomainException("Can only regenerate assistant messages.");
 
         if (!target.IsActiveVariant)
-            throw new DomainException("Cannot regenerate an inactive variant — switch to it first.");
+            throw new DomainException("Cannot regenerate an inactive variant - switch to it first.");
 
         // Deactivate the chosen variant group so the next history assembly sees
         // the old reply (and any sibling tool messages tagged with this group)
@@ -141,7 +141,7 @@ public class AgentService : IAgentService
         _conversations.Update(conversation);
         await _uow.SaveChangesAsync(ct);
 
-        // No new user message + no state update — state was set when the user
+        // No new user message + no state update - state was set when the user
         // originally sent this turn, and we're regenerating against that same
         // state. Compact between turns as usual.
         await MaybeCompactAsync(conversation, ct);
@@ -230,7 +230,7 @@ public class AgentService : IAgentService
                     yield return new AgentToolResult(toolMessage.Id, call.Id, observation);
                 }
 
-                // Next iteration — provider will see the tool results and (usually) reply with text.
+                // Next iteration - provider will see the tool results and (usually) reply with text.
                 continue;
             }
 
@@ -250,7 +250,7 @@ public class AgentService : IAgentService
                 // safe form. Emit the RAW text in AgentAssistantMessage so the
                 // live client view (which reconciles against this) doesn't visibly
                 // swap mid-stream. Fall back to raw if the cleaner stripped it to
-                // empty — Message.Create rejects empty assistant content.
+                // empty - Message.Create rejects empty assistant content.
                 var cleaned = _postProcessor.Clean(rawText, conversation.GetState());
                 var toPersist = string.IsNullOrWhiteSpace(cleaned) ? rawText : cleaned;
                 var reasoningForFinal = reasoningBuffer.Length > 0 ? reasoningBuffer.ToString() : null;
@@ -267,7 +267,7 @@ public class AgentService : IAgentService
                 yield break;
             }
 
-            // Length / Error / unexpected — bail out.
+            // Length / Error / unexpected - bail out.
             _logger.LogWarning(
                 "Iter {Iter}: provider finished unexpectedly with {Finish} | conv={ConversationId}",
                 iter, finish?.ToString() ?? "no-finish-event", conversation.Id);
@@ -344,7 +344,7 @@ public class AgentService : IAgentService
     }
 
     // Walks back from the end keeping at least `keepLast` messages, then keeps walking
-    // until we land on a User message — that's our cut boundary. Doing this avoids
+    // until we land on a User message - that's our cut boundary. Doing this avoids
     // ever cutting between an assistant's tool_calls and the matching tool results,
     // which the model needs to see together.
     private static int SelectCompactCutIndex(IReadOnlyList<Message> messages, int keepLast)
@@ -462,7 +462,7 @@ public class AgentService : IAgentService
         if (tool is null)
         {
             _logger.LogWarning(
-                "Tool call REJECTED — unknown tool | conv={ConversationId} tool={Tool} callId={CallId} args={Args}",
+                "Tool call REJECTED - unknown tool | conv={ConversationId} tool={Tool} callId={CallId} args={Args}",
                 conversationId, call.Name, call.Id, Preview(call.ArgumentsJson));
             return $"Error: tool '{call.Name}' is not registered.";
         }
@@ -478,7 +478,7 @@ public class AgentService : IAgentService
             sw.Stop();
 
             // A tool's "soft error" (it returns a string starting with "Error:"
-            // rather than throwing) is a meaningful signal — log at Warning so
+            // rather than throwing) is a meaningful signal - log at Warning so
             // it stands out from successful executions.
             var isSoftError = observation?.StartsWith("Error", StringComparison.OrdinalIgnoreCase) == true;
             var resultLen = observation?.Length ?? 0;
@@ -519,9 +519,9 @@ public class AgentService : IAgentService
 
     // Builds the message list sent to the provider:
     //   1. Persona system message (static persona + per-turn dynamic guidance)
-    //   2. (Optional) Project SystemPrompt — Phase 8 per-project personality override
+    //   2. (Optional) Project SystemPrompt - Phase 8 per-project personality override
     //   3. (Optional) system message containing the rolling summary
-    //   4. All messages strictly after SummarizedThroughMessageId — filtered to
+    //   4. All messages strictly after SummarizedThroughMessageId - filtered to
     //      active variants. Tool messages are additionally required to point at
     //      an active assistant's tool_call.id, so orphaned tool aftermath from
     //      a deactivated regen turn never reaches the provider.
@@ -554,7 +554,7 @@ public class AgentService : IAgentService
 
         var result = new List<ChatProviderMessage>(messages.Count - startIdx + 3);
 
-        // Persona prompt always goes first — it's the "who you are" header. State
+        // Persona prompt always goes first - it's the "who you are" header. State
         // may be null on the very first call before the updater has run; the
         // builder handles null gracefully.
         result.Add(new ChatProviderMessage(
@@ -583,7 +583,7 @@ public class AgentService : IAgentService
             var m = messages[i];
 
             // Filter inactive variants. Tool messages are kept iff their parent
-            // assistant's tool_call.id is still in the active set — this catches
+            // assistant's tool_call.id is still in the active set - this catches
             // legacy tool messages that were created before variant grouping
             // covered the tool aftermath.
             if (m.Role == MessageRole.Tool)

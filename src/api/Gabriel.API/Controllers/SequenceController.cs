@@ -17,7 +17,7 @@ public class SequenceController : ControllerBase
 {
     // Returns the catalog of pattern + palette identifiers a client can pin
     // on a project / conversation as a "skin" override. The lists are static
-    // and cheap — clients can fetch once per session.
+    // and cheap - clients can fetch once per session.
     [HttpGet("catalog")]
     public ActionResult<SequenceCatalogResponse> GetCatalog()
         => Ok(new SequenceCatalogResponse(SequenceCatalog.Patterns, SequenceCatalog.Palettes));

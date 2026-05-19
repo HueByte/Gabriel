@@ -1,7 +1,7 @@
 namespace Gabriel.Core.Entities;
 
 // Metadata for a file uploaded to a project. The bytes themselves live on disk
-// under {ProjectsRoot}/{ProjectId:N}/{RelativePath} — this entity only records
+// under {ProjectsRoot}/{ProjectId:N}/{RelativePath} - this entity only records
 // the descriptive shape.
 //
 // `Name` is the user-facing filename. `RelativePath` is the on-disk path

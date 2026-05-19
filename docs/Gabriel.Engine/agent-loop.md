@@ -28,7 +28,7 @@ Pre-flight validation throws **synchronously** so the API layer can respond with
 - Conversation not found → `NotFoundException` → `404`
 - (`RegenerateAsync` only) target is not an assistant message or is already inactive → `DomainException` → `400`
 
-In-stream failures, by contrast, can't change HTTP status — they appear as a final `AgentError` event on the SSE stream.
+In-stream failures, by contrast, can't change HTTP status - they appear as a final `AgentError` event on the SSE stream.
 
 ## The iteration loop
 
@@ -78,12 +78,12 @@ The agent loop is bounded by `AgentOptions.MaxIterations` (default 8). Past that
 
 ## Streaming events
 
-The provider emits `ChatProviderEvent`s — the transport-level shape:
+The provider emits `ChatProviderEvent`s - the transport-level shape:
 
 | Type | Meaning |
 | --- | --- |
 | `TextDeltaEvent(string Delta)` | Partial assistant text. Buffer + yield to client. |
-| `ReasoningDeltaEvent(string Delta)` | Partial **reasoning** token — the model's private chain-of-thought stream (Grok 4 `reasoning_content`, DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking). Providers without a reasoning channel simply never emit these. |
+| `ReasoningDeltaEvent(string Delta)` | Partial **reasoning** token - the model's private chain-of-thought stream (Grok 4 `reasoning_content`, DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking). Providers without a reasoning channel simply never emit these. |
 | `ToolCallReadyEvent(Id, Name, ArgsJson)` | A complete tool call. The provider buffers partial JSON internally; agent only sees fully-assembled calls. |
 | `FinishEvent(FinishReason)` | `Stop` / `ToolCalls` / `Length` / `Error`. Terminates the current provider call. |
 
@@ -95,19 +95,19 @@ The agent transforms these into `AgentEvent`s for the SSE wire:
 | `AgentReasoningDelta(Delta)` | Every reasoning delta forwarded as-is. Surfaces in the UI as a collapsible "thinking" panel. |
 | `AgentToolCall(MessageId, ToolCallId, Name, ArgsJson)` | After persisting the assistant's tool-call message. |
 | `AgentToolResult(MessageId, ToolCallId, Content)` | After tool execution + persistence. |
-| `AgentAssistantMessage(MessageId, Content, ReasoningContent?)` | Final assistant text — carries raw model output (see Save-vs-stream below) plus the accumulated reasoning so reloads stay consistent with the live view. |
+| `AgentAssistantMessage(MessageId, Content, ReasoningContent?)` | Final assistant text - carries raw model output (see Save-vs-stream below) plus the accumulated reasoning so reloads stay consistent with the live view. |
 | `AgentError(Message)` | In-stream failure. |
-| `AgentDone()` | Terminal — loop exited. |
+| `AgentDone()` | Terminal - loop exited. |
 
 Polymorphic JSON: every `AgentEvent` serializes with a `type` discriminator (`"textDelta"`, `"reasoningDelta"`, `"toolCall"`, etc.) via `[JsonPolymorphic]`. The webapp's `streamChat.ts` switches on that string.
 
-## Reasoning channels — native CoT + external ReAct
+## Reasoning channels - native CoT + external ReAct
 
 Gabriel deliberately runs **two independent reasoning channels** per iteration; both can fire on a single turn:
 
-1. **Provider-native chain-of-thought** — `reasoning_content` from reasoning-capable models. Streamed as `ReasoningDeltaEvent`, accumulated in a `reasoningBuffer`, emitted to the client as `AgentReasoningDelta`, and persisted on `Message.ReasoningContent` (a column distinct from `Message.Content`). The model's own private CoT — useful for transparency and a UI "thinking" indicator, but **not the answer**.
+1. **Provider-native chain-of-thought** - `reasoning_content` from reasoning-capable models. Streamed as `ReasoningDeltaEvent`, accumulated in a `reasoningBuffer`, emitted to the client as `AgentReasoningDelta`, and persisted on `Message.ReasoningContent` (a column distinct from `Message.Content`). The model's own private CoT - useful for transparency and a UI "thinking" indicator, but **not the answer**.
 
-2. **External ReAct reasoning** — the model's regular text content emitted **alongside** a tool-call iteration. OpenAI / xAI permit an assistant message to carry both `content` and `tool_calls`; that leading text is the "Thought" in Thought → Action → Observation. It's persisted on `Message.Content` of an assistant-with-tool-calls message and rendered as a separate `thought` ChatEntry in the webapp.
+2. **External ReAct reasoning** - the model's regular text content emitted **alongside** a tool-call iteration. OpenAI / xAI permit an assistant message to carry both `content` and `tool_calls`; that leading text is the "Thought" in Thought → Action → Observation. It's persisted on `Message.Content` of an assistant-with-tool-calls message and rendered as a separate `thought` ChatEntry in the webapp.
 
 ```mermaid
 flowchart LR
@@ -126,21 +126,21 @@ flowchart LR
 
 ### Why both
 
-Native CoT gives us free transparency when the provider supports it — no prompt engineering required. But:
+Native CoT gives us free transparency when the provider supports it - no prompt engineering required. But:
 
 - Not every model exposes a reasoning channel.
 - Native CoT is generally **ephemeral**: the model doesn't re-read its own prior `reasoning_content` on subsequent turns; only the visible `content` flows back into the next iteration's history.
 
 External ReAct reasoning (the model writing "I should call `web_search` because the user is asking about a current event…" before the actual tool call) is in `Message.Content`, which **is** re-fed to the provider on the next iteration. That gives the loop a stable trail of decisions to refer back to, regardless of whether native CoT is available.
 
-Combining the two: when both fire, you get a private, fine-grained CoT *and* a publicly-visible decision trail. When only ReAct fires (non-reasoning model), you still get the decision trail. When only CoT fires (rare — usually a one-shot answer with no tool calls), the user still sees the thinking panel.
+Combining the two: when both fire, you get a private, fine-grained CoT *and* a publicly-visible decision trail. When only ReAct fires (non-reasoning model), you still get the decision trail. When only CoT fires (rare - usually a one-shot answer with no tool calls), the user still sees the thinking panel.
 
 ### Implications for new providers
 
 When implementing a new `IChatProvider`:
 
 - Parse the reasoning-channel field if the API exposes one (`reasoning_content`, `thinking_blocks`, etc.) and emit `ReasoningDeltaEvent` for each chunk.
-- The regular text-content channel emits `TextDeltaEvent` as always. The ReAct side is automatically handled by the loop — no provider-level work needed.
+- The regular text-content channel emits `TextDeltaEvent` as always. The ReAct side is automatically handled by the loop - no provider-level work needed.
 - Never collapse the two into a single channel. The data model and the UI treat them as separate entities by design.
 
 ## Observability
@@ -166,7 +166,7 @@ Every turn emits Info-level structured logs via Serilog (configured in `Gabriel.
 | Compact summary failure / empty | Warning | exception (if any) |
 | Compact applied | Info | conv, cut count, current tokens, threshold |
 
-Result and arguments are flattened to a single line and truncated to 240 characters (`AgentService.LogPreviewLimit`) so big payloads — a fetched web page, a 12k-char file read — don't bloat the file.
+Result and arguments are flattened to a single line and truncated to 240 characters (`AgentService.LogPreviewLimit`) so big payloads - a fetched web page, a 12k-char file read - don't bloat the file.
 
 `Microsoft.*` and `System.*` namespaces are pinned to Warning (`Microsoft.Hosting.Lifetime` excepted) in `appsettings.json` so framework noise stays out. `Gabriel.*` runs at Information in production, Debug in `appsettings.Development.json`. `UseSerilogRequestLogging` adds one HTTP line per request: `HTTP {Method} {Path} → {Status} in {Elapsed} ms`.
 
@@ -178,7 +178,7 @@ A deliberate split:
 - **Database**: only the **cleaned** version (after `IResponsePostProcessor.Clean`) is persisted to `Messages.Content`.
 - **`AgentAssistantMessage.Content`**: carries the **raw** text (matches the deltas the client already received) so the live client view doesn't visibly swap content at end-of-stream.
 
-Trade-off: a page reload shows the cleaned version; the live session shows the raw version. Accepted — the alternative ("stream raw, swap to clean at end") would visibly rewrite the bubble after streaming completes, which feels worse.
+Trade-off: a page reload shows the cleaned version; the live session shows the raw version. Accepted - the alternative ("stream raw, swap to clean at end") would visibly rewrite the bubble after streaming completes, which feels worse.
 
 Fall-back: if the cleaner strips everything to empty (would-be reject by `Message.Create`), persistence falls back to the raw text.
 
@@ -202,7 +202,7 @@ Without this filter, the model would see contradicting tool results from deactiv
 
 When estimated history tokens approach the provider's context window, the agent summarizes the earliest portion and continues with `summary + recent messages`.
 
-**Trigger condition** — between turns, compute:
+**Trigger condition** - between turns, compute:
 
 $$
 T_{\text{history}} = T_{\text{summary}} + \sum_{m \in \text{post-cut}} \text{est}(m)
@@ -218,7 +218,7 @@ $$
 
 with $\theta = $ `AgentOptions.CompactThreshold` (default `0.8`) and $W_{\text{provider}}$ = `IChatProvider.ContextWindowTokens` (256k for grok-4, 8k for mock).
 
-**Cut-point selection** — `SelectCompactCutIndex` walks back from the end keeping at least `CompactKeepLast` messages (default `6`), then keeps walking until it lands on a User-role message. The User-message boundary is critical: cutting between an assistant's `tool_calls` and its tool results would orphan them and break the provider's wire-format invariant.
+**Cut-point selection** - `SelectCompactCutIndex` walks back from the end keeping at least `CompactKeepLast` messages (default `6`), then keeps walking until it lands on a User-role message. The User-message boundary is critical: cutting between an assistant's `tool_calls` and its tool results would orphan them and break the provider's wire-format invariant.
 
 **Cut-point formula:**
 
@@ -246,7 +246,7 @@ flowchart LR
     H --> Z
 ```
 
-The agent never compacts mid-iteration. Doing so could cut between an assistant's tool_call message and the matching tool result that's about to arrive — those need to travel together.
+The agent never compacts mid-iteration. Doing so could cut between an assistant's tool_call message and the matching tool result that's about to arrive - those need to travel together.
 
 ## Regenerate flow
 
@@ -254,18 +254,18 @@ The agent never compacts mid-iteration. Doing so could cut between an assistant'
 
 1. Load conversation, find target assistant message.
 2. Validate: must be assistant, must be `IsActiveVariant`.
-3. Call `Conversation.DeactivateVariantGroup(target.VariantGroupId)` — every message in that group (assistant + its tool aftermath) flips to `IsActiveVariant = false`.
+3. Call `Conversation.DeactivateVariantGroup(target.VariantGroupId)` - every message in that group (assistant + its tool aftermath) flips to `IsActiveVariant = false`.
 4. Save. From here on `ToProviderHistory` no longer sees the old turn.
 5. `MaybeCompactAsync` (same as a normal turn).
 6. Hand to `RunStreamAsync(conversation, variantGroupIdOverride: target.VariantGroupId, ct)`.
 
-The iterator runs the standard ReAct loop. Every assistant + tool message created in the new turn passes the override into `AppendAssistantText` / `AppendAssistantToolCalls` / `AppendToolResult`, so they all carry the original variant's group id. After the stream ends, the variant group has $\geq 2$ active+inactive turn-sequences — exactly the data shape the variant-picker UI needs.
+The iterator runs the standard ReAct loop. Every assistant + tool message created in the new turn passes the override into `AppendAssistantText` / `AppendAssistantToolCalls` / `AppendToolResult`, so they all carry the original variant's group id. After the stream ends, the variant group has $\geq 2$ active+inactive turn-sequences - exactly the data shape the variant-picker UI needs.
 
 See [variants-and-history.md](variants-and-history.md) for the full variant model.
 
 ## Token estimation
 
-`ITokenEstimator` is intentionally trivial — the default `NaiveTokenEstimator` returns:
+`ITokenEstimator` is intentionally trivial - the default `NaiveTokenEstimator` returns:
 
 $$
 \text{est}(text) = \lceil \text{len}(text) / 4 \rceil
@@ -277,11 +277,11 @@ $$
 \text{est}(m) = 8 + \text{est}(m.\text{Content}) + \text{est}(m.\text{ToolCallsJson}) + \text{est}(m.\text{ToolCallId})
 $$
 
-The `8` constant accounts for role markers and JSON separators that surround the content on the wire. The chars/4 ratio is a coarse approximation — real BPE tokenization is 30-50% more accurate — but for context-window budgeting at the 80% threshold, the headroom absorbs the error easily. The interface exists so swapping in a real BPE tokenizer later doesn't touch any caller.
+The `8` constant accounts for role markers and JSON separators that surround the content on the wire. The chars/4 ratio is a coarse approximation - real BPE tokenization is 30-50% more accurate - but for context-window budgeting at the 80% threshold, the headroom absorbs the error easily. The interface exists so swapping in a real BPE tokenizer later doesn't touch any caller.
 
 ## What this loop deliberately does NOT do
 
 - **Parallel tool execution**: tool calls within an iteration run serially. The provider can emit multiple tool calls per iteration, but we execute them one at a time. Parallelism would be straightforward but isn't worth the complexity until the tool list contains slow IO-bound calls.
-- **Streaming-aware compact**: compact fires only between turns. Inside an iteration, even if the history grows past the threshold, we don't interrupt — the model will get its full response or hit the iteration cap.
+- **Streaming-aware compact**: compact fires only between turns. Inside an iteration, even if the history grows past the threshold, we don't interrupt - the model will get its full response or hit the iteration cap.
 - **Per-turn cost tracking**: no accounting. Each turn calls the provider 1 to `MaxIterations` times; we don't tally tokens or expose usage.
-- **Re-feed native CoT on subsequent iterations**: `Message.ReasoningContent` is persisted for transparency but is not added to `ToProviderHistory`. Only `Message.Content` (the visible text channel, which contains any ReAct "Thought" prelude) is re-fed. Mirrors the providers' own behavior — they treat their `reasoning_content` as ephemeral by design.
+- **Re-feed native CoT on subsequent iterations**: `Message.ReasoningContent` is persisted for transparency but is not added to `ToProviderHistory`. Only `Message.Content` (the visible text channel, which contains any ReAct "Thought" prelude) is re-fed. Mirrors the providers' own behavior - they treat their `reasoning_content` as ephemeral by design.

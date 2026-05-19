@@ -11,7 +11,7 @@ using Gabriel.Infrastructure.Persistence;
 namespace Gabriel.Infrastructure.Projects;
 
 // Stores files on local disk at {Root}/{ProjectId:N}/{filename}. Metadata
-// goes into the ProjectFiles table. Path-traversal hardened — every disk
+// goes into the ProjectFiles table. Path-traversal hardened - every disk
 // access resolves the final path and verifies it sits inside the project's
 // directory before opening any handles.
 public sealed class DiskProjectFileService : IProjectFileService
@@ -117,7 +117,7 @@ public sealed class DiskProjectFileService : IProjectFileService
 
         if (bytesWritten > _options.MaxFileBytes)
         {
-            // The CopyWithLimit method tripped — file partially written + size
+            // The CopyWithLimit method tripped - file partially written + size
             // exceeded. Clean up before we record metadata.
             File.Delete(fullPath);
             throw new DomainException(
@@ -146,7 +146,7 @@ public sealed class DiskProjectFileService : IProjectFileService
         _ctx.ProjectFiles.Remove(file);
         await _ctx.SaveChangesAsync(ct);
 
-        // DB row gone — best-effort delete on disk. If the file is missing,
+        // DB row gone - best-effort delete on disk. If the file is missing,
         // that's fine; metadata being gone is the source of truth.
         if (File.Exists(fullPath))
         {
@@ -187,7 +187,7 @@ public sealed class DiskProjectFileService : IProjectFileService
         if (!canonicalFile.StartsWith(canonicalProject + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
             && !canonicalFile.StartsWith(canonicalProject + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
-            throw new DomainException("Path traversal detected — file path escapes project directory.");
+            throw new DomainException("Path traversal detected - file path escapes project directory.");
         }
     }
 
@@ -239,7 +239,7 @@ public sealed class DiskProjectFileService : IProjectFileService
     }
 
     // Stream copy with a hard byte budget. Returns the actual bytes written
-    // (which equals MaxFileBytes + 1 if the cap was exceeded — caller treats
+    // (which equals MaxFileBytes + 1 if the cap was exceeded - caller treats
     // that as an upload-too-large signal).
     private static async Task<long> CopyWithLimitAsync(Stream src, Stream dst, long max, CancellationToken ct)
     {

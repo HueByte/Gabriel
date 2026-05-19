@@ -28,7 +28,7 @@ async function postRefresh(): Promise<boolean> {
 }
 
 // Returns whether the refresh succeeded. Multiple concurrent callers share one
-// in-flight request — the first invocation kicks off the fetch; the rest await
+// in-flight request - the first invocation kicks off the fetch; the rest await
 // the same promise. Cleared when the promise settles so a future expiry can
 // trigger a fresh attempt.
 export function refreshSession(): Promise<boolean> {

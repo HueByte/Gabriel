@@ -3,14 +3,14 @@ import { ConversationsService, type ContextMetricsResponse } from '../api/genera
 
 interface ContextStatsProps {
   conversationId: string;
-  /** Bump to trigger a refetch — typically incremented after a chat turn so
+  /** Bump to trigger a refetch - typically incremented after a chat turn so
    *  the strip reflects the updated context size. */
   refreshKey?: number;
 }
 
 // Subtle horizontal strip under the avatar. Shows the next-turn token
 // estimate as a fraction of the provider's context window. Stays
-// minimal — just the bar + raw token count — until we're within 90% of the
+// minimal - just the bar + raw token count - until we're within 90% of the
 // auto-compact threshold, at which point the bar tints to the palette
 // accent and a "compact in Xk" warning appears so the trigger isn't a
 // surprise.
@@ -36,7 +36,7 @@ export function ContextStats({ conversationId, refreshKey = 0 }: ContextStatsPro
         if (!cancelled) setMetrics(m);
       })
       .catch(() => {
-        // Stay quiet on error — this is an auxiliary indicator, not load-bearing.
+        // Stay quiet on error - this is an auxiliary indicator, not load-bearing.
         // A 404 just means the conversation was deleted out from under us, which
         // the chat component will surface separately.
         if (!cancelled) setFailed(true);
@@ -45,7 +45,7 @@ export function ContextStats({ conversationId, refreshKey = 0 }: ContextStatsPro
   }, [conversationId, refreshKey]);
 
   if (failed || !metrics) {
-    // Reserve no space when there's nothing to show — the strip animates in
+    // Reserve no space when there's nothing to show - the strip animates in
     // on its own once metrics land, so the avatar doesn't visually jump.
     return null;
   }

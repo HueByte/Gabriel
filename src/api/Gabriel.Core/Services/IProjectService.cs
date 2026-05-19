@@ -4,7 +4,7 @@ namespace Gabriel.Core.Services;
 
 public interface IProjectService
 {
-    // Returns the user's projects (only their own — multi-tenant scoped at the
+    // Returns the user's projects (only their own - multi-tenant scoped at the
     // repo level). Always lazily ensures a "Default" project exists; absorbs
     // pre-Phase-8 conversations into it on first call.
     Task<IReadOnlyList<Project>> ListAsync(CancellationToken ct = default);

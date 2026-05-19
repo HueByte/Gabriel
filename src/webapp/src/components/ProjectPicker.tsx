@@ -37,7 +37,7 @@ interface ProjectPickerProps {
 //   1. A dropdown that lists the user's projects. Selecting one stores it as
 //      the active project and tells the parent so conversations can re-scope.
 //   2. A "+ New project" button that prompts for a name via window.prompt
-//      (intentionally minimal — a full settings drawer is a future enhancement).
+//      (intentionally minimal - a full settings drawer is a future enhancement).
 export function ProjectPicker({ activeProjectId, onActiveProjectChange, onActiveProjectMetaChange, refreshKey }: ProjectPickerProps) {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
@@ -51,7 +51,7 @@ export function ProjectPicker({ activeProjectId, onActiveProjectChange, onActive
       .then(list => {
         if (cancelled) return;
         setProjects(list);
-        // First boot — if nothing is selected yet, default to the first
+        // First boot - if nothing is selected yet, default to the first
         // project (which will be Default for a fresh user).
         if (!activeProjectId && list.length > 0) {
           const next = list[0];
@@ -65,7 +65,7 @@ export function ProjectPicker({ activeProjectId, onActiveProjectChange, onActive
           onActiveProjectChange(next?.id ?? null);
           onActiveProjectMetaChange?.(next);
         } else if (activeProjectId) {
-          // Already-selected project — re-emit metadata so parent stays in sync
+          // Already-selected project - re-emit metadata so parent stays in sync
           // when the list refreshes (name/isDefault could have changed).
           const current = list.find(p => p.id === activeProjectId) ?? null;
           onActiveProjectMetaChange?.(current);

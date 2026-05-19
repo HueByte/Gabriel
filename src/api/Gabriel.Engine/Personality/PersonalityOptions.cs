@@ -4,7 +4,7 @@ public class PersonalityOptions
 {
     public const string SectionName = "Personality";
 
-    // Persona display name — injected into the system prompt and the few-shot block.
+    // Persona display name - injected into the system prompt and the few-shot block.
     // Future Phase 8 (per-project personality) replaces this with per-project config.
     public string Name { get; set; } = "Gabriel";
 
@@ -24,7 +24,7 @@ public class PersonalityOptions
 
     // --- Streaming-tempo simulation (controller) ---------------------------------
 
-    // Initial pause before forwarding the first text delta — the "thinking" beat.
+    // Initial pause before forwarding the first text delta - the "thinking" beat.
     // Picked uniformly per turn; small jitter is built in by the range itself.
     public int MinThinkingDelayMs { get; set; } = 400;
     public int MaxThinkingDelayMs { get; set; } = 1100;

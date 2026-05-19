@@ -1,9 +1,9 @@
-// Client for the Gabriel Sequence endpoints — the 64-frame, 16×16
+// Client for the Gabriel Sequence endpoints - the 64-frame, 16×16
 // palette-indexed RGB representation of an entity's personality + current
 // emotional state. Two scopes:
-//   - GET /api/conversations/{id}/sequence — per-conversation, used for
+//   - GET /api/conversations/{id}/sequence - per-conversation, used for
 //     standalone chats (chats in the Default project).
-//   - GET /api/projects/{id}/sequence — project-shared, used for chats
+//   - GET /api/projects/{id}/sequence - project-shared, used for chats
 //     inside a user-created project where every chat shares one avatar.
 //
 // Hand-written rather than depending on the openapi-typescript-codegen output
@@ -25,7 +25,7 @@ export interface GabrielSequence {
   metadata: GabrielSequenceMetadata;
 }
 
-// Discriminated source so callers can't mix the scope up at runtime — the
+// Discriminated source so callers can't mix the scope up at runtime - the
 // view component takes one of these and forwards it through to the fetch.
 export type SequenceSource =
   | { kind: 'conversation'; conversationId: string }

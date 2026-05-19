@@ -5,7 +5,7 @@ namespace Gabriel.Engine.Sequence;
 // pattern-specific parameters; returns a scalar in [0, 1] that the generator
 // maps to a palette index.
 //
-// Patterns are designed for LOOP CONTINUITY — sampling at t=0 and t=1 should
+// Patterns are designed for LOOP CONTINUITY - sampling at t=0 and t=1 should
 // produce the same image so the 64-frame cycle closes seamlessly.
 internal static class Patterns
 {
@@ -14,7 +14,7 @@ internal static class Patterns
     // --- Plasma ----------------------------------------------------------------
     //
     // Superposed sines in x, y, x+y, and radial-distance. Gorgeous out-of-the-box
-    // animation, hugely varied across the parameter space — small seed changes
+    // animation, hugely varied across the parameter space - small seed changes
     // produce noticeably different visuals.
 
     public readonly record struct PlasmaParams(

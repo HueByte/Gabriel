@@ -9,7 +9,7 @@ public class Message
     // Nullable for assistant messages whose only payload is tool calls.
     public string? Content { get; private set; }
 
-    // Set on Tool-role messages — references the assistant's tool_call.id this answers.
+    // Set on Tool-role messages - references the assistant's tool_call.id this answers.
     public string? ToolCallId { get; private set; }
 
     // Set on Assistant-role messages that requested tool calls. Stored as the raw
@@ -27,7 +27,7 @@ public class Message
 
     // Variant grouping for regenerated assistant messages. All siblings of a
     // single regenerate-able turn share one VariantGroupId. For user / system /
-    // tool messages — and for assistant messages with no regenerations yet —
+    // tool messages - and for assistant messages with no regenerations yet -
     // VariantGroupId equals the message's own Id (each message is its own
     // singleton group). Exactly one message per group has IsActiveVariant = true.
     public Guid VariantGroupId { get; private set; }
@@ -81,7 +81,7 @@ public class Message
     internal void MarkActiveVariant() => IsActiveVariant = true;
 
     // Reasoning is captured by the agent loop alongside the assistant's content
-    // for the same turn — it isn't part of the role-payload validation, so
+    // for the same turn - it isn't part of the role-payload validation, so
     // we expose a dedicated setter rather than threading it through Create().
     internal void SetReasoningContent(string? reasoning)
     {

@@ -26,7 +26,7 @@ interface Props {
 /**
  * Two-pass typewriter: first reveals `text` rendered in a galactic cipher, then
  * a short pause, then a second pass overwrites each character with its English
- * form left-to-right — as if the message were being translated in place.
+ * form left-to-right - as if the message were being translated in place.
  */
 export function GalacticTypewriter({ text, charMs = 22, pauseMs = 450, onDone }: Props) {
   const [galCount, setGalCount] = useState(0);

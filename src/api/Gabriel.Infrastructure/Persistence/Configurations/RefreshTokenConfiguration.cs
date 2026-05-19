@@ -17,7 +17,7 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
         builder.Property(t => t.RevokedAt);
         builder.Property(t => t.ReplacedByTokenId);
 
-        // Lookup path on every refresh — keep this index lean and selective.
+        // Lookup path on every refresh - keep this index lean and selective.
         builder.HasIndex(t => t.TokenHash).IsUnique();
         // Bulk-revoke + theft-detection scan path.
         builder.HasIndex(t => t.UserId);

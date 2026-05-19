@@ -10,7 +10,7 @@ using Gabriel.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
-// Bootstrap logger — captures anything that happens BEFORE the host's logging
+// Bootstrap logger - captures anything that happens BEFORE the host's logging
 // pipeline is built (config loading, Infisical fetches, container startup
 // errors). Console-only; the real configured logger takes over once the host
 // builds and reads Serilog's appsettings section.
@@ -25,7 +25,7 @@ try
     // Replace the default Microsoft.Extensions.Logging pipeline with Serilog.
     // Every ILogger<T> injected anywhere in the app now flows through here.
     // The configuration call reads the "Serilog" section of appsettings(.*).json
-    // — sinks, minimum levels, enrichers, source-context overrides all live in
+    // - sinks, minimum levels, enrichers, source-context overrides all live in
     // config so deployment-time changes don't need a recompile.
     builder.Services.AddSerilog((services, lc) => lc
         .ReadFrom.Configuration(builder.Configuration)
@@ -44,7 +44,7 @@ try
 
     builder.Services.AddControllers(opts =>
     {
-        // Every controller route is auto-prefixed with /api — no per-controller [Route("api/...")] needed.
+        // Every controller route is auto-prefixed with /api - no per-controller [Route("api/...")] needed.
         opts.Conventions.Insert(0, new GlobalRoutePrefixConvention("api"));
     });
     builder.Services.AddEndpointsApiExplorer();
@@ -74,7 +74,7 @@ try
     builder.Services.AddEngineServices(builder.Configuration);
     builder.Services.AddInfrastructure(builder.Configuration);
 
-    // Identity + JWT — three auth schemes wired here; see IdentityServiceCollectionExtensions.
+    // Identity + JWT - three auth schemes wired here; see IdentityServiceCollectionExtensions.
     builder.Services.AddIdentityAndAuth(builder.Configuration);
 
     // ICurrentUser pulls from HttpContext.User regardless of which scheme authenticated.
@@ -83,7 +83,7 @@ try
 
     var app = builder.Build();
 
-    // Compact one-line-per-request HTTP log — replaces the verbose default
+    // Compact one-line-per-request HTTP log - replaces the verbose default
     // ASP.NET request lifecycle output. Static assets / health probes don't
     // hit our controllers so this stays signal-rich.
     app.UseSerilogRequestLogging(opts =>
@@ -117,13 +117,13 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
-    // Auth endpoints are controller-based (see AuthController) — no MapIdentityApi.
+    // Auth endpoints are controller-based (see AuthController) - no MapIdentityApi.
     // The webapp authenticates via /api/auth/login which sets HttpOnly JWT cookies;
     // JwtBearer's OnMessageReceived event reads the access cookie back on every request.
 
     app.MapControllers();
 
-    Log.Information("Gabriel API starting up — environment={Environment}", app.Environment.EnvironmentName);
+    Log.Information("Gabriel API starting up - environment={Environment}", app.Environment.EnvironmentName);
     app.Run();
 }
 catch (Exception ex)

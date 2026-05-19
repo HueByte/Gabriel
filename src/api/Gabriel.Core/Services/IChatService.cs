@@ -3,14 +3,14 @@ using Gabriel.Core.Entities;
 namespace Gabriel.Core.Services;
 
 // Conversation CRUD orchestrator. The actual chat-turn loop (streaming, tool
-// calls) lives in IAgentService — this stays focused on lifecycle.
+// calls) lives in IAgentService - this stays focused on lifecycle.
 public interface IChatService
 {
-    // `projectId` is optional — if absent, the conversation falls into the
+    // `projectId` is optional - if absent, the conversation falls into the
     // user's Default project (auto-created on first call).
     Task<Conversation> CreateConversationAsync(Guid? projectId, string? title, CancellationToken ct = default);
 
-    // List the user's conversations. Optionally filter by project — null means
+    // List the user's conversations. Optionally filter by project - null means
     // "all conversations across all projects".
     Task<IReadOnlyList<Conversation>> ListConversationsAsync(Guid? projectId, CancellationToken ct = default);
 
@@ -20,7 +20,7 @@ public interface IChatService
 
     // Pin the conversation's avatar pattern + palette (the "skin"). Mirror of
     // IProjectService.SetSkinAsync; only meaningful for standalone (Default-
-    // project) chats — chats inside a real project render the project's
+    // project) chats - chats inside a real project render the project's
     // skin, not the conversation's. Catalog identifiers must be validated at
     // the API layer before reaching here.
     Task<Conversation> SetSkinAsync(Guid id, string? pattern, string? palette, CancellationToken ct = default);

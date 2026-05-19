@@ -15,7 +15,7 @@ function loadMermaid(): Promise<MermaidModule['default']> {
     mermaid.initialize({
       startOnLoad: false,
       theme: 'dark',
-      // We render diagrams from chat content — `strict` blocks any inline HTML
+      // We render diagrams from chat content - `strict` blocks any inline HTML
       // that would otherwise execute in the SVG output.
       securityLevel: 'strict',
       fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -25,7 +25,7 @@ function loadMermaid(): Promise<MermaidModule['default']> {
   return mermaidPromise;
 }
 
-// Unique render ids — mermaid uses the id to namespace SVG defs / arrowheads.
+// Unique render ids - mermaid uses the id to namespace SVG defs / arrowheads.
 // Module-level counter so two diagrams on the same page can't collide.
 let idCounter = 0;
 const nextId = () => `md-mermaid-${++idCounter}`;
@@ -69,7 +69,7 @@ export function Mermaid({ source }: MermaidProps) {
   }, [source]);
 
   if (errored) {
-    // Source fallback — same visual as a normal code block so it doesn't
+    // Source fallback - same visual as a normal code block so it doesn't
     // look broken, just unrendered.
     return (
       <pre className="md-mermaid-fallback"><code>{source}</code></pre>
@@ -77,7 +77,7 @@ export function Mermaid({ source }: MermaidProps) {
   }
 
   if (!svg) {
-    // Reserve no space while loading — most diagrams render fast enough that
+    // Reserve no space while loading - most diagrams render fast enough that
     // a "rendering…" flash is more distracting than a brief gap.
     return null;
   }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Markdown, toGalactic, GAL_OPEN, GAL_CLOSE } from './Markdown';
 
-// Reveal cadence — chars per second.
+// Reveal cadence - chars per second.
 //   actualRate = min(MAX_RATE, BASE_RATE + backlog * SPEEDUP_PER_BACKLOG_CHAR)
 // Tunes so that short replies type at ~22 chars/sec (clear typewriter feel)
 // and long ones accelerate toward MAX_RATE so a 1000-char reply doesn't crawl.
@@ -17,7 +17,7 @@ const GALACTIC_LEAD = 25;
 interface Props {
   text: string;
   /** True while the SSE stream is still appending to `text`. Captured at mount;
-   *  toggling later doesn't abort the in-flight typewriter — it always finishes. */
+   *  toggling later doesn't abort the in-flight typewriter - it always finishes. */
   animate: boolean;
   caret?: boolean;
   /** Render the leading edge of the reveal in galactic cipher; english
@@ -42,7 +42,7 @@ export function StreamingText({ text, animate, caret = false, galactic = false }
   const prefersReduced = typeof window !== 'undefined'
     && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-  // Captured once on mount. Future toggles of `animate` don't stop the loop —
+  // Captured once on mount. Future toggles of `animate` don't stop the loop -
   // it keeps running until visible catches `text`.
   const [animating] = useState(animate && !prefersReduced);
   const cursorsRef = useRef({
@@ -138,7 +138,7 @@ export function StreamingText({ text, animate, caret = false, galactic = false }
   return (
     <>
       {/* `streaming` tells Markdown to skip rehype-highlight and rehype-katex
-          while the typewriter is still revealing chars — those plugins would
+          while the typewriter is still revealing chars - those plugins would
           otherwise re-run on every tick (up to 200/sec). Colors and math
           snap in the instant typing finishes. */}
       <Markdown text={markdownSource} streaming={stillTyping} />

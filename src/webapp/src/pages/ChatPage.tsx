@@ -60,7 +60,7 @@ export function ChatPage() {
 
   const bumpSequence = useCallback(() => setSequenceRefresh(n => n + 1), []);
 
-  // Convenience for "a chat turn just completed" — both the sidebar list
+  // Convenience for "a chat turn just completed" - both the sidebar list
   // (re-sort by updatedAt) and the Gabriel Sequence (Live State just changed)
   // are affected.
   const onTurnComplete = useCallback(() => {
@@ -68,7 +68,7 @@ export function ChatPage() {
     bumpSequence();
   }, [bumpSidebar, bumpSequence]);
 
-  // Chat fires this once it loads the conversation's metadata — lets us pick
+  // Chat fires this once it loads the conversation's metadata - lets us pick
   // up the avatar seed without doing a duplicate fetch. Effective seed +
   // project context drive both the rendered sequence and the Pulse palette
   // fallback. When the chat is in a real (non-default) project, the avatar
@@ -110,9 +110,9 @@ export function ChatPage() {
   }, [navigate]);
 
   // Active palette stops, in priority order:
-  //   1) The server-driven Gabriel Sequence palette — canonical visual
+  //   1) The server-driven Gabriel Sequence palette - canonical visual
   //      identity once the avatar finishes its first fetch.
-  //   2) The seed-derived pulse palette — fallback during the gap.
+  //   2) The seed-derived pulse palette - fallback during the gap.
   const activeStops = useMemo<readonly RGB[]>(
     () => sequenceStops ?? paletteForSeed(avatarSeed).stops,
     [sequenceStops, avatarSeed],
@@ -135,7 +135,7 @@ export function ChatPage() {
 
   if (!conversationId) {
     // useParams' default guarantees a string but the router should never let
-    // us reach this branch — defensive guard so TS knows conversationId is
+    // us reach this branch - defensive guard so TS knows conversationId is
     // non-empty downstream.
     return null;
   }
@@ -151,7 +151,7 @@ export function ChatPage() {
           refreshKey={sequenceRefresh}
           onSequenceLoaded={handleSequenceLoaded}
         />
-        {/* Reroll is only meaningful for standalone (Default-project) chats —
+        {/* Reroll is only meaningful for standalone (Default-project) chats -
             for real projects the avatar is the project's shared identity and
             rerolling lives on the Project Settings page (changing it here
             would silently re-skin every chat in the project). */}
@@ -168,7 +168,7 @@ export function ChatPage() {
         )}
       </div>
 
-      {/* Context-window usage strip — shares sequenceRefresh so it updates
+      {/* Context-window usage strip - shares sequenceRefresh so it updates
           after every chat turn alongside the Gabriel Sequence Live State. */}
       <ContextStats
         conversationId={conversationId}

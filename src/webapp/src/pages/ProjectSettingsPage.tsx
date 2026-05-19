@@ -21,7 +21,7 @@ import { SkinPicker } from '../components/SkinPicker';
 // Project-scoped settings: name + description, the appended system prompt,
 // the file library, and a deep-link to the project's shared diagnostics. The
 // Default project still has a system prompt (it acts as the catch-all
-// personality bucket) but no file UI — file storage is a "real project"
+// personality bucket) but no file UI - file storage is a "real project"
 // affordance per product framing.
 
 export function ProjectSettingsPage() {
@@ -32,7 +32,7 @@ export function ProjectSettingsPage() {
   const [files, setFiles] = useState<ProjectFileResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Form state — lifted out of `project` so dirty-checking + cancel-vs-save
+  // Form state - lifted out of `project` so dirty-checking + cancel-vs-save
   // are trivial.
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -130,7 +130,7 @@ export function ProjectSettingsPage() {
     }
   };
 
-  // Skin save — fired immediately on picker change so the user sees the
+  // Skin save - fired immediately on picker change so the user sees the
   // sequence update without an explicit "save skin" button. Concurrent saves
   // are gated by `skinSaving` to avoid a race against a fast user.
   const saveSkin = async (pattern: string | null, palette: string | null) => {
@@ -150,7 +150,7 @@ export function ProjectSettingsPage() {
   };
 
   // Reroll the project's AvatarSeed. Pinned pattern / palette overrides survive
-  // — reroll only changes the seed-derived dimensions (pattern parameters,
+  // - reroll only changes the seed-derived dimensions (pattern parameters,
   // palette when no override pinned).
   const rerollSeed = async () => {
     if (rerolling) return;
@@ -216,14 +216,14 @@ export function ProjectSettingsPage() {
             onChange={e => setDescription(e.target.value)}
             maxLength={2048}
             rows={2}
-            placeholder="Optional — what's this project for?"
+            placeholder="Optional - what's this project for?"
           />
         </label>
 
         <h2 className="settings-section-title">System prompt</h2>
         <p className="settings-hint">
           Appended to Gabriel's base persona for every chat in this project. Use it to
-          steer tone, expertise, or constraints — leave blank to use the base persona only.
+          steer tone, expertise, or constraints - leave blank to use the base persona only.
         </p>
         <label className="settings-field">
           <textarea
@@ -339,7 +339,7 @@ export function ProjectSettingsPage() {
         <section className="settings-section">
           <h2 className="settings-section-title">Diagnostics</h2>
           <p className="settings-hint">
-            Inspect this project's shared Gabriel Sequence — the 64-frame avatar
+            Inspect this project's shared Gabriel Sequence - the 64-frame avatar
             every chat in the project renders.
           </p>
           <Link to={`/p/${encodeURIComponent(projectId)}/diagnostics`} className="settings-secondary">
@@ -352,7 +352,7 @@ export function ProjectSettingsPage() {
   );
 }
 
-// File size formatting — picks the largest unit that keeps the value <1024.
+// File size formatting - picks the largest unit that keeps the value <1024.
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

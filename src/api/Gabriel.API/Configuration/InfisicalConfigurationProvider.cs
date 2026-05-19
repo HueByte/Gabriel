@@ -7,7 +7,7 @@ namespace Gabriel.API.Configuration;
 
 // Pulls secrets from a self-hosted Infisical instance at startup and merges them
 // into IConfiguration. Secret keys with `__` separators map to `:` config paths,
-// matching the env-var convention — so `PROVIDERS__GROK__APIKEY` in Infisical
+// matching the env-var convention - so `PROVIDERS__GROK__APIKEY` in Infisical
 // populates `Providers:Grok:ApiKey` for IOptions binding.
 public class InfisicalConfigurationProvider : ConfigurationProvider
 {
@@ -29,7 +29,7 @@ public class InfisicalConfigurationProvider : ConfigurationProvider
         catch (Exception ex)
         {
             // Pre-DI: no logger yet. Use stderr so it shows in console output but
-            // doesn't crash startup — missing keys will fail loudly when accessed.
+            // doesn't crash startup - missing keys will fail loudly when accessed.
             Console.Error.WriteLine($"[Infisical] secret load failed: {ex.Message}");
         }
     }
@@ -37,7 +37,7 @@ public class InfisicalConfigurationProvider : ConfigurationProvider
     private async Task LoadAsync()
     {
         // IConfigurationProvider.Load runs during builder.Configuration build-out,
-        // BEFORE the DI container exists — IHttpClientFactory is not available
+        // BEFORE the DI container exists - IHttpClientFactory is not available
         // here. A short-lived HttpClient disposed at the end of this single
         // bootstrap call is the canonical workaround; the usual socket-exhaustion
         // concern doesn't apply because Load is invoked once per process.

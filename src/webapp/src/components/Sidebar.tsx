@@ -19,7 +19,7 @@ import { ProjectPicker, loadActiveProjectId } from './ProjectPicker';
 const SIDEBAR_STORAGE_KEY = 'gabriel.sidebar.collapsed';
 
 function loadSidebarCollapsed(): boolean {
-  // Default to collapsed (closed overlay) — matches the EchoHub-style burger pattern.
+  // Default to collapsed (closed overlay) - matches the EchoHub-style burger pattern.
   try {
     const v = localStorage.getItem(SIDEBAR_STORAGE_KEY);
     return v == null ? true : v === '1';
@@ -45,7 +45,7 @@ interface MenuState {
 
 export function Sidebar({ refreshKey }: SidebarProps) {
   const navigate = useNavigate();
-  // Active id comes from the URL — single source of truth, no prop drilling.
+  // Active id comes from the URL - single source of truth, no prop drilling.
   const { conversationId: activeId } = useParams<{ conversationId: string }>();
 
   const [conversations, setConversations] = useState<ConversationResponse[]>([]);
@@ -53,14 +53,14 @@ export function Sidebar({ refreshKey }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [menu, setMenu] = useState<MenuState | null>(null);
-  // Local refresh tick — bumped by sidebar-initiated mutations so the list
+  // Local refresh tick - bumped by sidebar-initiated mutations so the list
   // refetches without going through the layout's external refresh signal.
   const [localRefresh, setLocalRefresh] = useState(0);
   // Project filter. localStorage is the canonical source; ProjectPicker keeps
   // it in sync. null = "all projects" but in practice the picker auto-selects
   // one as soon as the user has any.
   const [activeProjectId, setActiveProjectId] = useState<string | null>(loadActiveProjectId);
-  // Full active-project metadata — surfaced by ProjectPicker so the sidebar
+  // Full active-project metadata - surfaced by ProjectPicker so the sidebar
   // can route diagnostics correctly (real project → project's shared
   // diagnostics; Default project → per-conversation diagnostics).
   const [activeProject, setActiveProject] = useState<ProjectResponse | null>(null);
@@ -80,7 +80,7 @@ export function Sidebar({ refreshKey }: SidebarProps) {
 
   useEffect(() => {
     let cancelled = false;
-    // Project-scoped fetch — passing undefined for "all" would return
+    // Project-scoped fetch - passing undefined for "all" would return
     // cross-project results, which the picker UX implies isn't what we want.
     // When activeProjectId is null (briefly during first boot before the
     // picker resolves), pass undefined and show whatever the server returns.
@@ -112,7 +112,7 @@ export function Sidebar({ refreshKey }: SidebarProps) {
   }, [open]);
 
   // Close menu on outside click, Escape, sidebar scroll, and window resize.
-  // Scroll/resize matter because the menu is position: fixed — once the anchor
+  // Scroll/resize matter because the menu is position: fixed - once the anchor
   // button moves, the menu would otherwise float orphaned in the viewport.
   useEffect(() => {
     if (!menu) return;
@@ -120,9 +120,9 @@ export function Sidebar({ refreshKey }: SidebarProps) {
     const onDown = (e: globalThis.MouseEvent) => {
       const target = e.target as Element | null;
       if (!target) return;
-      // Clicks inside the menu itself — let the menu item handler run.
+      // Clicks inside the menu itself - let the menu item handler run.
       if (menuRef.current?.contains(target)) return;
-      // Clicks on any 3-dot trigger — let the button's onClick toggle it,
+      // Clicks on any 3-dot trigger - let the button's onClick toggle it,
       // otherwise we'd close-then-immediately-reopen on a same-row re-click.
       if (target.closest('.conv-action')) return;
       close();
@@ -189,7 +189,7 @@ export function Sidebar({ refreshKey }: SidebarProps) {
     if (!ok) return;
     try {
       await ConversationsService.deleteApiConversations({ id: c.id });
-      // If we just deleted the active conversation, hand off to "/" — IndexPage
+      // If we just deleted the active conversation, hand off to "/" - IndexPage
       // will either pick another stored conv or create a fresh one.
       if (activeId === c.id) {
         navigate('/', { replace: true });
@@ -223,7 +223,7 @@ export function Sidebar({ refreshKey }: SidebarProps) {
   };
 
   const openDiagnostics = (conversationId: string) => {
-    // Real projects render a *shared* sequence — opening diagnostics from any
+    // Real projects render a *shared* sequence - opening diagnostics from any
     // chat in the project routes to the project-level diagnostics page so the
     // user can't end up with N copies of the same view. Default-project chats
     // keep per-conversation diagnostics ("standalone" behavior).

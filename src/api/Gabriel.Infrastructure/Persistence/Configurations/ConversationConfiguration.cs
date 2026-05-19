@@ -22,17 +22,17 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.Property(c => c.PatternOverride).HasMaxLength(32);
         builder.Property(c => c.PaletteOverride).HasMaxLength(32);
 
-        // Sidebar list (UserId + UpdatedAt desc) — the hot query for the dashboard.
+        // Sidebar list (UserId + UpdatedAt desc) - the hot query for the dashboard.
         builder.HasIndex(c => new { c.UserId, c.UpdatedAt });
-        // Project filter — list conversations within a single project.
+        // Project filter - list conversations within a single project.
         builder.HasIndex(c => new { c.ProjectId, c.UpdatedAt });
 
-        // Rolling-summary columns — both nullable until the conversation crosses the compact threshold.
+        // Rolling-summary columns - both nullable until the conversation crosses the compact threshold.
         builder.Property(c => c.Summary);
         builder.Property(c => c.SummarizedThroughMessageId);
 
         // Conversation behavioral state (ConversationState serialized to JSON).
-        // Nullable — populated lazily on the first user turn.
+        // Nullable - populated lazily on the first user turn.
         builder.Property(c => c.StateJson);
 
         // Map the private _messages backing field so callers can only mutate via the aggregate.

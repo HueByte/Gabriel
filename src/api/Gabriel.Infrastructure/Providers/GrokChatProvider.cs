@@ -13,7 +13,7 @@ namespace Gabriel.Infrastructure.Providers;
 
 // Streaming wrapper over xAI's OpenAI-compatible /v1/chat/completions endpoint.
 // HTTP plumbing (base URL, timeout, auth header) is configured on a named
-// HttpClient at DI registration time — see DependencyInjection.cs and
+// HttpClient at DI registration time - see DependencyInjection.cs and
 // GrokAuthHandler.cs. We resolve the client via IHttpClientFactory per call
 // so the underlying pooled handler stays healthy (DNS refresh, lifetime, etc.).
 public class GrokChatProvider : IChatProvider
@@ -60,7 +60,7 @@ public class GrokChatProvider : IChatProvider
             yield break;
         }
 
-        // Tool calls arrive piecewise — accumulate by index until the chunk
+        // Tool calls arrive piecewise - accumulate by index until the chunk
         // with finish_reason="tool_calls" arrives, then emit them all.
         var toolCalls = new Dictionary<int, ToolCallBuilder>();
 
@@ -154,7 +154,7 @@ public class GrokChatProvider : IChatProvider
                     {
                         ["name"] = t.Name,
                         ["description"] = t.Description,
-                        // Schema is a raw JSON object string — parse so it serializes as nested JSON, not a string.
+                        // Schema is a raw JSON object string - parse so it serializes as nested JSON, not a string.
                         ["parameters"] = JsonNode.Parse(t.ParametersJsonSchema),
                     },
                 });
@@ -224,7 +224,7 @@ public class GrokChatProvider : IChatProvider
         public StringBuilder Arguments { get; } = new();
     }
 
-    // Wire DTOs for response parsing — kept private since they only describe the boundary with xAI.
+    // Wire DTOs for response parsing - kept private since they only describe the boundary with xAI.
 
     private sealed record StreamChunk(
         [property: JsonPropertyName("choices")] List<StreamChoice>? Choices);

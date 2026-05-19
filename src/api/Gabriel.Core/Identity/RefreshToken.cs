@@ -6,7 +6,7 @@ namespace Gabriel.Core.Identity;
 //
 // Rotation policy: every successful /jwt/refresh issues a new token AND marks
 // the old one as Replaced. If the old token is presented again after being
-// replaced, that's a strong theft signal — the JwtTokenService revokes the
+// replaced, that's a strong theft signal - the JwtTokenService revokes the
 // entire family for that user.
 public class RefreshToken
 {

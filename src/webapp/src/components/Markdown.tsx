@@ -17,7 +17,7 @@ import { Mermaid } from './Mermaid';
 // IMPORTANT: written as `\uXXXX` escapes, NOT as raw chars. The raw form
 // renders as zero-width in most editors/terminals, so a copy-paste through
 // a tool that strips non-printable chars silently turns them into empty
-// strings — at which point `''.indexOf('')` returns 0 and the loop below
+// strings - at which point `''.indexOf('')` returns 0 and the loop below
 // runs forever, allocating until the tab is OOM-killed. Don't ask how I
 // know.
 export const GAL_OPEN = '\uE001';
@@ -65,7 +65,7 @@ type Inline =
 function expandText(value: string): RootContent[] {
   const stages: Inline[] = [{ type: 'text', value }];
 
-  // Safety guard — if the sentinel constants ever get stripped to empty
+  // Safety guard - if the sentinel constants ever get stripped to empty
   // strings (some tools normalize non-printable PUA chars away), the loop
   // below would spin forever (`''.indexOf('')` returns 0). Detect the
   // misconfig and bail before allocating into oblivion.
@@ -138,7 +138,7 @@ function languageOf(className: string | undefined): string | null {
 }
 
 // Builds the react-markdown component overrides. While streaming, mermaid
-// blocks render as plain code (no diagram) — calling mermaid.render on
+// blocks render as plain code (no diagram) - calling mermaid.render on
 // partial source many times per second leaks SVG/DOM nodes. Once streaming
 // flips false the components map swaps and the real Mermaid renderer takes
 // over with the complete source.
@@ -168,7 +168,7 @@ function buildComponents(streaming: boolean): Components {
       return <pre {...rest}>{children}</pre>;
     },
     code({ className, children, ...rest }) {
-      // 1) Mermaid — language-mermaid block becomes a rendered diagram, but
+      // 1) Mermaid - language-mermaid block becomes a rendered diagram, but
       // only once streaming has stopped. Rendering on every char-reveal tick
       // spawns rapid mermaid.render() calls on incomplete sources.
       if (!streaming && languageOf(className) === 'mermaid') {
@@ -176,7 +176,7 @@ function buildComponents(streaming: boolean): Components {
         return <Mermaid source={source} />;
       }
 
-      // 2) Hex chip — inline code marked by remarkInlineEnrichments.
+      // 2) Hex chip - inline code marked by remarkInlineEnrichments.
       const hex = (rest as Record<string, unknown>)['data-hex'] as string | undefined;
       if (hex) {
         return (
@@ -187,7 +187,7 @@ function buildComponents(streaming: boolean): Components {
         );
       }
 
-      // 3) Default — for highlighted blocks className carries `hljs language-xxx`
+      // 3) Default - for highlighted blocks className carries `hljs language-xxx`
       // and children is an array of token spans (from rehype-highlight).
       return <code className={className}>{children}</code>;
     },
@@ -204,7 +204,7 @@ const COMPONENTS_STREAMING = buildComponents(true);
 const REMARK_PLUGINS: PluggableList = [remarkGfm, remarkMath, remarkInlineEnrichments];
 
 // Precomputed rehype-plugin permutations. We pick from these by inspecting
-// the rendered text — running rehype-highlight on a message with no fenced
+// the rendered text - running rehype-highlight on a message with no fenced
 // code is wasted work, and running rehype-katex on a message with no `$` is
 // the same. Plus during streaming we skip both unconditionally because they
 // re-process the full doc on every char-reveal tick.
@@ -219,7 +219,7 @@ const REHYPE_BOTH: PluggableList = [
 function pickRehypePlugins(text: string, streaming: boolean): PluggableList {
   if (streaming) return REHYPE_NONE;
   const hasFence = text.includes('```');
-  // Math is hot on the `$` char — quick reject keeps the common case (plain
+  // Math is hot on the `$` char - quick reject keeps the common case (plain
   // prose) on the cheap path. The plugin itself validates the rest.
   const hasMath = text.includes('$');
   if (hasFence && hasMath) return REHYPE_BOTH;
@@ -239,7 +239,7 @@ interface Props {
 
 function MarkdownImpl({ text, streaming = false }: Props) {
   // useMemo so the picked plugin array's identity is stable for the lifetime
-  // of this text — keeps react-markdown's internal caching working.
+  // of this text - keeps react-markdown's internal caching working.
   const rehypePlugins = useMemo(
     () => pickRehypePlugins(text, streaming),
     [text, streaming],

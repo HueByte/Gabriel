@@ -18,7 +18,7 @@ namespace Gabriel.Infrastructure.Identity;
 // stock Microsoft.AspNetCore.Identity / Microsoft.Extensions.Identity.Core ones.
 public static class GabrielIdentityExtensions
 {
-    // Cookie names — kept here so the JwtBearer cookie-fallback and the AuthController
+    // Cookie names - kept here so the JwtBearer cookie-fallback and the AuthController
     // cookie writer can't drift apart.
     public const string AccessCookieName = "gabriel.access";
     public const string RefreshCookieName = "gabriel.refresh";
@@ -32,7 +32,7 @@ public static class GabrielIdentityExtensions
     //   - IJwtTokenService for mint/refresh/revoke (handles refresh-token rotation + theft detection)
     public static IServiceCollection AddIdentityAndAuth(this IServiceCollection services, IConfiguration config)
     {
-        // JwtOptions — bound + validated. SKIP_DB_INIT (build-time swagger CLI) skips validation
+        // JwtOptions - bound + validated. SKIP_DB_INIT (build-time swagger CLI) skips validation
         // since the signing key isn't available yet during the codegen pass.
         var jwtOptionsBuilder = services.AddOptions<JwtOptions>()
             .Bind(config.GetSection(JwtOptions.SectionName));
@@ -49,7 +49,7 @@ public static class GabrielIdentityExtensions
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
 
-        // IdentityCore — user store + password hashing + UserManager + SignInManager.
+        // IdentityCore - user store + password hashing + UserManager + SignInManager.
         // No AddApiEndpoints (no MapIdentityApi), no AddDefaultUI.
         services.AddIdentityCore<ApplicationUser>(opts =>
             {
@@ -62,7 +62,7 @@ public static class GabrielIdentityExtensions
             .AddDefaultTokenProviders();
 
         // Single auth scheme: JwtBearer. Reads from Authorization header OR the
-        // HttpOnly access cookie — whichever is present.
+        // HttpOnly access cookie - whichever is present.
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, _ => { /* configured via PostConfigure below */ });
 

@@ -14,7 +14,7 @@ public class GrokOptions
     public string ApiKey { get; set; } = string.Empty;
 
     // Total request budget for a single chat call, applied via the standard
-    // resilience pipeline (not HttpClient.Timeout — which is set to infinite so
+    // resilience pipeline (not HttpClient.Timeout - which is set to infinite so
     // the pipeline is the single source of truth). Must comfortably exceed the
     // longest expected SSE stream; the default is generous so long generations
     // don't cut mid-token.
@@ -24,7 +24,7 @@ public class GrokOptions
     // are smaller. Override per-deployment if you change the Model field.
     public int ContextWindowTokens { get; set; } = 256_000;
 
-    // Sampling controls. 0.8-0.9 hits a nice spot for the natural-DM persona —
+    // Sampling controls. 0.8-0.9 hits a nice spot for the natural-DM persona -
     // 1.0 reads as slightly too random, below 0.7 starts feeling robotic. top_p
     // 0.9 keeps the tail constrained without choking variance.
     public double? Temperature { get; set; } = 0.85;

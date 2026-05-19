@@ -8,11 +8,11 @@ import { paletteVarsFromStops, type RGB } from '../pulse/palettes';
 // Diagnostics view: every frame of the Gabriel Sequence rendered as its own
 // 16×16 canvas in an 8×8 grid. One canvas per frame (rather than one big
 // canvas) keeps per-frame labels, hover affordances, and independent layout
-// trivial — the extra DOM nodes are cheap at this size.
+// trivial - the extra DOM nodes are cheap at this size.
 //
 // Two entry points share this component:
-//   - /c/:conversationId/diagnostics — for standalone (Default-project) chats.
-//   - /p/:projectId/diagnostics — for chats in real projects, where the
+//   - /c/:conversationId/diagnostics - for standalone (Default-project) chats.
+//   - /p/:projectId/diagnostics - for chats in real projects, where the
 //     sequence is the project's shared identity rather than the chat's own.
 
 const FRAME_W = 16;
@@ -72,7 +72,7 @@ function DiagnosticsPageInner({ source, backTo, scopeLabel }: DiagnosticsPagePro
           <span>Back</span>
         </button>
         <h1 className="diagnostics-title">
-          Gabriel Sequence — Diagnostics
+          Gabriel Sequence - Diagnostics
           {scopeLabel && <span className="diagnostics-scope"> · {scopeLabel}</span>}
         </h1>
         {sequence && (
@@ -107,7 +107,7 @@ function DiagnosticsPageInner({ source, backTo, scopeLabel }: DiagnosticsPagePro
   );
 }
 
-// Route at /c/:conversationId/diagnostics — kept for standalone (Default-
+// Route at /c/:conversationId/diagnostics - kept for standalone (Default-
 // project) chats and as a deep-link entry point.
 export function DiagnosticsPage() {
   const { conversationId = '' } = useParams<{ conversationId: string }>();
@@ -121,7 +121,7 @@ export function DiagnosticsPage() {
   );
 }
 
-// Route at /p/:projectId/diagnostics — shared diagnostics for every chat in
+// Route at /p/:projectId/diagnostics - shared diagnostics for every chat in
 // the project.
 export function ProjectDiagnosticsPage() {
   const { projectId = '' } = useParams<{ projectId: string }>();

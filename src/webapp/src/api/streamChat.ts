@@ -7,7 +7,7 @@
 // 401 handling: when the SSE pre-stream response is 401 (access JWT expired),
 // call the shared refreshSession() and retry the SSE POST once. If refresh
 // fails or the retry is still 401, signal session-expired so AuthContext can
-// log the user out cleanly — the in-flight chat send is then a thrown error
+// log the user out cleanly - the in-flight chat send is then a thrown error
 // the caller toasts.
 
 import { refreshSession, signalSessionExpired } from './authRefresh';
@@ -30,6 +30,12 @@ function doFetch(conversationId: string, content: string, signal?: AbortSignal):
     `/api/conversations/${encodeURIComponent(conversationId)}/messages/stream`,
     {
       method: 'POST',
+      // Explicit so the access cookie travels even if the deployment ever
+      // splits the webapp + API across origins (today's Vite proxy makes
+      // them same-origin, but defaults won't save us if that changes).
+      // Without this, a stale-cookie scenario in a cross-origin deploy
+      // would 401 the SSE with no recovery path.
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ content }),
       signal,
@@ -44,7 +50,7 @@ export async function* streamChat(
 ): AsyncGenerator<AgentEvent> {
   let response = await doFetch(conversationId, content, opts.signal);
 
-  // Pre-stream 401 — try one refresh, then retry. If still unauthorized, tell
+  // Pre-stream 401 - try one refresh, then retry. If still unauthorized, tell
   // the rest of the app the session is dead and surface a clean error.
   if (response.status === 401) {
     const refreshed = await refreshSession();
@@ -58,13 +64,13 @@ export async function* streamChat(
   }
 
   if (!response.ok) {
-    // 4xx/5xx surfaced before any streaming started — body is ProblemDetails JSON.
+    // 4xx/5xx surfaced before any streaming started - body is ProblemDetails JSON.
     let detail: string | undefined;
     try {
       const body = (await response.json()) as { detail?: string; title?: string };
       detail = body.detail ?? body.title;
     } catch {
-      // ignore parse failure — fall back to status text
+      // ignore parse failure - fall back to status text
     }
     throw new Error(detail ?? `${response.status} ${response.statusText}`);
   }
@@ -97,7 +103,7 @@ export async function* streamChat(
           try {
             yield JSON.parse(payload) as AgentEvent;
           } catch {
-            // Malformed frame — skip without crashing the stream.
+            // Malformed frame - skip without crashing the stream.
           }
         }
       }

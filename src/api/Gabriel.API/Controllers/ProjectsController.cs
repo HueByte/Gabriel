@@ -54,7 +54,7 @@ public class ProjectsController : ControllerBase
         // Patch semantics: only update fields that were supplied. The DTO is
         // all-nullable; explicit null on `Description` / `SystemPrompt` clears
         // them, missing keys leave them alone (JSON deserialization treats both
-        // as null, so this is a small simplification — see the comment in the
+        // as null, so this is a small simplification - see the comment in the
         // PATCH design note for the future explicit-clear behavior).
         var project = await _projects.GetAsync(id, ct);
         if (request.Name is not null) project = await _projects.RenameAsync(id, request.Name, ct);
@@ -84,7 +84,7 @@ public class ProjectsController : ControllerBase
     }
 
     // Re-rolls Project.AvatarSeed. The pinned pattern / palette overrides
-    // (if any) survive — reroll only changes the seed-derived dimensions of
+    // (if any) survive - reroll only changes the seed-derived dimensions of
     // the avatar. Mirrors the per-conversation reroll under
     // ConversationsController.
     [HttpPost("{id:guid}/avatar/reroll")]
@@ -94,7 +94,7 @@ public class ProjectsController : ControllerBase
         return Ok(project.ToResponse(includeFiles: false));
     }
 
-    // Pin (or clear) the project's avatar skin — pattern + palette identifiers
+    // Pin (or clear) the project's avatar skin - pattern + palette identifiers
     // from the catalog. PUT semantics: both fields are taken as the full
     // intended state, null on either dimension clears it back to seed-derived.
     // Unknown / unrecognized identifiers are rejected as 400 so the client

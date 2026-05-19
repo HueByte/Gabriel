@@ -3,7 +3,7 @@ import { HiOutlineArrowLeft, HiOutlineArrowRightOnRectangle } from 'react-icons/
 import { useAuth } from '../auth/AuthContext';
 import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
 
-// User-scoped settings: identity readout + sign-out. Intentionally minimal —
+// User-scoped settings: identity readout + sign-out. Intentionally minimal -
 // password change, email change, and theme controls will land here once the
 // API endpoints exist. The page reuses .settings-* styles shared with the
 // project settings page so both feel like one surface.
@@ -46,7 +46,7 @@ export function UserSettingsPage() {
         <h2 className="settings-section-title">Chat display</h2>
         <p className="settings-hint">
           The ReAct agent loop emits intermediate steps that Gabriel uses to
-          reason through a request. Toggle each kind independently — final
+          reason through a request. Toggle each kind independently - final
           answers always remain visible.
         </p>
         <label className="settings-toggle">
@@ -63,7 +63,7 @@ export function UserSettingsPage() {
             checked={hideToolCalls}
             onChange={e => setHideToolCalls(e.target.checked)}
           />
-          <span>Hide tool calls <span className="settings-faint">(the `action` step — tool name + arguments)</span></span>
+          <span>Hide tool calls <span className="settings-faint">(the `action` step - tool name + arguments)</span></span>
         </label>
         <label className="settings-toggle">
           <input
@@ -71,7 +71,7 @@ export function UserSettingsPage() {
             checked={hideToolResults}
             onChange={e => setHideToolResults(e.target.checked)}
           />
-          <span>Hide tool results <span className="settings-faint">(the `observation` step — collapsed output)</span></span>
+          <span>Hide tool results <span className="settings-faint">(the `observation` step - collapsed output)</span></span>
         </label>
       </section>
 

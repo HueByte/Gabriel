@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { installAuthInterceptor } from './api/authInterceptor';
 import 'react-toastify/dist/ReactToastify.css';
-// Syntax highlighting theme — applied to .hljs spans that rehype-highlight
+// Syntax highlighting theme - applied to .hljs spans that rehype-highlight
 // emits inside `.md pre code` blocks.
 import 'highlight.js/styles/github-dark.css';
 // KaTeX font / layout styles for the math nodes rehype-katex produces.

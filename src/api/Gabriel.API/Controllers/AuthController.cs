@@ -11,13 +11,13 @@ namespace Gabriel.API.Controllers;
 
 // Single auth surface for the app:
 //
-//   POST /api/auth/register   anonymous   — create user, mint pair, set HttpOnly cookies, return tokens
-//   POST /api/auth/login      anonymous   — verify creds, mint pair, set cookies, return tokens
-//   POST /api/auth/refresh    anonymous   — rotate refresh (reads cookie OR body), set new cookies
-//   POST /api/auth/logout     anonymous   — revoke refresh from cookie, clear cookies
-//   POST /api/auth/revoke     anonymous   — revoke a specific refresh token from the body (external)
-//   POST /api/auth/revoke-all [Authorize] — revoke every active refresh token for the current user
-//   GET  /api/auth/me         [Authorize] — return id + email of the current user
+//   POST /api/auth/register   anonymous   - create user, mint pair, set HttpOnly cookies, return tokens
+//   POST /api/auth/login      anonymous   - verify creds, mint pair, set cookies, return tokens
+//   POST /api/auth/refresh    anonymous   - rotate refresh (reads cookie OR body), set new cookies
+//   POST /api/auth/logout     anonymous   - revoke refresh from cookie, clear cookies
+//   POST /api/auth/revoke     anonymous   - revoke a specific refresh token from the body (external)
+//   POST /api/auth/revoke-all [Authorize] - revoke every active refresh token for the current user
+//   GET  /api/auth/me         [Authorize] - return id + email of the current user
 //
 // register / login / refresh: set cookies AND return tokens in the body. The webapp ignores
 // the body and lets the browser handle cookies; external clients ignore the cookies and use
@@ -79,7 +79,7 @@ public class AuthController : ControllerBase
         }
 
         // CheckPasswordSignInAsync verifies the password and updates lockout counters
-        // WITHOUT issuing any Identity cookies/sessions — perfect for our JWT flow.
+        // WITHOUT issuing any Identity cookies/sessions - perfect for our JWT flow.
         var result = await _signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
@@ -123,7 +123,7 @@ public class AuthController : ControllerBase
             // because ASP.NET's UseExceptionHandler calls Response.Clear() on
             // throw, which wipes any Set-Cookie headers we'd want to attach.
             // Clearing cookies here means the browser immediately stops sending
-            // dead tokens — the webapp's signal-expired flow can then redirect
+            // dead tokens - the webapp's signal-expired flow can then redirect
             // to login cleanly.
             _logger.LogInformation("Refresh failed: {Reason}", ex.Message);
             AuthCookies.Clear(Response);
@@ -132,7 +132,7 @@ public class AuthController : ControllerBase
     }
 
     // Build a ProblemDetails 401 response that survives alongside our explicit
-    // Response.Cookies edits — the global exception handler can't help us here
+    // Response.Cookies edits - the global exception handler can't help us here
     // because it would Response.Clear() first.
     private ActionResult BuildUnauthorized(string detail)
     {
@@ -163,7 +163,7 @@ public class AuthController : ControllerBase
     [HttpPost("revoke")]
     public async Task<IActionResult> Revoke([FromBody] RefreshTokenRequest request, CancellationToken ct)
     {
-        // Idempotent — always 204 so callers can't probe which tokens existed.
+        // Idempotent - always 204 so callers can't probe which tokens existed.
         await _jwt.RevokeAsync(request.RefreshToken, ct);
         return NoContent();
     }

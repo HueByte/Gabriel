@@ -3,7 +3,7 @@ import { HiOutlineArrowPath } from 'react-icons/hi2';
 import { SequenceService, type SequenceCatalogResponse } from '../api/generated';
 import { notifyError } from '../lib/notify';
 
-// Reusable "skin picker" — pattern + palette selectors, plus an optional
+// Reusable "skin picker" - pattern + palette selectors, plus an optional
 // reroll button for the seed-derived dimensions. Used by Project Settings
 // today; designed so a standalone-chat variant can drop it in later.
 //
@@ -18,7 +18,7 @@ interface SkinPickerProps {
   palette: string | null;
   onChange: (next: { pattern: string | null; palette: string | null }) => void;
   /** Optional reroll handler. When provided, a button is rendered next to the
-   *  pickers. The skin overrides are NOT cleared by reroll — pattern/palette
+   *  pickers. The skin overrides are NOT cleared by reroll - pattern/palette
    *  pins survive a reroll (reroll only changes seed-derived dimensions). */
   onReroll?: () => void;
   /** Disables interaction (e.g. while saving). */
@@ -87,7 +87,7 @@ export function SkinPicker({ pattern, palette, onChange, onReroll, disabled }: S
           className="settings-secondary"
           onClick={onReroll}
           disabled={disabled}
-          title="Reroll seed — pattern/palette pins survive"
+          title="Reroll seed - pattern/palette pins survive"
         >
           <HiOutlineArrowPath aria-hidden="true" />
           <span>Reroll seed</span>

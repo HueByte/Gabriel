@@ -28,7 +28,7 @@ internal static class ContractMappings
 
     public static ConversationResponse ToResponse(this Conversation c, bool includeMessages, Project? project = null)
     {
-        // Project metadata is optional — list endpoints don't bother loading it
+        // Project metadata is optional - list endpoints don't bother loading it
         // (sidebar rows don't render avatars), so the new fields stay null.
         // Single-conversation endpoints pass the project so the client can
         // render the correct sequence (project's shared one vs the conversation's

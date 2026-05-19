@@ -6,11 +6,11 @@ import { pickPattern, type Pattern } from '../pulse/patterns';
 import { mulberry32 } from '../pulse/rng';
 
 const BARS = 16;
-// Sample the avatar's pattern at the middle horizontal row — one column per bar.
+// Sample the avatar's pattern at the middle horizontal row - one column per bar.
 const SAMPLE_Y = 8;
 const LOOP_SPEED = 0.22; // slightly faster than the big avatar (0.15) so it reads as "active"
 
-// 3D layout — bars sit across [-0.5, 0.5] x and grow up from y = -MAX_H/2.
+// 3D layout - bars sit across [-0.5, 0.5] x and grow up from y = -MAX_H/2.
 const MAX_H = 0.7;
 const BAR_SPACING = 1 / BARS;
 const BAR_WIDTH = BAR_SPACING * 0.55;
@@ -42,7 +42,7 @@ function Bars({ seed, paletteStops }: { seed: number; paletteStops?: readonly RG
   const state = useMemo(() => buildState(seed, paletteStops), [seed, paletteStops]);
   const meshRefs = useRef<(Mesh | null)[]>([]);
 
-  // Bottom-anchored geometry — translating the plane up by MAX_H/2 puts its
+  // Bottom-anchored geometry - translating the plane up by MAX_H/2 puts its
   // origin at the bottom edge, so scaling Y grows upward from the baseline.
   const geom = useMemo(() => {
     const g = new PlaneGeometry(BAR_WIDTH, MAX_H);
@@ -87,7 +87,7 @@ function Bars({ seed, paletteStops }: { seed: number; paletteStops?: readonly RG
 /**
  * Mini three.js indicator shown between "user submitted" and "first token". Renders
  * a 16-bar mini equalizer driven by the same pattern + palette as the conversation's
- * avatar — same identity, different visual language. When `paletteStops` is
+ * avatar - same identity, different visual language. When `paletteStops` is
  * supplied (e.g. lifted from the server's GabrielSequence response) those colors
  * are used instead of the seed-derived pulse palette.
  */

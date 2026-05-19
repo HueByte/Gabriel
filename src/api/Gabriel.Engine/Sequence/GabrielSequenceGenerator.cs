@@ -10,7 +10,7 @@ namespace Gabriel.Engine.Sequence;
 //      one family; we expand its 2-4 gradient stops to a 16-entry palette.
 //
 //   2. PATTERN is one of five primitives (plasma, waves, spiral, pulse, shimmer)
-//      picked by seed. Each primitive has its own animation grammar — plasma
+//      picked by seed. Each primitive has its own animation grammar - plasma
 //      morphs, waves flow directionally, spirals rotate, pulse rings out,
 //      shimmer flickers per-pixel. That's what produces visual identity per
 //      personality and removes the "fbm-everywhere blob" feel.
@@ -30,7 +30,7 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
         string? paletteOverride = null)
     {
         // Palette: explicit override wins; otherwise seed-derived. Unknown
-        // override names fall through to seed-derived behavior — see
+        // override names fall through to seed-derived behavior - see
         // PaletteTemplates.PickByName / SequenceCatalog.
         var paletteTemplate = PaletteTemplates.PickByName(paletteOverride)
             ?? PaletteTemplates.Pick(seed);
@@ -40,7 +40,7 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
         // Seed a Random for pattern-parameter selection. Folding through xor +
         // a large prime keeps adjacent seeds from collapsing to the same params.
         // (The parameter RNG is still seed-derived even when the pattern KIND
-        // is pinned — pinning chooses the primitive but the per-pattern params
+        // is pinned - pinning chooses the primitive but the per-pattern params
         // stay fingerprinted to the seed.)
         var paramRng = new Random(unchecked((int)(seed ^ (seed >> 32) ^ 0xC2B2AE35)));
         var patternKind = SequenceCatalog.TryParsePattern(patternOverride)
@@ -98,7 +98,7 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
 
     private static PatternBundle BuildPatternBundle(PatternKind kind, Random rng)
     {
-        // Only initialize the chosen primitive — shimmer in particular allocates
+        // Only initialize the chosen primitive - shimmer in particular allocates
         // size×size phase arrays which we'd rather skip when unused.
         return new PatternBundle(
             Kind: kind,
@@ -137,7 +137,7 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
             for (var x = 0; x < Frame.Width; x++)
             {
                 var v = SamplePattern(bundle, x, y, t);
-                // Intensity pushes values toward the bright end — gives the
+                // Intensity pushes values toward the bright end - gives the
                 // Live State window its "alive" feel without re-balancing the
                 // palette window separately.
                 v = Math.Clamp(v * intensity, 0, 1);
@@ -178,7 +178,7 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
                 _              => (1,                      paletteSize - 1,     1.0),
             };
 
-            // Pinch the window further if the user has been sending shorts —
+            // Pinch the window further if the user has been sending shorts -
             // reads as slightly tense / restricted.
             if (state.ConsecutiveShortMessages >= 2)
             {
@@ -189,7 +189,7 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
             }
 
             // Per-turn phase shove so the visible frames actually differ
-            // between turns at the same mood — keeps the avatar feeling alive
+            // between turns at the same mood - keeps the avatar feeling alive
             // rather than freezing on identical Live State frames.
             var phaseNudge = (state.TurnCount * 0.073 + state.LastUserTokenCount * 0.0013) % 1.0;
 

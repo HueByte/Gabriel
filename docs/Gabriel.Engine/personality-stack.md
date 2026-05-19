@@ -2,11 +2,11 @@
 
 The "emotion system" in Gabriel is a three-stage pipeline that runs per turn:
 
-1. **`IConversationStateUpdater`** — reads the new user message + prior state, emits a new `ConversationState` (mood, length stats, user-style flags, task-mode flag).
-2. **`ISystemPromptBuilder`** — assembles the per-turn system prompt: static persona block + dynamic guidance derived from the state.
-3. **`IResponsePostProcessor`** — cleans the model's raw reply at save time (AI-ism strip + length cap).
+1. **`IConversationStateUpdater`** - reads the new user message + prior state, emits a new `ConversationState` (mood, length stats, user-style flags, task-mode flag).
+2. **`ISystemPromptBuilder`** - assembles the per-turn system prompt: static persona block + dynamic guidance derived from the state.
+3. **`IResponsePostProcessor`** - cleans the model's raw reply at save time (AI-ism strip + length cap).
 
-The state is also what drives the **Live State** layer of the Gabriel Sequence (frames 48-63). The same mood signal that shapes the system prompt also shifts the avatar's palette window — see [gabriel-sequence.md](gabriel-sequence.md).
+The state is also what drives the **Live State** layer of the Gabriel Sequence (frames 48-63). The same mood signal that shapes the system prompt also shifts the avatar's palette window - see [gabriel-sequence.md](gabriel-sequence.md).
 
 ```mermaid
 flowchart LR
@@ -49,9 +49,9 @@ public sealed record ConversationState
 
 ## HeuristicConversationStateUpdater
 
-Pure-heuristic, zero LLM calls — runs in microseconds. Trade-off: occasional mood mis-classification in exchange for predictability and no marginal cost.
+Pure-heuristic, zero LLM calls - runs in microseconds. Trade-off: occasional mood mis-classification in exchange for predictability and no marginal cost.
 
-### Token tracking — exponential moving average
+### Token tracking - exponential moving average
 
 For each new user message with token count $c_t$:
 
@@ -62,20 +62,20 @@ c_t & \text{if } T_0 = 0 \text{ (first turn)} \\
 \end{cases}
 $$
 
-Smoother than a sliding window, no buffer to maintain. Stored as `AvgUserTokenCount`. The weight ratio `0.7 / 0.3` gives ~3-message half-life — enough to track conversational rhythm without latching to outliers.
+Smoother than a sliding window, no buffer to maintain. Stored as `AvgUserTokenCount`. The weight ratio `0.7 / 0.3` gives ~3-message half-life - enough to track conversational rhythm without latching to outliers.
 
-### Mood classification — regex-driven
+### Mood classification - regex-driven
 
 Priority-ordered: the first matching cue wins.
 
 | Mood | Trigger |
 | --- | --- |
 | `Playful` | `\b(lol\|lmao\|haha\|hahaha\|rofl)\b` OR `!{2,}` OR `\bxd\b` |
-| `Venting` | Negative lexicon AND first-person — `\b(hate\|sucks\|fuck\|shit\|exhausted\|frustrat\w+\|stressed\|...)\b` plus the message containing `"i "` (case-insensitive) |
+| `Venting` | Negative lexicon AND first-person - `\b(hate\|sucks\|fuck\|shit\|exhausted\|frustrat\w+\|stressed\|...)\b` plus the message containing `"i "` (case-insensitive) |
 | `Serious` | Message starts with `^(honestly\|seriously\|look\|listen\|ok so)\b` |
 | `Curious` | Token count > 100 AND message contains `?` |
 | `LowEnergy` | Token count < 5 AND no punctuation |
-| `Neutral` | Fallback — also decays from prior non-neutral moods when no cue fires (`DecayToward` currently returns the prior, leaves room for a future decay table) |
+| `Neutral` | Fallback - also decays from prior non-neutral moods when no cue fires (`DecayToward` currently returns the prior, leaves room for a future decay table) |
 
 ### Task-mode detection (`UserAskedForDetail`)
 
@@ -83,7 +83,7 @@ The most important flag in the state. Determines whether the model produces a ca
 
 Two regexes, OR'd:
 
-**`DetailCueRegex`** — task verbs:
+**`DetailCueRegex`** - task verbs:
 
 ```text
 explain | tell me about | tell me | how does | how do | what is | why does | why is
@@ -93,7 +93,7 @@ do it | go ahead | send it | just do it | write it | make it
 make me | give me | show me | help me with
 ```
 
-**`PleaseSuffixRegex`** — `\w+\s+(please|pls)\s*\??\s*$` — catches `"bubble sort please"` / `"quicksort pls"` style implicit requests.
+**`PleaseSuffixRegex`** - `\w+\s+(please|pls)\s*\??\s*$` - catches `"bubble sort please"` / `"quicksort pls"` style implicit requests.
 
 When `UserAskedForDetail` flips true, the system prompt builder swaps the length guidance from chat-mode to task-mode (see below) and the post-processor raises the length cap.
 
@@ -112,19 +112,19 @@ Assembles the per-turn system prompt. Static persona block stays constant; dynam
 
 ### Two modes
 
-The persona is split into two modes, with **TASK MODE leading the prompt** (it's the failure-prone case — if the model defaults to short chat replies when the user asked for code, the experience breaks). Key rules:
+The persona is split into two modes, with **TASK MODE leading the prompt** (it's the failure-prone case - if the model defaults to short chat replies when the user asked for code, the experience breaks). Key rules:
 
-**TASK MODE** — fires when `UserAskedForDetail` is true:
+**TASK MODE** - fires when `UserAskedForDetail` is true:
 
 - Deliver the full artifact in this reply. Length-matching does NOT apply.
 - Open with the artifact itself, no preamble like "alright, here's a basic X".
-- If reply would be < 30 words, you've failed — start over.
+- If reply would be < 30 words, you've failed - start over.
 - Repeated user prompts ("do it", "write it") = stalling; produce output now.
 
-**CHAT MODE** — casual back-and-forth:
+**CHAT MODE** - casual back-and-forth:
 
 - Match the user's general weight (short user → short reply).
-- Every reply must bring substance — a take, a callback, a reaction with flavor. Bare acknowledgments ("yeah ok") are a fail.
+- Every reply must bring substance - a take, a callback, a reaction with flavor. Bare acknowledgments ("yeah ok") are a fail.
 - 2-3 word replies acceptable only for pure-noise messages (lol / k / fair).
 
 Plus hard prohibitions that apply in both modes: no "great question" / "absolutely" / "I'd be happy to help" / etc., no rephrasing the user, no "feel free to ask" closers, no unsolicited emoji.
@@ -138,10 +138,10 @@ Appended to the static persona at every turn:
 Turn: {state.TurnCount}
 User's last message length: ~{state.LastUserTokenCount} tokens
 Conversation mood: {state.Mood, lowercased}
-User uses emoji — light mirroring is allowed.            ; if state.UserUsesEmoji
-User writes in lowercase — match.                         ; if state.UserUsesLowercase
-Recent messages have been very short — don't force engagement.  ; if ConsecutiveShortMessages >= 2
-User is in TASK MODE — they want a substantive artifact (code, doc, explanation).  ; if UserAskedForDetail
+User uses emoji - light mirroring is allowed.            ; if state.UserUsesEmoji
+User writes in lowercase - match.                         ; if state.UserUsesLowercase
+Recent messages have been very short - don't force engagement.  ; if ConsecutiveShortMessages >= 2
+User is in TASK MODE - they want a substantive artifact (code, doc, explanation).  ; if UserAskedForDetail
 ⚠ STALL WARNING: ...PRODUCE THE FULL ARTIFACT IN THIS REPLY. No more confirmations.  ; if task mode + ConsecutiveShortMessages >= 1
 
 [Guidance]
@@ -149,7 +149,7 @@ User is in TASK MODE — they want a substantive artifact (code, doc, explanatio
 {MoodGuidance(state.Mood)}
 ```
 
-### Length guidance — bucketed on user-message length
+### Length guidance - bucketed on user-message length
 
 The bucketing is intentionally coarse (5 buckets) to avoid hair-trigger swings:
 
@@ -161,9 +161,9 @@ The bucketing is intentionally coarse (5 buckets) to avoid hair-trigger swings:
 | `61..150` | Match depth; short paragraph |
 | `> 150` | Substantive; cap at ~250 words |
 
-**Task-mode short-circuits all buckets** — when `UserAskedForDetail` is true, the function returns the "deliver the full artifact, length-matching does NOT apply" guidance regardless of $c_t$. This is the fix for the `"write it"` (2 tokens) failure mode where the previous bucket would have demanded an 8-word reply.
+**Task-mode short-circuits all buckets** - when `UserAskedForDetail` is true, the function returns the "deliver the full artifact, length-matching does NOT apply" guidance regardless of $c_t$. This is the fix for the `"write it"` (2 tokens) failure mode where the previous bucket would have demanded an 8-word reply.
 
-### Mood guidance — bias toward engagement
+### Mood guidance - bias toward engagement
 
 Each mood gets a one-liner pushing toward genuine engagement rather than passive matching:
 
@@ -174,11 +174,11 @@ Each mood gets a one-liner pushing toward genuine engagement rather than passive
 | `Serious` | Direct, thoughtful, substantive. |
 | `Curious` | Engage with the idea, add a take, ask one thing if genuinely curious. |
 | `LowEnergy` | Brief but make each sentence count. |
-| `Neutral` | **Bring an angle, a take, or a curious question** — "match the room" does NOT mean strip personality. |
+| `Neutral` | **Bring an angle, a take, or a curious question** - "match the room" does NOT mean strip personality. |
 
 ### Few-shot block
 
-Two chunks: chat-mode examples (`lol → lol`; `what do you think about rust → opinion`; `how's it going → caffeinated regex fight + question`) and task-mode examples (Python string reverse, TS BFS, OAuth explainer). The model anchors strongly on these — the task-mode examples specifically were added because the original prompt's chat-only examples were teaching the model to never deliver code.
+Two chunks: chat-mode examples (`lol → lol`; `what do you think about rust → opinion`; `how's it going → caffeinated regex fight + question`) and task-mode examples (Python string reverse, TS BFS, OAuth explainer). The model anchors strongly on these - the task-mode examples specifically were added because the original prompt's chat-only examples were teaching the model to never deliver code.
 
 ## ResponsePostProcessor
 
@@ -205,7 +205,7 @@ Runs at save time on the **full** accumulated raw response. Pure function: `(raw
 - `"hope (that|this) helps..."`
 - `"does that make sense..."`
 
-What it deliberately does NOT strip: markdown. Discord-style inline emphasis (`**bold**`, `*italic*`, fenced code, blockquotes) is part of the persona's allowed style — the post-processor's only job here is residual AI-speak.
+What it deliberately does NOT strip: markdown. Discord-style inline emphasis (`**bold**`, `*italic*`, fenced code, blockquotes) is part of the persona's allowed style - the post-processor's only job here is residual AI-speak.
 
 ### Length cap
 
@@ -229,7 +229,7 @@ Floor: $C \geq 30$. Even very short user messages allow a minimum reply.
 
 If $T_{\text{response}} > C$, truncate at the last sentence boundary (`. ! ?`) within the last ~80 chars of the budget. If no boundary found, hard-cut and append `…`. The 4-chars-per-token approximation used here matches the rest of the engine.
 
-The cap is a **safety net** — the persona prompt is the primary defense. In practice it's rarely triggered because the model already respects the prompt's guidance most of the time.
+The cap is a **safety net** - the persona prompt is the primary defense. In practice it's rarely triggered because the model already respects the prompt's guidance most of the time.
 
 ## Configuration
 
@@ -250,7 +250,7 @@ All knobs live in `PersonalityOptions` (section `Personality` in config):
 }
 ```
 
-The thinking-delay + cps range are consumed by the SSE controller (not Engine) to pace SSE deltas. They live on `PersonalityOptions` because they're a personality knob — different personas could feel slower or snappier — and they're config-bound where Engine reads `PersonalityOptions`.
+The thinking-delay + cps range are consumed by the SSE controller (not Engine) to pace SSE deltas. They live on `PersonalityOptions` because they're a personality knob - different personas could feel slower or snappier - and they're config-bound where Engine reads `PersonalityOptions`.
 
 ## Where this hooks the agent loop
 
@@ -272,13 +272,13 @@ var toPersist = string.IsNullOrWhiteSpace(cleaned) ? rawText : cleaned;
 var assistantMessage = conversation.AppendAssistantText(toPersist, variantGroupIdOverride);
 ```
 
-The state update happens **once per user turn** — before any provider call. The system prompt is rebuilt **on every iteration** of the ReAct loop (each tool-response cycle gets the same state-derived prompt, which is fine since state doesn't change mid-turn). The post-processor runs **once at the end** on the accumulated text.
+The state update happens **once per user turn** - before any provider call. The system prompt is rebuilt **on every iteration** of the ReAct loop (each tool-response cycle gets the same state-derived prompt, which is fine since state doesn't change mid-turn). The post-processor runs **once at the end** on the accumulated text.
 
-`RegenerateAsync` **does not call the state updater** — the existing state already reflects the user's message that the regen is replying to. The system prompt and post-processor use the same state.
+`RegenerateAsync` **does not call the state updater** - the existing state already reflects the user's message that the regen is replying to. The system prompt and post-processor use the same state.
 
 ## What's NOT in the personality stack (yet)
 
-- **Per-project personality** — Phase 8. Today the persona is global, defined by `PersonalityOptions.Name` + the hardcoded text in `GabrielSystemPromptBuilder`. Phase 8 introduces `Project.SystemPrompt` that overrides at agent-time. The `ISystemPromptBuilder` interface is already general enough to accept that.
-- **LLM-backed mood classification** — the heuristic is good enough today. The interface (`IConversationStateUpdater`) is the swap point if a small classifier model becomes worth it.
-- **Multi-turn mood decay** — `DecayToward` is currently the identity function; a future smoothing table could decay non-neutral moods toward neutral over silent turns.
-- **Topic-aware system prompt** — `RecentTopics` is tracked but not yet injected. The dynamic block could include `"Recent topics: rust, ownership, lifetimes"` to keep the model aware of running threads.
+- **Per-project personality** - Phase 8. Today the persona is global, defined by `PersonalityOptions.Name` + the hardcoded text in `GabrielSystemPromptBuilder`. Phase 8 introduces `Project.SystemPrompt` that overrides at agent-time. The `ISystemPromptBuilder` interface is already general enough to accept that.
+- **LLM-backed mood classification** - the heuristic is good enough today. The interface (`IConversationStateUpdater`) is the swap point if a small classifier model becomes worth it.
+- **Multi-turn mood decay** - `DecayToward` is currently the identity function; a future smoothing table could decay non-neutral moods toward neutral over silent turns.
+- **Topic-aware system prompt** - `RecentTopics` is tracked but not yet injected. The dynamic block could include `"Recent topics: rust, ownership, lifetimes"` to keep the model aware of running threads.

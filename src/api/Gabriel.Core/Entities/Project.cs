@@ -18,7 +18,7 @@ public class Project
 
     // Drives the *shared* Gabriel Sequence rendered for this project. Every
     // user-created project has a stable seed so all of its conversations show
-    // the same avatar — the project itself has an identity. The auto-created
+    // the same avatar - the project itself has an identity. The auto-created
     // "Default" project (see IsDefault) still carries a seed but the client
     // ignores it: conversations in the Default bucket each render their own
     // per-conversation sequence ("standalone" behavior).
@@ -32,7 +32,7 @@ public class Project
 
     // Optional "skin" pins that override the seed-derived Gabriel Sequence
     // pattern / palette picks. Both are catalog identifiers (lowercase, e.g.
-    // "plasma" / "heat"). Null means "use whatever the seed chooses" — the
+    // "plasma" / "heat"). Null means "use whatever the seed chooses" - the
     // default behavior. See SequenceCatalog for the known values.
     public string? PatternOverride { get; private set; }
     public string? PaletteOverride { get; private set; }
@@ -83,7 +83,7 @@ public class Project
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    // Matches Conversation.GenerateAvatarSeed — 1..2^32-1 so the value
+    // Matches Conversation.GenerateAvatarSeed - 1..2^32-1 so the value
     // round-trips through JSON Number safely.
     private static long GenerateAvatarSeed() => Random.Shared.NextInt64(1L, 1L << 32);
 

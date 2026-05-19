@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace Gabriel.Engine.Tools.Files;
 
-// Scoped — pulls IToolExecutionContext (per-turn project id) + IProjectFileService
+// Scoped - pulls IToolExecutionContext (per-turn project id) + IProjectFileService
 // (project root + authz). Stateless aside from those.
 public sealed class AgentPathResolver : IAgentPathResolver
 {
@@ -48,14 +48,14 @@ public sealed class AgentPathResolver : IAgentPathResolver
             case PathRootMode.Host:
                 if (string.IsNullOrWhiteSpace(_options.HostRoot))
                     throw new DomainException(
-                        "Host mode is disabled — operator hasn't set AgentTools:HostRoot. " +
+                        "Host mode is disabled - operator hasn't set AgentTools:HostRoot. " +
                         "Use mode=\"project\" to access this conversation's project files instead.");
                 return Path.GetFullPath(_options.HostRoot);
 
             case PathRootMode.Project:
                 if (_context.ProjectId is not { } projectId)
                     throw new DomainException(
-                        "This conversation isn't attached to a project — can't use project sandbox mode.");
+                        "This conversation isn't attached to a project - can't use project sandbox mode.");
                 return await _projectFiles.GetProjectDirectoryAsync(projectId, ct);
 
             default:

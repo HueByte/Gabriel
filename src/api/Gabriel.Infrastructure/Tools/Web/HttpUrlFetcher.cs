@@ -8,15 +8,15 @@ namespace Gabriel.Infrastructure.Tools.Web;
 
 // IUrlFetcher backed by HttpClient. Three concerns this class is built around:
 //
-//   1. SSRF defense — refuse non-HTTP(S) schemes and refuse hosts that resolve
+//   1. SSRF defense - refuse non-HTTP(S) schemes and refuse hosts that resolve
 //      to loopback / link-local / RFC1918 private ranges. Otherwise the agent
 //      could be tricked into hitting the host's own metadata service
 //      (169.254.169.254), an internal admin port, or a database.
 //
-//   2. Size cap — read up to a fixed byte ceiling so a giant page doesn't
+//   2. Size cap - read up to a fixed byte ceiling so a giant page doesn't
 //      blow the model's context window. Truncation is reported, not silent.
 //
-//   3. HTML→text — strip script/style/nav/header/footer first (their content
+//   3. HTML→text - strip script/style/nav/header/footer first (their content
 //      is rarely the answer), then strip remaining tags, decode entities,
 //      collapse whitespace. Gets the readable body into the model's hands
 //      without the page chrome.
@@ -24,7 +24,7 @@ public sealed class HttpUrlFetcher : IUrlFetcher
 {
     public const string HttpClientName = "WebFetch";
 
-    // 12k chars roughly = 3k tokens — a reasonable upper bound that leaves room
+    // 12k chars roughly = 3k tokens - a reasonable upper bound that leaves room
     // for the rest of the conversation in the model's context.
     private const int MaxContentChars = 12_000;
     // Read at most this many bytes from the wire before we stop; some pages
@@ -61,7 +61,7 @@ public sealed class HttpUrlFetcher : IUrlFetcher
         if (!IsTextLike(contentType))
             throw new InvalidOperationException($"Refusing to fetch non-text content (Content-Type: {contentType}).");
 
-        // Bounded read — at most MaxBytesToRead bytes before we cut the stream.
+        // Bounded read - at most MaxBytesToRead bytes before we cut the stream.
         var bytes = await ReadBoundedAsync(response.Content, MaxBytesToRead, ct);
         var wasTruncatedAtBytes = bytes.Length >= MaxBytesToRead;
 
@@ -122,13 +122,13 @@ public sealed class HttpUrlFetcher : IUrlFetcher
             if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
             // 192.168.0.0/16
             if (b[0] == 192 && b[1] == 168) return true;
-            // 169.254.0.0/16 — link-local; AWS / GCP metadata lives here
+            // 169.254.0.0/16 - link-local; AWS / GCP metadata lives here
             if (b[0] == 169 && b[1] == 254) return true;
-            // 127.0.0.0/8 — already caught by IsLoopback for 127.0.0.1 but cover the rest
+            // 127.0.0.0/8 - already caught by IsLoopback for 127.0.0.1 but cover the rest
             if (b[0] == 127) return true;
-            // 0.0.0.0/8 — unspecified
+            // 0.0.0.0/8 - unspecified
             if (b[0] == 0) return true;
-            // 100.64.0.0/10 — CGNAT
+            // 100.64.0.0/10 - CGNAT
             if (b[0] == 100 && b[1] >= 64 && b[1] <= 127) return true;
         }
         else if (addr.AddressFamily == AddressFamily.InterNetworkV6)

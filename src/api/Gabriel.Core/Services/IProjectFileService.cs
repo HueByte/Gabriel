@@ -16,7 +16,7 @@ public interface IProjectFileService
     // Used by the download controller and the read_project_file tool.
     Task<(ProjectFile File, Stream Content)> OpenAsync(Guid projectId, Guid fileId, CancellationToken ct = default);
 
-    // Reads the file as UTF-8 text up to `maxBytes`. Used by the read tool —
+    // Reads the file as UTF-8 text up to `maxBytes`. Used by the read tool -
     // refuses non-text content types so a 200 MB ZIP doesn't blow the model's
     // context. Returns null if the file isn't text-like.
     Task<string?> ReadTextAsync(Guid projectId, Guid fileId, int maxBytes, CancellationToken ct = default);
@@ -34,6 +34,6 @@ public interface IProjectFileService
     // absolute on-disk directory the project's uploaded files live in. Used
     // by agent filesystem tools to scope path-based reads to a project
     // sandbox (`{Root}/{projectId:N}`). Throws if the user can't access the
-    // project — callers don't need to layer their own authz on top.
+    // project - callers don't need to layer their own authz on top.
     Task<string> GetProjectDirectoryAsync(Guid projectId, CancellationToken ct = default);
 }

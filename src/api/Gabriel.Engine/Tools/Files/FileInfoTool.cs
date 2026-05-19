@@ -85,7 +85,7 @@ public sealed class FileInfoTool : ITool
         }
         catch (Exception ex)
         {
-            return $"Error: could not resolve path — {ex.Message}";
+            return $"Error: could not resolve path - {ex.Message}";
         }
 
         return BuildReport(resolved, previewLines, ct);
@@ -171,10 +171,10 @@ public sealed class FileInfoTool : ITool
 
         if (info.Length > _options.MaxPreviewBytes)
         {
-            sb.AppendLine("Encoding: (skipped — file exceeds MaxPreviewBytes)");
-            sb.AppendLine("Lines: (skipped — file exceeds MaxPreviewBytes)");
+            sb.AppendLine("Encoding: (skipped - file exceeds MaxPreviewBytes)");
+            sb.AppendLine("Lines: (skipped - file exceeds MaxPreviewBytes)");
             sb.AppendLine();
-            sb.Append("Preview skipped — file is larger than ")
+            sb.Append("Preview skipped - file is larger than ")
               .Append(FormatSize(_options.MaxPreviewBytes)).AppendLine(".");
             return;
         }
@@ -199,7 +199,7 @@ public sealed class FileInfoTool : ITool
             sb.AppendLine("Encoding: binary");
             sb.AppendLine("Lines: (not text)");
             sb.AppendLine();
-            sb.AppendLine("Preview skipped — file contains non-text bytes.");
+            sb.AppendLine("Preview skipped - file contains non-text bytes.");
             return;
         }
 
@@ -224,7 +224,7 @@ public sealed class FileInfoTool : ITool
         sb.Append("--- head ").Append(n).AppendLine(" ---");
         for (var i = 0; i < n; i++) sb.AppendLine(displayLines[i].TrimEnd('\r'));
 
-        // Show the tail only when there's distinct content from the head — no
+        // Show the tail only when there's distinct content from the head - no
         // point repeating lines when the whole file is shorter than 2N.
         if (displayLines.Length > n * 2)
         {
@@ -246,7 +246,7 @@ public sealed class FileInfoTool : ITool
         }
         catch (Exception ex)
         {
-            sb.Append("Error: could not enumerate — ").AppendLine(ex.Message);
+            sb.Append("Error: could not enumerate - ").AppendLine(ex.Message);
             return;
         }
         ct.ThrowIfCancellationRequested();
@@ -260,7 +260,7 @@ public sealed class FileInfoTool : ITool
         if (entries.Length == 0) return;
 
         // Sort: dirs first, then files; alphabetical within each. Show a small
-        // preview here — full listing belongs in list_dir.
+        // preview here - full listing belongs in list_dir.
         var preview = entries
             .OrderBy(e => (e.Attributes & FileAttributes.Directory) != 0 ? 0 : 1)
             .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
@@ -277,7 +277,7 @@ public sealed class FileInfoTool : ITool
 
         if (entries.Length > preview.Length)
         {
-            sb.Append("(... ").Append(entries.Length - preview.Length).AppendLine(" more — use list_dir for full listing)");
+            sb.Append("(... ").Append(entries.Length - preview.Length).AppendLine(" more - use list_dir for full listing)");
         }
     }
 

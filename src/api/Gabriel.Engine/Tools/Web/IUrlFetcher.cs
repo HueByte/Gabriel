@@ -7,7 +7,7 @@ namespace Gabriel.Engine.Tools.Web;
 //   - cap response size so a huge page can't blow the model's context
 //   - convert HTML to plain text (strip script/style/nav, then strip tags)
 //
-// WebFetchTool depends on this — swap implementations without touching the
+// WebFetchTool depends on this - swap implementations without touching the
 // agent layer.
 public interface IUrlFetcher
 {

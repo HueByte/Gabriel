@@ -15,7 +15,7 @@ public enum PathRootMode
     Project,
 }
 
-// `Display` is the user-friendly form to show in tool output — relative to
+// `Display` is the user-friendly form to show in tool output - relative to
 // the resolved root. `Absolute` is what we actually open. `RootAbsolute` is
 // the directory the path is pinned under, surfaced for "Path: X (rooted at Y)"
 // output and for callers that want to do their own walks.

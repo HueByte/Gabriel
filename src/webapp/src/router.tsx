@@ -5,7 +5,7 @@ import { MainLayout } from './layouts/MainLayout';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { PublicRoute } from './routes/PublicRoute';
 
-// Pages — lazy loaded. Named-export wrapping is required because React.lazy
+// Pages - lazy loaded. Named-export wrapping is required because React.lazy
 // expects a module with a `default` export.
 const IndexPage = lazy(() =>
   import('./pages/IndexPage').then(m => ({ default: m.IndexPage })),
@@ -37,7 +37,7 @@ function PageLoader() {
 }
 
 // Shown when a lazy chunk fails to load. Almost always means a new build was
-// deployed mid-session and the old chunk URL is now 404 — a reload fixes it.
+// deployed mid-session and the old chunk URL is now 404 - a reload fixes it.
 function ChunkErrorFallback() {
   const handleReload = () => window.location.reload();
   return (
@@ -67,11 +67,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return { hasError: true };
   }
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Single out the "stale chunk after deploy" case for clearer logs — every
+    // Single out the "stale chunk after deploy" case for clearer logs - every
     // other error is logged with the React tree info that React.captureOwner
     // gives us in errorInfo.
     if (error.message.includes('Failed to fetch dynamically imported module')) {
-      console.error('Chunk loading error — new version may be available:', error.message);
+      console.error('Chunk loading error - new version may be available:', error.message);
     } else {
       console.error('Page error:', error, errorInfo);
     }
@@ -93,7 +93,7 @@ function LazyPage({ children }: { children: ReactNode }) {
 }
 
 export const router = createBrowserRouter([
-  // Auth pages — redirect to / when already signed in.
+  // Auth pages - redirect to / when already signed in.
   {
     element: <PublicRoute />,
     children: [
@@ -112,7 +112,7 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  // App pages — require authentication.
+  // App pages - require authentication.
   {
     element: <ProtectedRoute />,
     children: [

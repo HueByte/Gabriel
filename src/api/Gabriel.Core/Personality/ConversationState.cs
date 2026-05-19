@@ -4,7 +4,7 @@ namespace Gabriel.Core.Personality;
 // and read by ISystemPromptBuilder + IResponsePostProcessor. Persisted as JSON
 // on Conversation.StateJson so EF doesn't need a separate table.
 //
-// This is the foundation for the future emotion engine (Phase 10) — `Mood` and
+// This is the foundation for the future emotion engine (Phase 10) - `Mood` and
 // the user-style flags (emoji / lowercase) will feed avatar reactions later.
 public sealed record ConversationState
 {
@@ -20,7 +20,7 @@ public sealed record ConversationState
     public DateTimeOffset LastMessageAt { get; init; }
     public int ConsecutiveShortMessages { get; init; }
 
-    // Sticky once true — if the user has ever used emoji, the persona is allowed
+    // Sticky once true - if the user has ever used emoji, the persona is allowed
     // to mirror sparingly. Reset is intentional manual policy (or fresh chat).
     public bool UserUsesEmoji { get; init; }
     public bool UserUsesLowercase { get; init; }

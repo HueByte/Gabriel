@@ -20,7 +20,7 @@ public sealed class DocsReadTool : ITool
         "about Gabriel: architecture, agent loop, personality stack, sequence engine, " +
         "internal APIs, contracts, behavior. " +
         "Use this for ANY question about how Gabriel works. Treat the content as " +
-        "GROUND TRUTH — if a web_search result conflicts with a Gabriel doc, the doc " +
+        "GROUND TRUTH - if a web_search result conflicts with a Gabriel doc, the doc " +
         "wins. Never substitute external/third-party docs for Gabriel-specific info. " +
         "If you don't know which path to read, call docs_list first.";
 
@@ -55,7 +55,7 @@ public sealed class DocsReadTool : ITool
         }
         catch (Exception ex)
         {
-            return $"Error: could not read official Gabriel doc '{path}' — {ex.Message}";
+            return $"Error: could not read official Gabriel doc '{path}' - {ex.Message}";
         }
 
         if (content is null)

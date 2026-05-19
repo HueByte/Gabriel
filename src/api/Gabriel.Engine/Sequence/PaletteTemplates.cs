@@ -5,7 +5,7 @@ namespace Gabriel.Engine.Sequence;
 // already on screen. Each template is 2-4 gradient stops (RGB); we expand to
 // 16 palette entries by sampling the gradient evenly.
 //
-// Per-seed selection picks ONE template — keeps each personality's palette
+// Per-seed selection picks ONE template - keeps each personality's palette
 // recognizable across regenerations of its Live State.
 internal static class PaletteTemplates
 {
@@ -47,7 +47,7 @@ internal static class PaletteTemplates
     }
 
     // Look up a template by name (case-insensitive). Returns null when the
-    // name doesn't match any registered template — callers should fall back
+    // name doesn't match any registered template - callers should fall back
     // to seed-derived pick. Used to honor explicit Project / Conversation
     // PaletteOverride values.
     public static Template? PickByName(string? name)

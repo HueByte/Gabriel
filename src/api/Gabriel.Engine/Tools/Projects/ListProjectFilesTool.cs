@@ -32,12 +32,12 @@ public sealed class ListProjectFilesTool : ITool
 
         IReadOnlyList<Core.Entities.ProjectFile> files;
         try { files = await _files.ListAsync(projectId, ct); }
-        catch (Exception ex) { return $"Error: could not list project files — {ex.Message}"; }
+        catch (Exception ex) { return $"Error: could not list project files - {ex.Message}"; }
 
         if (files.Count == 0)
             return "No files uploaded to this project yet.";
 
-        // The id MUST be in the output — read_project_file requires the GUID,
+        // The id MUST be in the output - read_project_file requires the GUID,
         // and prior versions of this tool printed only filenames, which left
         // the model passing the name as `file_id` and tripping the Guid parser.
         var sb = new StringBuilder();

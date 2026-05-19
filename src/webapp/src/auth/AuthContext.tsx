@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await AuthService.postApiAuthLogout();
     } catch {
-      // Even if the server call fails, clear local state — the cookies might be
+      // Even if the server call fails, clear local state - the cookies might be
       // gone already and forcing the user to keep retrying logout is worse than
       // a tiny window where the server still thinks they're logged in.
     }
@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Interceptor (axios) or SSE client fires this when a 401 → refresh attempt
   // fails. Run the full logout flow so the server-side refresh family is
-  // revoked and the browser cookies are cleared — matches the manual sign-out
+  // revoked and the browser cookies are cleared - matches the manual sign-out
   // path. The logout endpoint is anonymous and idempotent, so a stale or
   // missing refresh cookie is fine.
   useEffect(() => {

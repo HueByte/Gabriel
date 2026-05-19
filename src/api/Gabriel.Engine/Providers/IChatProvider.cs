@@ -2,7 +2,7 @@ namespace Gabriel.Engine.Providers;
 
 // Streaming abstraction over LLM providers (mock, Grok/xAI, OpenAI, etc).
 // Providers yield a sequence of events (text deltas, completed tool calls, finish)
-// so the agent loop can react incrementally — important for ReAct flows where
+// so the agent loop can react incrementally - important for ReAct flows where
 // every tool call would otherwise block the UI for seconds.
 public interface IChatProvider
 {

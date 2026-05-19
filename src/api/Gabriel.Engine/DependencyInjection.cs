@@ -31,12 +31,12 @@ public static class DependencyInjection
         // once per turn; project-scoped tools read from it.
         services.AddScoped<IToolExecutionContext, ToolExecutionContext>();
 
-        // Personality stack — all three are pure / config-driven, so singleton.
+        // Personality stack - all three are pure / config-driven, so singleton.
         services.AddSingleton<IConversationStateUpdater, HeuristicConversationStateUpdater>();
         services.AddSingleton<ISystemPromptBuilder, GabrielSystemPromptBuilder>();
         services.AddSingleton<IResponsePostProcessor, ResponsePostProcessor>();
 
-        // Gabriel Sequence (Phase 10) — stateless generator + scoped service that
+        // Gabriel Sequence (Phase 10) - stateless generator + scoped service that
         // loads the conversation to resolve seed + state.
         services.AddSingleton<IGabrielSequenceGenerator, GabrielSequenceGenerator>();
         services.AddScoped<IGabrielSequenceService, GabrielSequenceService>();

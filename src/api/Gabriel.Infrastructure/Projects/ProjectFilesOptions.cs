@@ -15,7 +15,7 @@ public class ProjectFilesOptions
     public long MaxFileBytes { get; set; } = 25 * 1024 * 1024;  // 25 MiB
 
     // Extensions that may be uploaded. Conservative whitelist of text / common
-    // doc formats — adjust per deployment if you genuinely need others.
+    // doc formats - adjust per deployment if you genuinely need others.
     public IList<string> AllowedExtensions { get; set; } = new List<string>
     {
         ".txt", ".md", ".json", ".csv", ".tsv", ".yml", ".yaml", ".xml",

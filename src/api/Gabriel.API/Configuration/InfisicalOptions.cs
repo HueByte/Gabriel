@@ -17,7 +17,7 @@ public class InfisicalOptions
 
     public int TimeoutSeconds { get; set; } = 15;
 
-    // If any of the four essentials are missing, the provider silently skips —
+    // If any of the four essentials are missing, the provider silently skips -
     // local dev without Infisical access still boots cleanly.
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(Host) &&

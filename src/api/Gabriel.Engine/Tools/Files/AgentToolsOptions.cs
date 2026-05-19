@@ -1,7 +1,7 @@
 namespace Gabriel.Engine.Tools.Files;
 
 // Options for the filesystem + shell agent tools. Bound from "AgentTools:*"
-// in configuration. The single most important knob is HostRoot — every host-
+// in configuration. The single most important knob is HostRoot - every host-
 // mode filesystem op canonicalizes under it, and anything resolving outside
 // is rejected.
 public sealed class AgentToolsOptions
@@ -11,7 +11,7 @@ public sealed class AgentToolsOptions
     // Absolute directory the host-mode filesystem tools are pinned to. Relative
     // paths resolve against it; absolute paths must canonicalize under it.
     // Leave null/empty to disable host mode entirely (project-sandbox mode
-    // still works). Operator must opt in deliberately — there's no auto-default
+    // still works). Operator must opt in deliberately - there's no auto-default
     // to the process cwd because that's usually the API binary directory, not
     // a useful workspace.
     public string? HostRoot { get; set; }

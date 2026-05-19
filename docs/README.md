@@ -1,4 +1,4 @@
-# Gabriel — documentation
+# Gabriel - documentation
 
 Architectural and behavioral documentation for the Gabriel codebase. The roadmap and per-feature design notes live under [`.dev/`](../.dev/) (gitignored); this folder is the durable, committed reference.
 
@@ -7,13 +7,13 @@ Architectural and behavioral documentation for the Gabriel codebase. The roadmap
 ```text
 docs/
 └── Gabriel.Engine/
-    ├── README.md                 — overview + folder map + key concepts
-    ├── architecture.md           — onion layering + project dependency graph
-    ├── agent-loop.md             — ReAct loop, streaming events, rolling compact, regenerate
-    ├── personality-stack.md      — state tracker, system prompt, post-processor (the emotion inputs)
-    ├── gabriel-sequence.md       — 64-frame avatar engine: layers, palettes, patterns, live state
-    ├── tools.md                  — ITool / IToolRegistry, web_search, web_fetch, docs_*
-    └── variants-and-history.md   — variant grouping, regeneration, truncate-from-here
+    ├── README.md                 - overview + folder map + key concepts
+    ├── architecture.md           - onion layering + project dependency graph
+    ├── agent-loop.md             - ReAct loop, streaming events, rolling compact, regenerate
+    ├── personality-stack.md      - state tracker, system prompt, post-processor (the emotion inputs)
+    ├── gabriel-sequence.md       - 64-frame avatar engine: layers, palettes, patterns, live state
+    ├── tools.md                  - ITool / IToolRegistry, web_search, web_fetch, docs_*
+    └── variants-and-history.md   - variant grouping, regeneration, truncate-from-here
 ```
 
 ## Where to start

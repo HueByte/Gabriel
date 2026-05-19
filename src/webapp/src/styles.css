@@ -57,7 +57,7 @@ button {
 
 /* ---------- Sidebar (EchoHub-style overlay panel) ---------- */
 
-/* Burger button — fixed top-left, only meaningful when the panel is closed. */
+/* Burger button - fixed top-left, only meaningful when the panel is closed. */
 .sidebar-burger {
   position: fixed;
   top: 1rem;
@@ -93,7 +93,7 @@ button {
   pointer-events: none;
 }
 
-/* Backdrop — fades + blurs the rest of the app when the panel is open. */
+/* Backdrop - fades + blurs the rest of the app when the panel is open. */
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
@@ -110,7 +110,7 @@ button {
   pointer-events: auto;
 }
 
-/* Panel — fixed, off-canvas by default, slides in on .open. */
+/* Panel - fixed, off-canvas by default, slides in on .open. */
 .sidebar {
   position: fixed;
   top: 0;
@@ -178,7 +178,7 @@ button {
   background: var(--accent-dim);
 }
 
-/* Project picker — sits between the sidebar head and the New-chat button. */
+/* Project picker - sits between the sidebar head and the New-chat button. */
 .project-picker {
   display: grid;
   /* Settings icon column appears only when the active project is non-Default
@@ -419,7 +419,7 @@ button {
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* Floating menu — position: fixed (coordinates set inline from the trigger's
+/* Floating menu - position: fixed (coordinates set inline from the trigger's
    bounding rect) so it escapes .sidebar-body's overflow clipping. Without
    this, menus on the last few rows of long conversation lists get cut off. */
 .conv-menu {
@@ -482,7 +482,7 @@ button {
   /* Outer column never scrolls. Pages that need to scroll their own content
      (`.diagnostics`, `.settings`) set `flex: 1 1 auto; min-height: 0;
      overflow-y: auto` on their root, which lets them stretch to the
-     remaining viewport height and scroll internally — same pattern as
+     remaining viewport height and scroll internally - same pattern as
      `.chat`'s inner `.messages`. This avoids the sub-pixel rounding that
      made the outer column show a ghost scrollbar on the chat page when the
      content perfectly fit. */
@@ -503,7 +503,7 @@ button {
   animation-delay: 0.1s;
 }
 
-/* Thinking glow — blurred radial halo behind the avatar canvas.
+/* Thinking glow - blurred radial halo behind the avatar canvas.
    Sits at z-index -1 so the canvas and reroll button render on top. */
 .avatar-wrap::before {
   content: "";
@@ -624,7 +624,7 @@ button {
 }
 
 /* Tint shifts toward the full palette accent once the user is approaching
-   the auto-compact threshold — meta label flips at the same point. */
+   the auto-compact threshold - meta label flips at the same point. */
 .ctx-stats.approaching .ctx-stats-fill {
   background: var(--palette-accent, var(--accent));
 }
@@ -656,7 +656,7 @@ button {
   color: var(--text-faint);
 }
 
-/* "Compact in Xk" — pulled toward the palette accent so the user notices it
+/* "Compact in Xk" - pulled toward the palette accent so the user notices it
    the moment the strip flips from quiet status to actionable warning. */
 .ctx-stats-warning {
   color: var(--palette-accent, var(--accent));
@@ -871,14 +871,14 @@ button {
    Each step entry carries `.react-step` so a soft left rule visually ties
    consecutive Thought→Action→Observation lines together as one reasoning
    unit. The line breaks naturally across the .messages-content gap when a
-   user/assistant text bubble interrupts — so steps from the SAME iteration
+   user/assistant text bubble interrupts - so steps from the SAME iteration
    read as a group, and the final answer stands apart. */
 .react-step {
   border-left: 2px solid color-mix(in srgb, var(--palette-accent, var(--accent)) 28%, var(--border));
   padding-left: 10px;
 }
 
-/* Action — single-line "tool(args)" — same visual footprint as before.
+/* Action - single-line "tool(args)" - same visual footprint as before.
    Padding is split into longhand because .react-step (which this element
    also carries) sets padding-left to give the badge breathing room from the
    left rule; using `padding: 4px 0` shorthand here resets that to 0 and the
@@ -905,9 +905,9 @@ button {
   color: var(--text);
 }
 
-/* Tool result — collapsed by default, click to expand. Uses native <details>
+/* Tool result - collapsed by default, click to expand. Uses native <details>
    so it's keyboard / a11y friendly out of the box. Padding longhand for the
-   same reason as .tool-call — preserve .react-step's padding-left. */
+   same reason as .tool-call - preserve .react-step's padding-left. */
 .tool-result {
   align-self: flex-start;
   max-width: 100%;
@@ -931,7 +931,7 @@ button {
 .tool-result > summary::-webkit-details-marker { display: none; }
 .tool-result > summary::marker { content: ''; }
 
-/* Custom caret — rotates 90° when the details is open. */
+/* Custom caret - rotates 90° when the details is open. */
 .tool-result > summary::before {
   content: '▸';
   color: var(--text-faint);
@@ -961,7 +961,7 @@ button {
   letter-spacing: 0.02em;
 }
 
-/* Expanded content — cap at ~30 lines (`lh` unit = one line-height each) and
+/* Expanded content - cap at ~30 lines (`lh` unit = one line-height each) and
    scroll internally so a giant tool dump doesn't push the rest of the chat
    off-screen. */
 .tool-result > pre {
@@ -1019,7 +1019,7 @@ button {
   background: color-mix(in srgb, var(--palette-accent, var(--accent)) 16%, transparent);
   color: color-mix(in srgb, var(--palette-accent, var(--accent)) 80%, var(--text));
 }
-/* Reasoning — the dedicated reasoning_content stream channel. Visually
+/* Reasoning - the dedicated reasoning_content stream channel. Visually
    similar to .thought-badge but a hair more saturated so the user can tell
    "real" chain-of-thought from pre-tool reasoning at a glance. */
 .reasoning-badge {
@@ -1027,7 +1027,7 @@ button {
   color: color-mix(in srgb, var(--palette-accent, var(--accent)) 70%, var(--text-dim));
 }
 
-/* Thought + Reasoning share identical disclosure visuals — both are
+/* Thought + Reasoning share identical disclosure visuals - both are
    collapsed prose blocks. `.reasoning` matches `.thought` exactly so the two
    sit next to each other coherently when a turn produces both. */
 .thought,
@@ -1514,7 +1514,7 @@ button {
   font-size: inherit;
 }
 
-/* Links — palette-tinted, gentle underline that thickens on hover. */
+/* Links - palette-tinted, gentle underline that thickens on hover. */
 .md-link {
   color: var(--palette-accent, var(--accent));
   text-decoration: underline;
@@ -1528,7 +1528,7 @@ button {
   text-decoration-thickness: 2px;
 }
 
-/* `---` separator — a thin palette-tinted line with a soft glow. */
+/* `---` separator - a thin palette-tinted line with a soft glow. */
 .md-hr {
   border: 0;
   height: 1px;
@@ -1541,7 +1541,7 @@ button {
   );
 }
 
-/* Inline hex chips — `#hex` followed by a color swatch. The swatch is an
+/* Inline hex chips - `#hex` followed by a color swatch. The swatch is an
    inline-flex span so it sits on the text baseline; the code background
    matches normal inline code for visual consistency. */
 .md-hex {
@@ -1580,7 +1580,7 @@ button {
   padding: 0;
 }
 
-/* The language hint we'd otherwise have to manually inject — a small tag in
+/* The language hint we'd otherwise have to manually inject - a small tag in
    the top-right corner of the code block. Only appears for fenced blocks
    that specify a language (rehype-highlight sets language-X on the code). */
 .md pre {
@@ -1588,7 +1588,7 @@ button {
 }
 .md pre > code[class*="language-"]::before {
   content: attr(data-lang);
-  /* Populated by JS — for now hide; future enhancement could surface this. */
+  /* Populated by JS - for now hide; future enhancement could surface this. */
   display: none;
 }
 
@@ -1614,7 +1614,7 @@ button {
   height: auto;
 }
 
-/* Fallback for partial/invalid mermaid source (commonly seen mid-stream) —
+/* Fallback for partial/invalid mermaid source (commonly seen mid-stream) -
    identical visual to a normal code block so it doesn't look like an error,
    just unrendered source. */
 .md-mermaid-fallback {
@@ -1808,7 +1808,7 @@ button {
   gap: 18px;
   padding: 20px 24px;
   /* Take remaining viewport height under .main-col (which is overflow: hidden)
-     and scroll internally — mirrors how .diagnostics handles its own scroll.
+     and scroll internally - mirrors how .diagnostics handles its own scroll.
      width: 100% so the max-width centering still applies via .main-col's
      align-items: center. */
   width: 100%;
@@ -2000,7 +2000,7 @@ button {
   color: var(--text-dim);
 }
 
-/* File list — project settings only. */
+/* File list - project settings only. */
 .settings-files {
   list-style: none;
   margin: 0;
@@ -2062,7 +2062,7 @@ button {
 }
 .settings-file-delete svg { width: 14px; height: 14px; }
 
-/* Skin picker — sits in Project Settings, exposes pattern + palette pins
+/* Skin picker - sits in Project Settings, exposes pattern + palette pins
    plus a reroll button. Two select columns + a button row; collapses to a
    single column on narrow viewports. */
 .skin-picker {
@@ -2095,7 +2095,7 @@ button {
   }
 }
 
-/* Inline meta row beneath the skin picker — shows seed + transient
+/* Inline meta row beneath the skin picker - shows seed + transient
    "Saving…" / "Rerolling…" hints. */
 .settings-meta-row {
   display: flex;
@@ -2109,7 +2109,7 @@ button {
   font-style: italic;
 }
 
-/* Settings toggle — checkbox + label aligned on one row. */
+/* Settings toggle - checkbox + label aligned on one row. */
 .settings-toggle {
   display: flex;
   align-items: center;

@@ -11,7 +11,7 @@ internal static class AuthCookies
     public const string AccessCookieName = GabrielIdentityExtensions.AccessCookieName;
     public const string RefreshCookieName = GabrielIdentityExtensions.RefreshCookieName;
 
-    // Refresh cookie is scoped to the auth subtree — it should never travel on
+    // Refresh cookie is scoped to the auth subtree - it should never travel on
     // ordinary API calls. Limits the blast radius if a single response is leaked.
     private const string RefreshCookiePath = "/api/auth";
 

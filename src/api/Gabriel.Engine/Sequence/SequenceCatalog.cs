@@ -3,7 +3,7 @@ namespace Gabriel.Engine.Sequence;
 // The catalog of pattern + palette identifiers a client can pin on a Project
 // or standalone Conversation. Identifiers are case-insensitive strings (not
 // enum-typed on the wire) so the catalog can grow without database migrations.
-// Unknown identifiers are silently ignored at generation time — the generator
+// Unknown identifiers are silently ignored at generation time - the generator
 // falls back to the seed-derived pick.
 public static class SequenceCatalog
 {

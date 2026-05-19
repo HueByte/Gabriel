@@ -6,7 +6,7 @@ namespace Gabriel.Engine.Sequence;
 //
 // Storage strategy: we DON'T persist the rendered bytes. Sequences are
 // generated on-demand from (seed, ConversationState) by IGabrielSequenceGenerator
-// — both inputs already live on the Conversation entity, so no extra rows.
+// - both inputs already live on the Conversation entity, so no extra rows.
 public sealed record GabrielSequence(
     int Version,
     Palette Palette,
@@ -24,7 +24,7 @@ public sealed record GabrielSequence(
 public sealed record SequenceMetadata(
     long Seed,
     DateTimeOffset GeneratedAt,
-    // Short human-readable summary of the Live State that drove the generation —
+    // Short human-readable summary of the Live State that drove the generation -
     // e.g. "playful, short-message rhythm, 4 turns in". Helps debugging + supports
     // the spec's "observation pass" (any compatible AI can read this).
     string? StateSummary);

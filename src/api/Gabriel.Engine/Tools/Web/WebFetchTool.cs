@@ -17,11 +17,11 @@ public sealed class WebFetchTool : ITool
     public string Description =>
         "Fetch and read the actual content of a public web page by URL. " +
         "USE THIS AFTER web_search when a result snippet looks relevant and you " +
-        "need the full page text to answer the user — search snippets are short " +
+        "need the full page text to answer the user - search snippets are short " +
         "and often miss the relevant detail. " +
         "Returns cleaned plain text (HTML tags stripped, script/style/nav removed, " +
         "whitespace normalized), capped at roughly 12,000 characters. " +
-        "DO NOT use this for Gabriel-specific questions — use docs_read for those.";
+        "DO NOT use this for Gabriel-specific questions - use docs_read for those.";
 
     public string ParametersJsonSchema => """
         {
@@ -54,14 +54,14 @@ public sealed class WebFetchTool : ITool
         }
         catch (Exception ex)
         {
-            return $"Error: fetch failed — {ex.Message}";
+            return $"Error: fetch failed - {ex.Message}";
         }
 
         var sb = new StringBuilder();
         sb.Append("Fetched: ").AppendLine(result.FinalUrl);
         sb.Append("Content-Type: ").AppendLine(result.ContentType);
         sb.Append("Length: ").Append(result.ContentLength).Append(" chars");
-        if (result.Truncated) sb.Append(" (truncated — page was larger)");
+        if (result.Truncated) sb.Append(" (truncated - page was larger)");
         sb.AppendLine();
         sb.AppendLine();
         sb.AppendLine(result.Content);

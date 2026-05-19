@@ -47,7 +47,7 @@ public sealed class GitHubDocsLookup : IDocsLookup
         await _listLock.WaitAsync(ct);
         try
         {
-            // Re-check after acquiring the lock — another caller may have filled the cache.
+            // Re-check after acquiring the lock - another caller may have filled the cache.
             if (_listCache is { } recheck && recheck.Until > now)
                 return recheck.Entries;
 
@@ -98,7 +98,7 @@ public sealed class GitHubDocsLookup : IDocsLookup
         ValidatePath(path);
 
         var http = _httpFactory.CreateClient(RawHttpClientName);
-        // Absolute URL — overrides any BaseAddress on the named client.
+        // Absolute URL - overrides any BaseAddress on the named client.
         var url = $"https://raw.githubusercontent.com/{_options.Owner}/{_options.Repo}/{_options.Branch}/{_options.DocsPath}/{path}";
 
         using var response = await http.GetAsync(url, ct);
@@ -121,7 +121,7 @@ public sealed class GitHubDocsLookup : IDocsLookup
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Path is required.", nameof(path));
 
-        // No traversal, no absolute prefixes — keep the fetch scoped to the docs subtree.
+        // No traversal, no absolute prefixes - keep the fetch scoped to the docs subtree.
         if (path.StartsWith('/') || path.StartsWith('\\'))
             throw new ArgumentException("Path must be relative.", nameof(path));
         if (path.Split('/', '\\').Any(seg => seg == ".." || seg == "."))

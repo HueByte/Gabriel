@@ -38,7 +38,7 @@ public class ProjectFilesController : ControllerBase
     }
 
     // Multipart upload. Form key: `file`. Single-file upload to keep the
-    // request shape simple — batch upload can come later if needed.
+    // request shape simple - batch upload can come later if needed.
     //
     // No `[FromForm]` on the IFormFile parameter: Swashbuckle blows up on the
     // combo when generating OpenAPI ("Error reading parameter(s) … as

@@ -2,7 +2,7 @@ namespace Gabriel.Engine.Sequence;
 
 // Deterministic noise primitives for the Gabriel Sequence generator. Mirrors
 // the hash + value-noise + fbm shape that lives in the webapp's pulse/patterns.ts
-// so the visual language stays consistent — Sequences and the existing
+// so the visual language stays consistent - Sequences and the existing
 // procedural avatar speak the same noise grammar.
 internal static class Noise
 {
@@ -17,7 +17,7 @@ internal static class Noise
         }
     }
 
-    // Smoothstep — classic cubic Hermite ease.
+    // Smoothstep - classic cubic Hermite ease.
     private static double Smooth(double t) => t * t * (3 - 2 * t);
 
     // Value noise sampled bilinearly between integer hash points.
@@ -39,7 +39,7 @@ internal static class Noise
              + d * u       * v;
     }
 
-    // Fractional Brownian motion — sums octaves of value noise at doubling
+    // Fractional Brownian motion - sums octaves of value noise at doubling
     // frequencies + halving amplitudes. Output is normalized to roughly [0, 1].
     public static double Fbm(double x, double y, int seed, int octaves)
     {

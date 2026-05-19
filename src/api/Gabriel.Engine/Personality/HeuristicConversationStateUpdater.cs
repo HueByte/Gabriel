@@ -39,7 +39,7 @@ public sealed class HeuristicConversationStateUpdater : IConversationStateUpdate
 
     // Catches short imperative requests like "bubble sort please" or "quicksort
     // pls" where there's no leading task verb but the noun + "please" is a clear
-    // ask. Conservative — must end with please/pls preceded by at least one word.
+    // ask. Conservative - must end with please/pls preceded by at least one word.
     private static readonly Regex PleaseSuffixRegex = new(
         @"\w+\s+(please|pls)\s*\??\s*$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -52,7 +52,7 @@ public sealed class HeuristicConversationStateUpdater : IConversationStateUpdate
         @"^(honestly|seriously|look|listen|ok so)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // Coarse negative-affect lexicon for venting detection. Intentionally small —
+    // Coarse negative-affect lexicon for venting detection. Intentionally small -
     // venting also needs profanity or "i (just )?" framing to register.
     private static readonly Regex VentingNegativeRegex = new(
         @"\b(hate|sucks|fuck|fucking|shit|exhausted|tired of|annoyed|frustrat\w+|stressed|overwhelm\w+)\b",
@@ -109,7 +109,7 @@ public sealed class HeuristicConversationStateUpdater : IConversationStateUpdate
         if (tokens > 100 && message.Contains('?')) return Mood.Curious;
         if (tokens < 5 && !message.Any(char.IsPunctuation)) return Mood.LowEnergy;
 
-        // Decay toward neutral when nothing else fires — sticky moods feel artificial.
+        // Decay toward neutral when nothing else fires - sticky moods feel artificial.
         return previous == Mood.Neutral ? Mood.Neutral : DecayToward(previous);
     }
 

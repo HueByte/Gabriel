@@ -42,7 +42,7 @@ public class ProjectRepository : IProjectRepository
 
     public Task<int> AssignOrphanConversationsAsync(Guid ownerUserId, Guid projectId, CancellationToken ct = default)
     {
-        // ExecuteUpdate — bulk reassign without loading rows into the change tracker.
+        // ExecuteUpdate - bulk reassign without loading rows into the change tracker.
         // Conversations whose ProjectId is null AND owned by this user → set to projectId.
         return _ctx.Conversations
             .Where(c => c.UserId == ownerUserId && c.ProjectId == null)

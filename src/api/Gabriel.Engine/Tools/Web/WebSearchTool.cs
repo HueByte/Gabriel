@@ -20,7 +20,7 @@ public sealed class WebSearchTool : ITool
         "USE THIS for: recent events, public docs of external tools/libraries, factual lookups, " +
         "current data the model wouldn't know. " +
         "DO NOT use this for questions about Gabriel itself (architecture, agent loop, " +
-        "personality system, internal APIs) — use the docs_list / docs_read tools instead. " +
+        "personality system, internal APIs) - use the docs_list / docs_read tools instead. " +
         "Those return Gabriel's OFFICIAL documentation; web results are at best secondhand " +
         "and may be outdated or wrong about Gabriel-specific details.";
 
@@ -30,7 +30,7 @@ public sealed class WebSearchTool : ITool
           "properties": {
             "query": {
               "type": "string",
-              "description": "Search query. Be specific — short keyword strings work better than full sentences."
+              "description": "Search query. Be specific - short keyword strings work better than full sentences."
             },
             "limit": {
               "type": "integer",
@@ -68,7 +68,7 @@ public sealed class WebSearchTool : ITool
         }
         catch (Exception ex)
         {
-            return $"Error: web search failed — {ex.Message}";
+            return $"Error: web search failed - {ex.Message}";
         }
 
         if (results.Count == 0)

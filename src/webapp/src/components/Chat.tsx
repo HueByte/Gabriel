@@ -14,23 +14,23 @@ import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/us
 import { StreamingText } from './StreamingText';
 import { ThinkingPulse } from './ThinkingPulse';
 
-// Chat entries are heterogeneous — text bubbles (user/assistant), individual
+// Chat entries are heterogeneous - text bubbles (user/assistant), individual
 // tool calls, tool results, and the model's "thoughts" (reasoning text that
-// preceded a tool call) — so we model them as a discriminated union instead
+// preceded a tool call) - so we model them as a discriminated union instead
 // of trying to cram everything into a single message shape.
 //
 // The ReAct flow visualizes as:
 //   User Query ➔ [ Thought ➔ Action(toolCall) ➔ Observation(toolResult) ]* ➔ Final Answer
 //
 // Detecting a thought is purely structural: assistant content that lives on a
-// Message which ALSO carries tool calls is — by construction of the backend
-// loop — the reasoning text the model emitted before requesting the tool.
+// Message which ALSO carries tool calls is - by construction of the backend
+// loop - the reasoning text the model emitted before requesting the tool.
 type ChatEntry =
   | { kind: 'text'; id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean }
   | { kind: 'thought'; id: string; content: string; streaming?: boolean }
   // `reasoning` carries the dedicated reasoning_content stream (Grok 4,
   // DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking). Rendered the
-  // same way as a `thought` — collapsed by default — but kept distinct because
+  // same way as a `thought` - collapsed by default - but kept distinct because
   // a single turn can produce both: pre-tool reasoning text *and* a separate
   // chain-of-thought stream.
   | { kind: 'reasoning'; id: string; content: string; streaming?: boolean }
@@ -44,7 +44,7 @@ function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
       if (m.content) entries.push({ kind: 'text', id: m.id, role: 'user', content: m.content });
     } else if (m.role === 'assistant') {
       // Reasoning stream (reasoning_content) renders first if the provider
-      // captured one for this turn — it precedes both the model's regular
+      // captured one for this turn - it precedes both the model's regular
       // content and any tool calls.
       if (m.reasoningContent) {
         entries.push({ kind: 'reasoning', id: `${m.id}-reasoning`, content: m.reasoningContent });
@@ -68,7 +68,7 @@ function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
     } else if (m.role === 'tool' && m.toolCallId && m.content != null) {
       entries.push({ kind: 'toolResult', id: m.id, toolCallId: m.toolCallId, content: m.content });
     }
-    // role === 'system' — not rendered.
+    // role === 'system' - not rendered.
   }
   return entries;
 }
@@ -85,7 +85,7 @@ function toolCallEntry(messageId: string, tc: MessageToolCall): ChatEntry {
 
 interface ChatProps {
   conversationId: string;
-  /** Avatar seed — drives the thinking-pulse pattern so motion stays
+  /** Avatar seed - drives the thinking-pulse pattern so motion stays
    *  deterministic per conversation. Colors come from `paletteStops` when
    *  available, otherwise fall back to the seed-derived palette. */
   avatarSeed: number;
@@ -96,10 +96,10 @@ interface ChatProps {
   onMessageSent?: () => void;
   onBusyChange?: (busy: boolean) => void;
   // Fired once per conversation switch as soon as the conversation metadata is
-  // loaded — lets the parent pick up things like the avatar seed without doing
+  // loaded - lets the parent pick up things like the avatar seed without doing
   // its own duplicate fetch.
   onConversationLoaded?: (conv: ConversationResponse) => void;
-  // Fired when the initial history fetch returns 404 — the conversation was
+  // Fired when the initial history fetch returns 404 - the conversation was
   // deleted out from under us (e.g. on another tab). The parent typically
   // navigates away from this stale URL.
   onConversationMissing?: () => void;
@@ -108,7 +108,7 @@ interface ChatProps {
 // Composer cap (~5 lines at 14.5px / 1.5 line-height + padding). Beyond this
 // the textarea grows scroll-internally instead of pushing the messages list.
 const MAX_COMPOSER_HEIGHT = 140;
-// Forgiveness around the bottom — the user is treated as "at bottom" until
+// Forgiveness around the bottom - the user is treated as "at bottom" until
 // they're more than this many px away from it. Implemented via rootMargin on
 // the IntersectionObserver: positive bottom margin extends the root's
 // effective bottom edge, keeping the sentinel "intersecting" for a bit of
@@ -171,7 +171,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
 
   // Track whether the user is at the bottom via an IntersectionObserver on a
   // sentinel placed at the very end of the message content. This is the
-  // canonical pattern for chat stick-to-bottom — no scroll-event race, no
+  // canonical pattern for chat stick-to-bottom - no scroll-event race, no
   // scrollHeight/scrollTop arithmetic, and the browser handles edge cases like
   // sub-pixel zoom and content shrinking for us.
   useEffect(() => {
@@ -187,7 +187,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   }, []);
 
   // When content grows (new messages, streaming text) OR the container shrinks
-  // (composer expanding), re-anchor to the bottom — but only if the user
+  // (composer expanding), re-anchor to the bottom - but only if the user
   // hasn't scrolled away. Smooth scroll for small deltas (the common streaming
   // case feels gentle), instant for large jumps (conversation switch, big
   // catch-ups) where smooth would noticeably lag.
@@ -262,7 +262,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
       }
       onMessageSent?.();
     } catch (e: unknown) {
-      // Network failure / pre-flight 4xx — drop the streaming placeholder if any.
+      // Network failure / pre-flight 4xx - drop the streaming placeholder if any.
       notifyError(e);
       setEntries(prev => prev.filter(e2 => !(e2.kind === 'text' && e2.role === 'assistant' && e2.streaming)));
     } finally {
@@ -300,7 +300,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
             if (e.kind === 'toolResult') return !hideToolResults;
             return true;
           }).map(renderEntry)}
-          {/* Thinking indicator — shows once the user has submitted and before
+          {/* Thinking indicator - shows once the user has submitted and before
               the first delta arrives. The condition checks that no assistant
               bubble is currently streaming, which means tokens haven't started
               flowing yet. Once a delta lands the streaming bubble takes over. */}
@@ -309,7 +309,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
               <ThinkingPulse seed={avatarSeed} paletteStops={paletteStops ?? undefined} />
             </div>
           )}
-          {/* Stick-to-bottom sentinel — IntersectionObserver above watches it. */}
+          {/* Stick-to-bottom sentinel - IntersectionObserver above watches it. */}
           <div ref={bottomSentinelRef} className="messages-bottom" aria-hidden="true" />
         </div>
       </div>
@@ -353,7 +353,7 @@ function renderEntry(e: ChatEntry) {
       // Assistant text gets the two-cursor typewriter (galactic lead + english
       // translation trailing). User text and history render statically.
       // `animate` is captured at mount in StreamingText, so it only matters at
-      // first render — switching from streaming → done doesn't abort the loop.
+      // first render - switching from streaming → done doesn't abort the loop.
       // `caret` stays true for assistant entries; StreamingText hides it once
       // typing has caught up to text.
       const isLiveAssistant = e.role === 'assistant' && e.streaming === true;
@@ -407,7 +407,7 @@ function Reasoning({ content, streaming }: { content: string; streaming?: boolea
 }
 
 // Reasoning text the model emitted before requesting a tool. Same disclosure
-// pattern as ToolResult — collapsed by default so the chat doesn't fill up
+// pattern as ToolResult - collapsed by default so the chat doesn't fill up
 // with chain-of-thought monologues, expandable when the user wants to peek.
 function Thought({ content }: { content: string }) {
   const lines = content.length > 0 ? content.split('\n') : [''];
@@ -490,7 +490,7 @@ function applyAgentEvent(
 
     case 'reasoningDelta':
       // Reasoning tokens arrive interleaved with (or strictly before) regular
-      // content tokens. Keep a single streaming `reasoning` entry per turn —
+      // content tokens. Keep a single streaming `reasoning` entry per turn -
       // it sits ahead of the streaming text bubble so the UI reads top-down:
       // thinking → answer.
       setEntries(prev => {
@@ -517,14 +517,14 @@ function applyAgentEvent(
 
     case 'toolCall':
       setEntries(prev => {
-        // Freeze any in-flight streaming reasoning — the model is moving on
+        // Freeze any in-flight streaming reasoning - the model is moving on
         // from thinking to executing tools, so the reasoning panel should
         // collapse to its done state.
         const frozenReasoning = prev.map<ChatEntry>(e =>
           e.kind === 'reasoning' && e.streaming ? { ...e, streaming: false } : e,
         );
         // The trailing streaming assistant bubble is the model's reasoning that
-        // preceded this tool call — reclassify it as a `thought` so the UI
+        // preceded this tool call - reclassify it as a `thought` so the UI
         // renders it as a collapsed ReAct step alongside the action/observation.
         // Empty buffers are dropped (some providers emit no reasoning before
         // calling a tool). Keep its id stable so any in-flight StreamingText
@@ -598,13 +598,13 @@ function applyAgentEvent(
       break;
 
     case 'error':
-      // In-stream error — surface via toast. Pre-flight errors are caught at
+      // In-stream error - surface via toast. Pre-flight errors are caught at
       // the top of send() and toasted there.
       toast.error(evt.message);
       break;
 
     case 'done':
-      // Loop finished — just make sure no entry is still marked streaming.
+      // Loop finished - just make sure no entry is still marked streaming.
       setEntries(prev => prev.map(e => {
         if (e.kind === 'text' && e.streaming) return { ...e, streaming: false };
         if (e.kind === 'reasoning' && e.streaming) return { ...e, streaming: false };

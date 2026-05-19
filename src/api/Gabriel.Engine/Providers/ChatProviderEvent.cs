@@ -22,13 +22,13 @@ public sealed record ReasoningDeltaEvent(string Delta) : ChatProviderEvent;
 // A complete, ready-to-execute tool call.
 public sealed record ToolCallReadyEvent(string Id, string Name, string ArgumentsJson) : ChatProviderEvent;
 
-// Terminal event — the provider has nothing more to emit for this turn.
+// Terminal event - the provider has nothing more to emit for this turn.
 public sealed record FinishEvent(FinishReason Reason) : ChatProviderEvent;
 
 public enum FinishReason
 {
     Stop,        // Assistant finished naturally with content
-    ToolCalls,   // Assistant wants to call tools — agent loop should execute them and re-stream
+    ToolCalls,   // Assistant wants to call tools - agent loop should execute them and re-stream
     Length,      // Hit max tokens / model output limit
     Error,       // Provider-side failure
 }

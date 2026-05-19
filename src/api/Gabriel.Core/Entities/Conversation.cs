@@ -7,7 +7,7 @@ public class Conversation
 {
     public Guid Id { get; private set; } = Guid.NewGuid();
 
-    // Owner — every conversation is scoped to a user. Repository queries always
+    // Owner - every conversation is scoped to a user. Repository queries always
     // filter by this so users only see their own threads. Required since auth
     // landed; pre-auth dev data was wiped on migration.
     public Guid UserId { get; private set; }
@@ -28,7 +28,7 @@ public class Conversation
     // cleanly through JSON.
     public long AvatarSeed { get; private set; }
 
-    // Optional "skin" pins for standalone (Default-project) chats — when set,
+    // Optional "skin" pins for standalone (Default-project) chats - when set,
     // they override the seed-derived pattern / palette picks. Mirrors the
     // matching fields on Project; the sequence service prefers the project's
     // overrides for project-shared sequences and falls back to the
@@ -42,7 +42,7 @@ public class Conversation
     public string? Summary { get; private set; }
     public Guid? SummarizedThroughMessageId { get; private set; }
 
-    // Serialized ConversationState — turn count, mood, length tracking, user-style
+    // Serialized ConversationState - turn count, mood, length tracking, user-style
     // flags. Read via GetState(), written via SetState(). JSON column instead of a
     // separate table because the shape evolves and we never query its fields.
     public string? StateJson { get; private set; }
@@ -62,7 +62,7 @@ public class Conversation
 
         // Construct first so we can use the freshly-allocated Id as the
         // default title when the caller didn't supply one. Each new chat
-        // therefore gets a unique, distinguishable name out of the box — the
+        // therefore gets a unique, distinguishable name out of the box - the
         // user (or a future auto-titler) can still rename via PATCH.
         var conv = new Conversation
         {
@@ -90,7 +90,7 @@ public class Conversation
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    // Mirror of Project.SetSkin — null/empty clears the override and lets the
+    // Mirror of Project.SetSkin - null/empty clears the override and lets the
     // seed drive that dimension again. Catalog validation lives in the API
     // layer (Engine has the catalog, Core can't reference Engine).
     public void SetSkin(string? pattern, string? palette)
@@ -100,7 +100,7 @@ public class Conversation
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    // 1..2^32-1 — positive, fits JS Number safely, matches the client RNG's expected range.
+    // 1..2^32-1 - positive, fits JS Number safely, matches the client RNG's expected range.
     private static long GenerateAvatarSeed() => Random.Shared.NextInt64(1L, 1L << 32);
 
     public Message AppendMessage(
@@ -156,7 +156,7 @@ public class Conversation
         return toRemove;
     }
 
-    // Marks every assistant message in the variant group inactive — used by
+    // Marks every assistant message in the variant group inactive - used by
     // regenerate to deactivate the prior reply before streaming the new variant.
     // The tool aftermath of the inactive variants is already excluded from
     // provider history by tool_call_id matching (see AgentService.ToProviderHistory).

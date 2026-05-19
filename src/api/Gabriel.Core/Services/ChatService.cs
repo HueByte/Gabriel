@@ -114,7 +114,7 @@ public class ChatService : IChatService
             throw new NotFoundException(nameof(Message), messageId);
 
         // Conversation.TruncateFrom returns the removed messages so we can hand
-        // them to the repository for explicit EF removal — orphan-removal alone
+        // them to the repository for explicit EF removal - orphan-removal alone
         // is fragile, this is the safe path.
         var removed = conversation.TruncateFrom(messageId);
         _conversations.RemoveMessages(removed);

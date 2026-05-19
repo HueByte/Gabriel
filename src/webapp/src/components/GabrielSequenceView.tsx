@@ -12,7 +12,7 @@ import { fetchGabrielSequence, type GabrielSequence, type SequenceSource } from 
 // The sequence is refetched whenever `conversationId` or `refreshKey` changes
 // so Live State (frames 48-63) tracks ConversationState as it evolves.
 
-// 280ms × 64 ≈ 18s full cycle. Snappier than the prior 600ms — at that pace
+// 280ms × 64 ≈ 18s full cycle. Snappier than the prior 600ms - at that pace
 // the smoothstep pause-at-frame-boundaries read as a "muscle spasm". Faster
 // linear motion between snapshots feels like a glide instead.
 const FRAME_DURATION_MS = 280;
@@ -22,7 +22,7 @@ const FRAME_H = 16;
 const PIXEL_COUNT = FRAME_W * FRAME_H;
 
 interface GabrielSequenceViewProps {
-  /** Which sequence to render — a specific conversation's, or a project's
+  /** Which sequence to render - a specific conversation's, or a project's
    *  shared one. The kind decides which endpoint the view hits. */
   source: SequenceSource;
   /** Bump this to force a refetch (e.g. after sending a message). */
@@ -45,7 +45,7 @@ export function GabrielSequenceView({
   const sequenceRef = useRef<GabrielSequence | null>(null);
   const startTimeRef = useRef<number>(performance.now());
 
-  // Source key used for the effect dependency — concatenating kind + id is
+  // Source key used for the effect dependency - concatenating kind + id is
   // cheaper than deep-comparing the source object and avoids effect re-runs
   // when the parent rebuilds the object with the same content each render.
   const sourceKey = source.kind === 'conversation'
@@ -53,7 +53,7 @@ export function GabrielSequenceView({
     : `p:${source.projectId}`;
 
   // Fetch on source change + every refreshKey bump. The animation loop
-  // reads sequenceRef so swap-in is seamless — no remount on refetch.
+  // reads sequenceRef so swap-in is seamless - no remount on refetch.
   useEffect(() => {
     const ctrl = new AbortController();
     fetchGabrielSequence(source, ctrl.signal)
@@ -80,7 +80,7 @@ export function GabrielSequenceView({
 
     // Allocate the pixel buffer ONCE and reuse it across frames. The previous
     // pattern of `ctx.createImageData(...)` per frame produced ~1KB of garbage
-    // every 16ms — 60KB/sec of GC pressure on the main thread, just to draw
+    // every 16ms - 60KB/sec of GC pressure on the main thread, just to draw
     // an avatar. Reusing means we only ever touch the same backing array.
     // Alpha is constant (255) so we set it once at init and never rewrite it.
     const imageData = ctx.createImageData(FRAME_W, FRAME_H);
@@ -96,7 +96,7 @@ export function GabrielSequenceView({
         const cyclePos = (elapsed % totalCycle) / FRAME_DURATION_MS;
         const i = Math.floor(cyclePos);
         const next = (i + 1) % FRAMES;
-        // Pure linear interpolation — smoothstep eased into / out of every
+        // Pure linear interpolation - smoothstep eased into / out of every
         // frame boundary, which compounded with short distances between
         // adjacent palette indices to read as a per-frame "jolt". Linear feels
         // like continuous flow.
@@ -111,7 +111,7 @@ export function GabrielSequenceView({
           data[offset    ] = Math.round(ca[0] + (cb[0] - ca[0]) * t);
           data[offset + 1] = Math.round(ca[1] + (cb[1] - ca[1]) * t);
           data[offset + 2] = Math.round(ca[2] + (cb[2] - ca[2]) * t);
-          // offset + 3 (alpha) — set once at init, no per-frame write needed.
+          // offset + 3 (alpha) - set once at init, no per-frame write needed.
         }
         ctx.putImageData(imageData, 0, 0);
       }

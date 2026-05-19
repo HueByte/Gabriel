@@ -1,7 +1,7 @@
 namespace Gabriel.Engine.Tools.Web;
 
 // Abstraction over a web search provider (Brave, Tavily, SerpAPI, etc.).
-// WebSearchTool depends on this — swap the implementation in Infrastructure
+// WebSearchTool depends on this - swap the implementation in Infrastructure
 // without touching the agent layer.
 public interface IWebSearch
 {

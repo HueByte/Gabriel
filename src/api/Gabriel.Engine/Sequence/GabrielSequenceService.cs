@@ -29,7 +29,7 @@ public sealed class GabrielSequenceService : IGabrielSequenceService
         var userId = _currentUser.UserId
             ?? throw new UnauthorizedAccessException("Authenticated user required.");
 
-        // GetByIdWithMessagesAsync rather than GetByIdAsync — the state lives
+        // GetByIdWithMessagesAsync rather than GetByIdAsync - the state lives
         // on Conversation.StateJson which is on the aggregate itself, BUT we
         // also want access to message history for future Context-layer drift.
         // Cheap enough for the first cut; cache-aware versions can come later.
@@ -53,7 +53,7 @@ public sealed class GabrielSequenceService : IGabrielSequenceService
 
         // Pick the latest conversation in the project to drive Live State.
         // ListAsync returns ordered by UpdatedAt DESC, so [0] is the freshest.
-        // A project with no conversations yet renders against a null state —
+        // A project with no conversations yet renders against a null state -
         // the generator's neutral defaults take over.
         var conversations = await _conversations.ListAsync(userId, projectId, ct);
         var latest = conversations.Count > 0 ? conversations[0] : null;

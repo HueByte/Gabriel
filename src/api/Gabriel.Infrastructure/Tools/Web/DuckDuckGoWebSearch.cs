@@ -11,7 +11,7 @@ namespace Gabriel.Infrastructure.Tools.Web;
 // URLs (`/l/?uddg=ENCODED_URL`) to recover the destination.
 //
 // Tradeoffs vs. a paid API:
-//   - No quota / no key — works out of the box.
+//   - No quota / no key - works out of the box.
 //   - HTML may change shape; the parsing is regex-driven and intentionally
 //     forgiving (parse failures yield zero results, not crashes).
 //   - DuckDuckGo may rate-limit or block aggressive use. For a single-user
@@ -97,7 +97,7 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
         if (results.Count == 0)
         {
             // Either zero genuine hits or the HTML format drifted. Log so we
-            // notice before users complain — the tool layer will surface "no
+            // notice before users complain - the tool layer will surface "no
             // results" to the model either way.
             _logger.LogInformation("DuckDuckGo returned no parseable results for the query");
         }
@@ -105,7 +105,7 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
         return results;
     }
 
-    // DDG wraps every destination in /l/?uddg=ENCODED_URL&rut=... — decode the
+    // DDG wraps every destination in /l/?uddg=ENCODED_URL&rut=... - decode the
     // uddg parameter to recover the real target. Falls back to the raw href if
     // the wrapper shape is unrecognized.
     private static string UnwrapRedirect(string href)

@@ -20,7 +20,7 @@ public class RefreshTokenStore : IRefreshTokenStore
 
     public async Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default)
     {
-        // ExecuteUpdateAsync issues a single UPDATE — no need to load the rows
+        // ExecuteUpdateAsync issues a single UPDATE - no need to load the rows
         // into the change tracker for a bulk revoke.
         var now = DateTimeOffset.UtcNow;
         await _ctx.Set<RefreshToken>()

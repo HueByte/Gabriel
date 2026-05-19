@@ -2,7 +2,7 @@ using Gabriel.Core.Entities;
 
 namespace Gabriel.Engine.Services;
 
-// Coarse char/4 approximation — good enough for context-window budgeting in a
+// Coarse char/4 approximation - good enough for context-window budgeting in a
 // dev/prototype setting. Real BPE tokenization is 30-50% more accurate but
 // requires shipping a tokenizer/vocab. Swap in later if accuracy matters.
 public class NaiveTokenEstimator : ITokenEstimator

@@ -44,7 +44,7 @@ public static class DependencyInjection
     }
 
     // Web page fetcher used by the web_fetch tool. A single HttpClient with a
-    // sensible timeout and a normal browser UA — pages from major sites refuse
+    // sensible timeout and a normal browser UA - pages from major sites refuse
     // requests with a blank or scriptable-looking UA. Redirects allowed (the
     // SSRF guard runs against the FINAL destination via the request hooks).
     private static void AddWebFetch(IServiceCollection services)
@@ -61,7 +61,7 @@ public static class DependencyInjection
         services.AddSingleton<IUrlFetcher, HttpUrlFetcher>();
     }
 
-    // Web search wiring. Default is DuckDuckGo — free, no API key, fine for
+    // Web search wiring. Default is DuckDuckGo - free, no API key, fine for
     // a single-user hobby deployment. Set Tools:Web:Active=brave to switch to
     // the Brave Search API (requires Tools:Web:Brave:ApiKey). Unknown values
     // log a warning and fall back to DDG so a typo doesn't break the tool.
@@ -102,7 +102,7 @@ public static class DependencyInjection
         }
     }
 
-    // GitHub-backed docs lookup. Two named HttpClients — one for the JSON API
+    // GitHub-backed docs lookup. Two named HttpClients - one for the JSON API
     // (api.github.com, used by ListAsync) and one for the raw content host
     // (raw.githubusercontent.com, used by ReadAsync). Defaults to HueByte/PulsePixel
     // so the docs tool works out of the box.
@@ -141,7 +141,7 @@ public static class DependencyInjection
         {
             case "grok":
                 // Read once at startup. The resilience pipeline's timeouts are
-                // pipeline-level — no per-request live tuning, so a captured
+                // pipeline-level - no per-request live tuning, so a captured
                 // value is correct here.
                 var grokTimeout = TimeSpan.FromSeconds(
                     config.GetValue($"{GrokOptions.SectionName}:TimeoutSeconds", 900));
@@ -166,7 +166,7 @@ public static class DependencyInjection
                 // the required lifetime for handlers registered via AddHttpMessageHandler.
                 services.AddTransient<GrokAuthHandler>();
 
-                // Named HttpClient — consumed via IHttpClientFactory.CreateClient(name)
+                // Named HttpClient - consumed via IHttpClientFactory.CreateClient(name)
                 // inside GrokChatProvider. The Bearer header is applied by the
                 // DelegatingHandler rather than DefaultRequestHeaders so a future
                 // key rotation flows through without recycling the client.
@@ -194,7 +194,7 @@ public static class DependencyInjection
     // Standard resilience pipeline tuned for SSE chat streams. The defaults
     // (30s total / 10s per-attempt) would terminate any non-trivial generation
     // mid-stream, so both timeouts are driven by Providers:Grok:TimeoutSeconds.
-    // Retries stay at the default — a retry only fires before the response
+    // Retries stay at the default - a retry only fires before the response
     // stream starts, so network/DNS/initial-5xx failures benefit, and once
     // tokens are flowing the pipeline is out of the picture for the duration
     // of that attempt. Circuit-breaker sampling is widened to satisfy the

@@ -5,7 +5,7 @@ namespace Gabriel.Core.Identity;
 // server-side state so they can be revoked.
 public interface IJwtTokenService
 {
-    // Initial issuance — caller already authenticated via session/cookie.
+    // Initial issuance - caller already authenticated via session/cookie.
     Task<TokenPair> IssueAsync(Guid userId, string email, CancellationToken ct = default);
 
     // Trade a valid refresh token for a fresh pair. Rotates the refresh token

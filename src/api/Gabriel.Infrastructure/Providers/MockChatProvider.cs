@@ -17,10 +17,10 @@ public class MockChatProvider : IChatProvider
 
     private static readonly string[] Templates =
     [
-        "[mock] Got it — you said: \"{0}\". Plugging in a real provider will replace this.",
-        "[mock] Interesting. \"{0}\" — let me think about that. (This is a placeholder reply.)",
+        "[mock] Got it - you said: \"{0}\". Plugging in a real provider will replace this.",
+        "[mock] Interesting. \"{0}\" - let me think about that. (This is a placeholder reply.)",
         "[mock] I hear you on \"{0}\". Once a real provider is wired up I'll have something smarter to say.",
-        "[mock] \"{0}\" — noted. Mock provider here; swap me out via DI for the real one.",
+        "[mock] \"{0}\" - noted. Mock provider here; swap me out via DI for the real one.",
     ];
 
     public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
