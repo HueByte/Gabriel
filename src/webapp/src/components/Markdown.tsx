@@ -1,14 +1,19 @@
+import { isValidElement, type ReactElement } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
 import { visit, SKIP } from 'unist-util-visit';
 import type { Root, Text, Parent, RootContent, PhrasingContent } from 'mdast';
+import { Mermaid } from './Mermaid';
 
 // Private-use sentinels for the galactic trail. The typewriter wraps its
 // trailing cipher chars in these so a remark plugin can lift them out into
 // a styled span inline within the markdown AST (instead of dangling after
 // any block elements).
-export const GAL_OPEN = '';
-export const GAL_CLOSE = '';
+export const GAL_OPEN = '';
+export const GAL_CLOSE = '';
 
 // Standard Galactic-style cipher: A–Z → Tifinagh glyphs.
 const GAL_MAP: Record<string, string> = {
@@ -120,9 +125,18 @@ function toAstNode(inline: Inline): RootContent {
   } as unknown as RootContent;
 }
 
+// Extracts a language hint from a className like "language-rust hljs".
+function languageOf(className: string | undefined): string | null {
+  if (!className) return null;
+  const m = /(?:^|\s)language-([\w-]+)/.exec(className);
+  return m ? m[1] : null;
+}
+
 // Custom react-markdown component overrides. `code` adds a color swatch
-// when `data-hex` is present; `a` opens links in a new tab; `hr` is a
-// styled separator.
+// when `data-hex` is present, hands mermaid blocks to <Mermaid>, and
+// otherwise lets the className (which rehype-highlight has decorated with
+// hljs token classes) flow through. `pre` unwraps when its child is a
+// mermaid block so the SVG doesn't end up inside an inappropriate <pre>.
 const components: Components = {
   a({ href, children, ...rest }) {
     return (
@@ -134,8 +148,27 @@ const components: Components = {
   hr() {
     return <hr className="md-hr" />;
   },
+  pre({ children, ...rest }) {
+    // react-markdown wraps fenced code as <pre><code class="language-X">...</code></pre>.
+    // For mermaid we render an SVG instead, which doesn't belong inside <pre>.
+    if (isValidElement(children)) {
+      const child = children as ReactElement<{ className?: string }>;
+      if (languageOf(child.props.className) === 'mermaid') {
+        return <>{children}</>;
+      }
+    }
+    return <pre {...rest}>{children}</pre>;
+  },
   code({ className, children, ...rest }) {
-    // react-markdown passes data-* through here too.
+    // 1) Mermaid — language-mermaid block becomes a rendered diagram.
+    if (languageOf(className) === 'mermaid') {
+      // Strip the trailing newline mdast adds to fenced code bodies so the
+      // diagram source is exactly what the user wrote.
+      const source = String(children).replace(/\n$/, '');
+      return <Mermaid source={source} />;
+    }
+
+    // 2) Hex chip — inline code marked by remarkInlineEnrichments.
     const hex = (rest as Record<string, unknown>)['data-hex'] as string | undefined;
     if (hex) {
       return (
@@ -145,6 +178,9 @@ const components: Components = {
         </code>
       );
     }
+
+    // 3) Default — for highlighted blocks className carries `hljs language-xxx`
+    // and children is an array of token spans (from rehype-highlight).
     return <code className={className}>{children}</code>;
   },
 };
@@ -159,12 +195,30 @@ interface Props {
  *   - `#hex` color codes render as inline code with a swatch
  *   - links open in a new tab with accent color
  *   - `---` renders as a styled separator
+ *   - fenced code blocks get syntax highlighting via rehype-highlight (common langs)
+ *   - ```mermaid``` blocks render as live diagrams (lazy-loaded)
+ *   - `$inline$` and `$$block$$` math render via KaTeX
+ *
+ * remark order matters: remark-math must transform `$...$` into math nodes
+ * BEFORE our text-walking enrichments run, so the enrichments don't try to
+ * touch math source. Hex / galactic patterns can't appear inside math nodes
+ * because the visitor skips them when the parent isn't a plain text container.
  */
 export function Markdown({ text }: Props) {
   return (
     <div className="md">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkInlineEnrichments]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkInlineEnrichments]}
+        rehypePlugins={[
+          // ignoreMissing: don't bail when a language isn't bundled — fenced
+          // blocks like ```mermaid```, ```dot```, etc. still get a class but
+          // are left for downstream component overrides to handle.
+          [rehypeHighlight, { ignoreMissing: true }],
+          // throwOnError: false — partial math during streaming (e.g. a half-
+          // typed `$x^` mid-token) renders as source instead of crashing the
+          // whole message.
+          [rehypeKatex, { throwOnError: false }],
+        ]}
         components={components}
       >
         {text}

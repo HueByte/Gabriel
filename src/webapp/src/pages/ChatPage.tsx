@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { HiOutlineArrowPath } from 'react-icons/hi2';
 import { Chat } from '../components/Chat';
+import { ContextStats } from '../components/ContextStats';
 import { GabrielSequenceView } from '../components/GabrielSequenceView';
 import { useMainLayout } from '../layouts/MainLayout';
 import { ConversationsService, type ConversationResponse } from '../api/generated';
 import { notifyError } from '../lib/notify';
 import { paletteForSeed, paletteVarsFromStops, type RGB } from '../pulse/palettes';
-import type { GabrielSequence } from '../api/sequence';
+import type { GabrielSequence, SequenceSource } from '../api/sequence';
 
 const ACTIVE_CONVERSATION_KEY = 'gabriel.activeConversationId';
 
@@ -31,6 +32,12 @@ export function ChatPage() {
   const { bumpSidebar } = useMainLayout();
 
   const [avatarSeed, setAvatarSeed] = useState<number>(FALLBACK_AVATAR_SEED);
+  // The conversation's parent project (null until metadata loads). When
+  // !isDefault, every chat in the project shares one sequence keyed on the
+  // project id; otherwise the chat falls back to its own conversation-keyed
+  // sequence (standalone behavior).
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectIsDefault, setProjectIsDefault] = useState<boolean>(true);
   const [sequenceRefresh, setSequenceRefresh] = useState(0);
   const [thinking, setThinking] = useState(false);
   // Server-driven palette pulled from the latest GabrielSequence response.
@@ -62,9 +69,15 @@ export function ChatPage() {
   }, [bumpSidebar, bumpSequence]);
 
   // Chat fires this once it loads the conversation's metadata — lets us pick
-  // up the avatar seed without doing a duplicate fetch.
+  // up the avatar seed without doing a duplicate fetch. Effective seed +
+  // project context drive both the rendered sequence and the Pulse palette
+  // fallback. When the chat is in a real (non-default) project, the avatar
+  // shown is the project's shared one; standalone chats keep their own.
   const handleConversationLoaded = useCallback((conv: ConversationResponse) => {
-    setAvatarSeed(conv.avatarSeed);
+    const isDefault = conv.projectIsDefault ?? true;
+    setProjectIsDefault(isDefault);
+    setProjectId(conv.projectId ?? null);
+    setAvatarSeed(conv.effectiveAvatarSeed ?? conv.avatarSeed);
   }, []);
 
   // GabrielSequenceView fires this once per successful sequence fetch. The
@@ -109,6 +122,17 @@ export function ChatPage() {
     [activeStops],
   );
 
+  // The sequence source flips per chat: non-default project → project's
+  // shared sequence; otherwise this chat's own. Built as a memoized object so
+  // the view's effect only re-fires when the underlying id/kind actually
+  // changes, not on every render.
+  const sequenceSource = useMemo<SequenceSource>(
+    () => !projectIsDefault && projectId
+      ? { kind: 'project', projectId }
+      : { kind: 'conversation', conversationId },
+    [projectIsDefault, projectId, conversationId],
+  );
+
   if (!conversationId) {
     // useParams' default guarantees a string but the router should never let
     // us reach this branch — defensive guard so TS knows conversationId is
@@ -120,22 +144,36 @@ export function ChatPage() {
     <div style={paletteVars} className="palette-scope">
       <div className={`avatar-wrap${thinking ? ' thinking' : ''}`}>
         <GabrielSequenceView
-          // Remount on conversation switch so the animation timer resets.
-          key={conversationId}
-          conversationId={conversationId}
+          // Remount on source switch so the animation timer resets when the
+          // user navigates between a standalone chat and a project chat.
+          key={`${sequenceSource.kind}:${sequenceSource.kind === 'conversation' ? sequenceSource.conversationId : sequenceSource.projectId}`}
+          source={sequenceSource}
           refreshKey={sequenceRefresh}
           onSequenceLoaded={handleSequenceLoaded}
         />
-        <button
-          type="button"
-          className="reroll"
-          onClick={() => void rerollAvatar()}
-          aria-label="Reroll avatar"
-          title="Reroll avatar"
-        >
-          <HiOutlineArrowPath aria-hidden="true" />
-        </button>
+        {/* Reroll is only meaningful for standalone (Default-project) chats —
+            for real projects the avatar is the project's shared identity and
+            rerolling lives on the Project Settings page (changing it here
+            would silently re-skin every chat in the project). */}
+        {projectIsDefault && (
+          <button
+            type="button"
+            className="reroll"
+            onClick={() => void rerollAvatar()}
+            aria-label="Reroll avatar"
+            title="Reroll avatar"
+          >
+            <HiOutlineArrowPath aria-hidden="true" />
+          </button>
+        )}
       </div>
+
+      {/* Context-window usage strip — shares sequenceRefresh so it updates
+          after every chat turn alongside the Gabriel Sequence Live State. */}
+      <ContextStats
+        conversationId={conversationId}
+        refreshKey={sequenceRefresh}
+      />
 
       <Chat
         // Remount on conversation switch so internal history state resets

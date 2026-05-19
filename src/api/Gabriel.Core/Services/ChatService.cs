@@ -85,6 +85,17 @@ public class ChatService : IChatService
         return conversation;
     }
 
+    public async Task<Conversation> SetSkinAsync(Guid id, string? pattern, string? palette, CancellationToken ct = default)
+    {
+        var conversation = await _conversations.GetByIdAsync(id, RequireUserId(), ct)
+            ?? throw new NotFoundException(nameof(Conversation), id);
+
+        conversation.SetSkin(pattern, palette);
+        _conversations.Update(conversation);
+        await _uow.SaveChangesAsync(ct);
+        return conversation;
+    }
+
     public async Task DeleteConversationAsync(Guid id, CancellationToken ct = default)
     {
         var conversation = await _conversations.GetByIdAsync(id, RequireUserId(), ct)

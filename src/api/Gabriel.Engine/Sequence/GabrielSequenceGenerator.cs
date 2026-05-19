@@ -23,17 +23,28 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
     private const int Size = 16;
     private const int FramesPerLayer = 16;
 
-    public GabrielSequence Generate(long seed, ConversationState? state)
+    public GabrielSequence Generate(
+        long seed,
+        ConversationState? state,
+        string? patternOverride = null,
+        string? paletteOverride = null)
     {
-        // Two independent seed mixes — palette vs pattern selection — so a small
-        // seed delta produces visibly different sequences instead of "same look,
-        // slightly different noise".
-        var palette = PaletteTemplates.ExpandTo(PaletteTemplates.Pick(seed), Size);
+        // Palette: explicit override wins; otherwise seed-derived. Unknown
+        // override names fall through to seed-derived behavior — see
+        // PaletteTemplates.PickByName / SequenceCatalog.
+        var paletteTemplate = PaletteTemplates.PickByName(paletteOverride)
+            ?? PaletteTemplates.Pick(seed);
+        var paletteName = paletteTemplate.Name;
+        var palette = PaletteTemplates.ExpandTo(paletteTemplate, Size);
 
         // Seed a Random for pattern-parameter selection. Folding through xor +
         // a large prime keeps adjacent seeds from collapsing to the same params.
+        // (The parameter RNG is still seed-derived even when the pattern KIND
+        // is pinned — pinning chooses the primitive but the per-pattern params
+        // stay fingerprinted to the seed.)
         var paramRng = new Random(unchecked((int)(seed ^ (seed >> 32) ^ 0xC2B2AE35)));
-        var patternKind = (PatternKind)(Math.Abs(unchecked((int)(seed ^ (seed >> 32)))) % 5);
+        var patternKind = SequenceCatalog.TryParsePattern(patternOverride)
+            ?? (PatternKind)(Math.Abs(unchecked((int)(seed ^ (seed >> 32)))) % 5);
         var bundle = BuildPatternBundle(patternKind, paramRng);
 
         var frames = new Frame[GabrielSequence.FrameCount];
@@ -70,14 +81,12 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
         var metadata = new SequenceMetadata(
             Seed: seed,
             GeneratedAt: DateTimeOffset.UtcNow,
-            StateSummary: $"pattern={patternKind.ToString().ToLowerInvariant()}, {live.Summary}");
+            StateSummary: $"pattern={patternKind.ToString().ToLowerInvariant()}, palette={paletteName}, {live.Summary}");
 
         return new GabrielSequence(GabrielSequence.SchemaVersion, palette, frames, metadata);
     }
 
     // --- pattern bundle --------------------------------------------------------
-
-    private enum PatternKind { Plasma, Waves, Spiral, Pulse, Shimmer }
 
     private readonly record struct PatternBundle(
         PatternKind Kind,

@@ -20,6 +20,16 @@ public interface IProjectService
     Task<Project> UpdateDescriptionAsync(Guid id, string? description, CancellationToken ct = default);
     Task<Project> UpdateSystemPromptAsync(Guid id, string? systemPrompt, CancellationToken ct = default);
 
+    // Re-rolls the project's AvatarSeed so the seed-derived dimensions of the
+    // sequence (pattern + palette, when not pinned via SetSkinAsync) change.
+    Task<Project> RerollAvatarAsync(Guid id, CancellationToken ct = default);
+
+    // Pin the project's avatar pattern + palette. Pass null or empty string
+    // to clear an individual override and fall back to seed-derived behavior
+    // for that dimension. Catalog identifiers are validated at the API layer
+    // before reaching here.
+    Task<Project> SetSkinAsync(Guid id, string? pattern, string? palette, CancellationToken ct = default);
+
     Task DeleteAsync(Guid id, CancellationToken ct = default);
 
     // Get or lazily create the "Default" project for the current user. Returns

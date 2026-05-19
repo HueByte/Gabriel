@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   HiOutlineArrowRightOnRectangle,
   HiOutlineBars3,
+  HiOutlineCog6Tooth,
   HiOutlineEllipsisVertical,
   HiOutlinePencilSquare,
   HiOutlinePlus,
@@ -10,7 +11,7 @@ import {
   HiOutlineWrenchScrewdriver,
   HiOutlineXMark,
 } from 'react-icons/hi2';
-import { ConversationsService, type ConversationResponse } from '../api/generated';
+import { ConversationsService, type ConversationResponse, type ProjectResponse } from '../api/generated';
 import { useAuth } from '../auth/AuthContext';
 import { notifyError } from '../lib/notify';
 import { ProjectPicker, loadActiveProjectId } from './ProjectPicker';
@@ -59,6 +60,10 @@ export function Sidebar({ refreshKey }: SidebarProps) {
   // it in sync. null = "all projects" but in practice the picker auto-selects
   // one as soon as the user has any.
   const [activeProjectId, setActiveProjectId] = useState<string | null>(loadActiveProjectId);
+  // Full active-project metadata — surfaced by ProjectPicker so the sidebar
+  // can route diagnostics correctly (real project → project's shared
+  // diagnostics; Default project → per-conversation diagnostics).
+  const [activeProject, setActiveProject] = useState<ProjectResponse | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const { user, logout } = useAuth();
@@ -215,8 +220,20 @@ export function Sidebar({ refreshKey }: SidebarProps) {
     }
   };
 
-  const openDiagnostics = (id: string) => {
-    navigate(`/c/${encodeURIComponent(id)}/diagnostics`);
+  const openDiagnostics = (conversationId: string) => {
+    // Real projects render a *shared* sequence — opening diagnostics from any
+    // chat in the project routes to the project-level diagnostics page so the
+    // user can't end up with N copies of the same view. Default-project chats
+    // keep per-conversation diagnostics ("standalone" behavior).
+    const route = activeProject && !activeProject.isDefault
+      ? `/p/${encodeURIComponent(activeProject.id)}/diagnostics`
+      : `/c/${encodeURIComponent(conversationId)}/diagnostics`;
+    navigate(route);
+    toggleCollapsed();
+  };
+
+  const openUserSettings = () => {
+    navigate('/settings');
     toggleCollapsed();
   };
 
@@ -272,6 +289,7 @@ export function Sidebar({ refreshKey }: SidebarProps) {
         <ProjectPicker
           activeProjectId={activeProjectId}
           onActiveProjectChange={setActiveProjectId}
+          onActiveProjectMetaChange={setActiveProject}
           refreshKey={refreshKey}
         />
 
@@ -332,7 +350,15 @@ export function Sidebar({ refreshKey }: SidebarProps) {
 
         {user && (
           <div className="sidebar-foot">
-            <div className="sidebar-user" title={user.email}>{user.email}</div>
+            <button
+              type="button"
+              className="sidebar-user"
+              onClick={openUserSettings}
+              title="Account settings"
+            >
+              <HiOutlineCog6Tooth aria-hidden="true" />
+              <span>{user.email}</span>
+            </button>
             <button
               type="button"
               className="sidebar-logout"

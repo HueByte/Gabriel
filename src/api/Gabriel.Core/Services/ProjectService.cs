@@ -80,6 +80,24 @@ public class ProjectService : IProjectService
         return project;
     }
 
+    public async Task<Project> RerollAvatarAsync(Guid id, CancellationToken ct = default)
+    {
+        var project = await GetAsync(id, ct);
+        project.RerollAvatar();
+        _projects.Update(project);
+        await _uow.SaveChangesAsync(ct);
+        return project;
+    }
+
+    public async Task<Project> SetSkinAsync(Guid id, string? pattern, string? palette, CancellationToken ct = default)
+    {
+        var project = await GetAsync(id, ct);
+        project.SetSkin(pattern, palette);
+        _projects.Update(project);
+        await _uow.SaveChangesAsync(ct);
+        return project;
+    }
+
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var project = await GetAsync(id, ct);
@@ -105,7 +123,8 @@ public class ProjectService : IProjectService
             ownerUserId: userId,
             name: DefaultProjectName,
             description: "Default project for everything not categorized elsewhere.",
-            systemPrompt: null);
+            systemPrompt: null,
+            isDefault: true);
 
         await _projects.AddAsync(project, ct);
         // Save first so the new Project.Id is committed before the bulk-update

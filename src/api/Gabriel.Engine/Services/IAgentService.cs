@@ -20,4 +20,11 @@ public interface IAgentService
         Guid conversationId,
         Guid assistantMessageId,
         CancellationToken ct = default);
+
+    // Snapshot of the context-window state for the given conversation —
+    // exposes the numbers MaybeCompactAsync compares against the configured
+    // threshold so the UI can render a matching progress indicator.
+    Task<ContextMetrics> GetContextMetricsAsync(
+        Guid conversationId,
+        CancellationToken ct = default);
 }

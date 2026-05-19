@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { fetchGabrielSequence, type GabrielSequence } from '../api/sequence';
+import { fetchGabrielSequence, type GabrielSequence, type SequenceSource } from '../api/sequence';
 
 // Renders a Gabriel Sequence (64 × 16×16 palette-indexed frames) at the
 // configured display size. The animation linearly interpolates between
@@ -22,7 +22,9 @@ const FRAME_H = 16;
 const PIXEL_COUNT = FRAME_W * FRAME_H;
 
 interface GabrielSequenceViewProps {
-  conversationId: string;
+  /** Which sequence to render — a specific conversation's, or a project's
+   *  shared one. The kind decides which endpoint the view hits. */
+  source: SequenceSource;
   /** Bump this to force a refetch (e.g. after sending a message). */
   refreshKey?: number;
   /** Display size in pixels (square). Defaults to 200 to match the prior Three.js avatar. */
@@ -34,7 +36,7 @@ interface GabrielSequenceViewProps {
 }
 
 export function GabrielSequenceView({
-  conversationId,
+  source,
   refreshKey,
   size = 200,
   onSequenceLoaded,
@@ -43,11 +45,18 @@ export function GabrielSequenceView({
   const sequenceRef = useRef<GabrielSequence | null>(null);
   const startTimeRef = useRef<number>(performance.now());
 
-  // Fetch on conversation change + every refreshKey bump. The animation loop
+  // Source key used for the effect dependency — concatenating kind + id is
+  // cheaper than deep-comparing the source object and avoids effect re-runs
+  // when the parent rebuilds the object with the same content each render.
+  const sourceKey = source.kind === 'conversation'
+    ? `c:${source.conversationId}`
+    : `p:${source.projectId}`;
+
+  // Fetch on source change + every refreshKey bump. The animation loop
   // reads sequenceRef so swap-in is seamless — no remount on refetch.
   useEffect(() => {
     const ctrl = new AbortController();
-    fetchGabrielSequence(conversationId, ctrl.signal)
+    fetchGabrielSequence(source, ctrl.signal)
       .then(seq => {
         sequenceRef.current = seq;
         onSequenceLoaded?.(seq);
@@ -59,7 +68,7 @@ export function GabrielSequenceView({
         }
       });
     return () => ctrl.abort();
-  }, [conversationId, refreshKey]);
+  }, [sourceKey, refreshKey]);
 
   // Animation loop. Survives sequence refetches; cancels on unmount.
   useEffect(() => {

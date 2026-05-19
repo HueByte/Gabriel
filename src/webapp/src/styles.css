@@ -181,7 +181,11 @@ button {
 /* Project picker — sits between the sidebar head and the New-chat button. */
 .project-picker {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  /* Settings icon column appears only when the active project is non-Default
+     (auto-collapses to zero width otherwise via `grid-template-columns: ...
+     min-content`). Keeping the grid declaration in one place avoids the
+     layout flicker that an inserted/removed cell would cause. */
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
@@ -234,6 +238,23 @@ button {
   background: var(--accent-dim);
 }
 .project-picker-new svg { width: 14px; height: 14px; }
+.project-picker-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.project-picker-settings:hover {
+  color: var(--text);
+  background: var(--accent-dim);
+}
+.project-picker-settings svg { width: 14px; height: 14px; }
 
 .new-chat {
   display: flex;
@@ -559,6 +580,81 @@ button {
   cursor: not-allowed;
 }
 
+/* ---------- Context-window stats strip (under the avatar) ----------
+   Subtle status indicator. Fixed width to match the 200px avatar so the
+   strip sits flush below it; horizontally centered by the parent flex
+   column. The bar shows next-turn tokens as a fraction of the provider
+   window; the meta row underneath shows the raw count + a label that
+   flips to "compact in Xk" when the user is approaching the trigger. */
+.ctx-stats {
+  width: 200px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  margin-bottom: 12px;
+  animation: fade-in 0.4s ease-out both;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--text-faint);
+}
+
+.ctx-stats-bar {
+  position: relative;
+  height: 3px;
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 12%, var(--border));
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ctx-stats-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 55%, var(--text-faint));
+  border-radius: 2px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s;
+}
+
+/* Tint shifts toward the full palette accent once the user is approaching
+   the auto-compact threshold — meta label flips at the same point. */
+.ctx-stats.approaching .ctx-stats-fill {
+  background: var(--palette-accent, var(--accent));
+}
+
+.ctx-stats-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.ctx-stats-tokens {
+  color: var(--text-dim);
+}
+
+.ctx-stats-sep {
+  color: var(--text-faint);
+  margin: 0 1px;
+}
+
+.ctx-stats-dot {
+  color: var(--text-faint);
+  opacity: 0.6;
+}
+
+.ctx-stats-note {
+  color: var(--text-faint);
+}
+
+/* "Compact in Xk" — pulled toward the palette accent so the user notices it
+   the moment the strip flips from quiet status to actionable warning. */
+.ctx-stats-warning {
+  color: var(--palette-accent, var(--accent));
+}
+
 /* ---------- Chat (borderless, merged with background) ---------- */
 
 .chat {
@@ -775,7 +871,11 @@ button {
   padding-left: 10px;
 }
 
-/* Action — single-line "tool(args)" — same visual footprint as before. */
+/* Action — single-line "tool(args)" — same visual footprint as before.
+   Padding is split into longhand because .react-step (which this element
+   also carries) sets padding-left to give the badge breathing room from the
+   left rule; using `padding: 4px 0` shorthand here resets that to 0 and the
+   badge ends up flush against the border bar. */
 .tool-call {
   align-self: flex-start;
   display: flex;
@@ -784,7 +884,8 @@ button {
   max-width: 100%;
   font-size: 12.5px;
   color: var(--text-dim);
-  padding: 4px 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .tool-call code {
@@ -798,13 +899,15 @@ button {
 }
 
 /* Tool result — collapsed by default, click to expand. Uses native <details>
-   so it's keyboard / a11y friendly out of the box. */
+   so it's keyboard / a11y friendly out of the box. Padding longhand for the
+   same reason as .tool-call — preserve .react-step's padding-left. */
 .tool-result {
   align-self: flex-start;
   max-width: 100%;
   font-size: 12.5px;
   color: var(--text-dim);
-  padding: 4px 0;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .tool-result > summary {
@@ -926,7 +1029,10 @@ button {
   max-width: 100%;
   font-size: 12.5px;
   color: var(--text-dim);
-  padding: 4px 0;
+  /* Longhand so .react-step's padding-left isn't clobbered by the shorthand
+     reset (badge would otherwise sit flush against the left border bar). */
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 .thought > summary,
 .reasoning > summary {
@@ -1044,12 +1150,31 @@ button {
 }
 
 .sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
   font-size: 12px;
   color: var(--text-dim);
-  padding: 0 0.25rem;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.sidebar-user span {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.sidebar-user svg { width: 14px; height: 14px; flex: 0 0 auto; }
+.sidebar-user:hover {
+  color: var(--text);
+  background: var(--accent-dim);
 }
 
 .sidebar-logout {
@@ -1438,6 +1563,88 @@ button {
   letter-spacing: 0.01em;
 }
 
+/* ---------- Syntax highlighting (rehype-highlight + github-dark) ----------
+   github-dark.css ships an opinionated background; let our .md pre surface
+   show through and only keep the token colors. The theme's own font/size
+   stays consistent with the rest of the markdown code blocks. */
+.md pre code.hljs,
+.md pre .hljs {
+  background: transparent;
+  padding: 0;
+}
+
+/* The language hint we'd otherwise have to manually inject — a small tag in
+   the top-right corner of the code block. Only appears for fenced blocks
+   that specify a language (rehype-highlight sets language-X on the code). */
+.md pre {
+  position: relative;
+}
+.md pre > code[class*="language-"]::before {
+  content: attr(data-lang);
+  /* Populated by JS — for now hide; future enhancement could surface this. */
+  display: none;
+}
+
+/* ---------- Mermaid diagrams ----------
+   The rendered SVG is inserted by mermaid; we just constrain the wrapper so
+   the diagram sits centered and doesn't blow past the message width. The
+   palette-accent tinted background is subtle enough to read as "this is a
+   rendered diagram, not just text". */
+.md-mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 0.6em;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.md-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Fallback for partial/invalid mermaid source (commonly seen mid-stream) —
+   identical visual to a normal code block so it doesn't look like an error,
+   just unrendered source. */
+.md-mermaid-fallback {
+  margin: 0 0 0.6em;
+  padding: 10px 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  line-height: 1.5;
+  background: var(--surface);
+  border: 1px dashed var(--border-soft);
+  border-radius: 8px;
+  color: var(--text-dim);
+  overflow-x: auto;
+}
+
+/* ---------- KaTeX math ----------
+   katex.min.css covers fonts + token layout; we only tweak the wrapper. */
+.md .katex {
+  /* Match the surrounding text size so inline math doesn't visually jump. */
+  font-size: 1em;
+}
+
+.md .katex-display {
+  /* Centered block math with a touch of breathing room. KaTeX defaults to
+     margin: 1em 0 which is heavier than the rest of the .md block spacing. */
+  margin: 0.6em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.md .katex-display::-webkit-scrollbar { height: 6px; }
+.md .katex-display::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
 /* ---------- Diagnostics page (8×8 frame grid) ---------- */
 
 .diagnostics {
@@ -1581,4 +1788,318 @@ button {
   align-items: center;
   padding: 4px 6px;
   animation: fade-in 0.25s ease-out both;
+}
+
+/* ---------- Settings pages ---------- */
+
+/* Shared shell for /settings (user) and /p/:id/settings (project). Same
+   palette-scope visuals as the diagnostics page so all admin-ish surfaces
+   feel like one app. */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 24px;
+  max-width: 760px;
+  margin: 0 auto;
+  animation: fade-in-up 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.settings-scope {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.settings-section-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.settings-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+.settings-hint code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--accent-dim);
+  color: var(--text);
+}
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.settings-field span {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.settings-field input,
+.settings-field textarea {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.settings-field input:focus,
+.settings-field textarea:focus {
+  border-color: var(--palette-accent, var(--accent));
+}
+.settings-field textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.5;
+}
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.settings-primary,
+.settings-secondary,
+.settings-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-decoration: none;
+}
+.settings-primary {
+  background: var(--palette-accent, var(--accent));
+  border: 1px solid var(--palette-accent, var(--accent));
+  color: var(--surface);
+}
+.settings-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.settings-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.settings-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.settings-secondary:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: var(--accent-dim);
+}
+.settings-danger {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: #c44;
+}
+.settings-danger:hover {
+  background: rgba(204, 68, 68, 0.08);
+  border-color: #c44;
+}
+.settings-empty {
+  font-size: 13px;
+  color: var(--text-faint);
+  padding: 16px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+.settings-loading {
+  color: var(--text-faint);
+  font-size: 13px;
+  padding: 32px 0;
+  text-align: center;
+}
+.settings-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+.settings-kv dt {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding-top: 2px;
+}
+.settings-kv dd {
+  margin: 0;
+  color: var(--text);
+}
+.settings-mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+/* File list — project settings only. */
+.settings-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.settings-file-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+}
+.settings-file-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.settings-file-name {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.settings-file-meta {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.settings-file-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-faint);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.settings-file-delete:hover {
+  color: #c44;
+  border-color: #c44;
+}
+.settings-file-delete svg { width: 14px; height: 14px; }
+
+/* Skin picker — sits in Project Settings, exposes pattern + palette pins
+   plus a reroll button. Two select columns + a button row; collapses to a
+   single column on narrow viewports. */
+.skin-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 12px;
+}
+.skin-picker select {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.skin-picker select:focus {
+  border-color: var(--palette-accent, var(--accent));
+}
+.skin-picker select:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+@media (max-width: 480px) {
+  .skin-picker {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Inline meta row beneath the skin picker — shows seed + transient
+   "Saving…" / "Rerolling…" hints. */
+.settings-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.settings-faint {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Settings toggle — checkbox + label aligned on one row. */
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  padding: 4px 0;
+}
+.settings-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--palette-accent, var(--accent));
+  cursor: pointer;
+  flex: 0 0 auto;
 }

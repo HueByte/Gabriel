@@ -17,6 +17,14 @@ public interface IChatService
     Task<Conversation> GetConversationAsync(Guid id, CancellationToken ct = default);
     Task<Conversation> RenameConversationAsync(Guid id, string title, CancellationToken ct = default);
     Task<Conversation> RerollAvatarAsync(Guid id, CancellationToken ct = default);
+
+    // Pin the conversation's avatar pattern + palette (the "skin"). Mirror of
+    // IProjectService.SetSkinAsync; only meaningful for standalone (Default-
+    // project) chats — chats inside a real project render the project's
+    // skin, not the conversation's. Catalog identifiers must be validated at
+    // the API layer before reaching here.
+    Task<Conversation> SetSkinAsync(Guid id, string? pattern, string? palette, CancellationToken ct = default);
+
     Task DeleteConversationAsync(Guid id, CancellationToken ct = default);
 
     // Message-level operations.

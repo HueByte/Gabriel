@@ -46,6 +46,22 @@ internal static class PaletteTemplates
         }
     }
 
+    // Look up a template by name (case-insensitive). Returns null when the
+    // name doesn't match any registered template — callers should fall back
+    // to seed-derived pick. Used to honor explicit Project / Conversation
+    // PaletteOverride values.
+    public static Template? PickByName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var key = name.Trim();
+        for (var i = 0; i < All.Length; i++)
+        {
+            if (string.Equals(All[i].Name, key, StringComparison.OrdinalIgnoreCase))
+                return All[i];
+        }
+        return null;
+    }
+
     // Expand a 2-4 stop template to a 16-entry palette by sampling the
     // gradient evenly. palette[0] is the quiescent shadow, palette[15] is
     // the brightest accent.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { HiOutlineFolder, HiOutlineFolderPlus } from 'react-icons/hi2';
+import { useNavigate } from 'react-router-dom';
+import { HiOutlineFolder, HiOutlineFolderPlus, HiOutlineCog6Tooth } from 'react-icons/hi2';
 import { ProjectsService, type ProjectResponse } from '../api/generated';
 import { notifyError } from '../lib/notify';
 
@@ -20,6 +21,12 @@ function persistActiveProjectId(id: string | null) {
 interface ProjectPickerProps {
   activeProjectId: string | null;
   onActiveProjectChange: (projectId: string | null) => void;
+  /** Fires with the full active-project metadata each time the picker
+   *  resolves which project is active (initial load, user selects another,
+   *  newly created project auto-activates). Lets the parent route correctly
+   *  between project-shared and conversation-keyed behaviors (e.g. which
+   *  diagnostics URL to open from a chat's 3-dot menu). */
+  onActiveProjectMetaChange?: (project: ProjectResponse | null) => void;
   /** Bumped by the parent when a fresh fetch is desired (e.g. after creating
    *  a project elsewhere). The picker also refetches on its own internal
    *  mutations. */
@@ -31,7 +38,8 @@ interface ProjectPickerProps {
 //      the active project and tells the parent so conversations can re-scope.
 //   2. A "+ New project" button that prompts for a name via window.prompt
 //      (intentionally minimal — a full settings drawer is a future enhancement).
-export function ProjectPicker({ activeProjectId, onActiveProjectChange, refreshKey }: ProjectPickerProps) {
+export function ProjectPicker({ activeProjectId, onActiveProjectChange, onActiveProjectMetaChange, refreshKey }: ProjectPickerProps) {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [localRefresh, setLocalRefresh] = useState(0);
@@ -46,15 +54,21 @@ export function ProjectPicker({ activeProjectId, onActiveProjectChange, refreshK
         // First boot — if nothing is selected yet, default to the first
         // project (which will be Default for a fresh user).
         if (!activeProjectId && list.length > 0) {
-          const next = list[0].id;
-          persistActiveProjectId(next);
-          onActiveProjectChange(next);
-        }
-        // Active project was deleted? Fall back to the first available.
-        if (activeProjectId && !list.find(p => p.id === activeProjectId)) {
-          const next = list[0]?.id ?? null;
-          persistActiveProjectId(next);
-          onActiveProjectChange(next);
+          const next = list[0];
+          persistActiveProjectId(next.id);
+          onActiveProjectChange(next.id);
+          onActiveProjectMetaChange?.(next);
+        } else if (activeProjectId && !list.find(p => p.id === activeProjectId)) {
+          // Active project was deleted? Fall back to the first available.
+          const next = list[0] ?? null;
+          persistActiveProjectId(next?.id ?? null);
+          onActiveProjectChange(next?.id ?? null);
+          onActiveProjectMetaChange?.(next);
+        } else if (activeProjectId) {
+          // Already-selected project — re-emit metadata so parent stays in sync
+          // when the list refreshes (name/isDefault could have changed).
+          const current = list.find(p => p.id === activeProjectId) ?? null;
+          onActiveProjectMetaChange?.(current);
         }
       })
       .catch(e => { if (!cancelled) notifyError(e, 'Failed to load projects.'); })
@@ -66,7 +80,10 @@ export function ProjectPicker({ activeProjectId, onActiveProjectChange, refreshK
   const selectProject = (id: string) => {
     persistActiveProjectId(id);
     onActiveProjectChange(id);
+    onActiveProjectMetaChange?.(projects.find(p => p.id === id) ?? null);
   };
+
+  const activeProject = projects.find(p => p.id === activeProjectId) ?? null;
 
   const handleNew = async () => {
     const name = window.prompt('New project name:')?.trim();
@@ -77,9 +94,15 @@ export function ProjectPicker({ activeProjectId, onActiveProjectChange, refreshK
       // Auto-activate the freshly created project.
       persistActiveProjectId(project.id);
       onActiveProjectChange(project.id);
+      onActiveProjectMetaChange?.(project);
     } catch (e: unknown) {
       notifyError(e, 'Failed to create project.');
     }
+  };
+
+  const openSettings = () => {
+    if (!activeProject) return;
+    navigate(`/p/${encodeURIComponent(activeProject.id)}/settings`);
   };
 
   return (
@@ -104,6 +127,17 @@ export function ProjectPicker({ activeProjectId, onActiveProjectChange, refreshK
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
       </select>
+      {activeProject && !activeProject.isDefault && (
+        <button
+          type="button"
+          className="project-picker-settings"
+          onClick={openSettings}
+          title="Project settings"
+          aria-label="Project settings"
+        >
+          <HiOutlineCog6Tooth aria-hidden="true" />
+        </button>
+      )}
       <button
         type="button"
         className="project-picker-new"

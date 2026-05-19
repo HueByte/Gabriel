@@ -5,6 +5,7 @@ using Gabriel.API.Contracts.Projects;
 using Gabriel.API.Contracts.Sequence;
 using Gabriel.Core.Entities;
 using Gabriel.Engine.Sequence;
+using Gabriel.Engine.Services;
 
 namespace Gabriel.API.Mapping;
 
@@ -17,17 +18,29 @@ internal static class ContractMappings
             : null;
         return new ProjectResponse(
             p.Id, p.Name, p.Description, p.SystemPrompt,
+            p.AvatarSeed, p.IsDefault,
+            p.PatternOverride, p.PaletteOverride,
             p.CreatedAt, p.UpdatedAt, files);
     }
 
     public static ProjectFileResponse ToResponse(this ProjectFile f)
         => new(f.Id, f.Name, f.SizeBytes, f.ContentType, f.UploadedAt);
 
-    public static ConversationResponse ToResponse(this Conversation c, bool includeMessages)
+    public static ConversationResponse ToResponse(this Conversation c, bool includeMessages, Project? project = null)
     {
+        // Project metadata is optional — list endpoints don't bother loading it
+        // (sidebar rows don't render avatars), so the new fields stay null.
+        // Single-conversation endpoints pass the project so the client can
+        // render the correct sequence (project's shared one vs the conversation's
+        // own standalone one).
+        bool? projectIsDefault = project?.IsDefault;
+        long? effectiveSeed = project is null
+            ? null
+            : (project.IsDefault ? c.AvatarSeed : project.AvatarSeed);
+
         if (!includeMessages)
         {
-            return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, null);
+            return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, null, projectIsDefault, effectiveSeed, c.PatternOverride, c.PaletteOverride);
         }
 
         var allMessages = c.Messages;
@@ -85,8 +98,18 @@ internal static class ContractMappings
                 m.ReasoningContent));
         }
 
-        return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, messages);
+        return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, messages, projectIsDefault, effectiveSeed, c.PatternOverride, c.PaletteOverride);
     }
+
+    public static ContextMetricsResponse ToResponse(this ContextMetrics m)
+        => new(
+            m.CurrentTokens,
+            m.ContextWindowTokens,
+            m.CompactThresholdTokens,
+            m.CompactThresholdRatio,
+            m.MessagesAfterCut,
+            m.IsSummarized,
+            m.SummaryTokens);
 
     public static GabrielSequenceResponse ToResponse(this GabrielSequence sequence)
     {

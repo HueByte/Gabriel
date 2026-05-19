@@ -23,18 +23,31 @@ public class ConversationsController : ControllerBase
     private readonly IChatService _chat;
     private readonly IAgentService _agent;
     private readonly IGabrielSequenceService _sequence;
+    private readonly IProjectService _projects;
     private readonly PersonalityOptions _personality;
 
     public ConversationsController(
         IChatService chat,
         IAgentService agent,
         IGabrielSequenceService sequence,
+        IProjectService projects,
         IOptions<PersonalityOptions> personality)
     {
         _chat = chat;
         _agent = agent;
         _sequence = sequence;
+        _projects = projects;
         _personality = personality.Value;
+    }
+
+    // Helper: loads the conversation's parent project (if any) so the response
+    // can carry projectIsDefault + effectiveAvatarSeed. Single-conversation
+    // endpoints use this; the List endpoint skips it (sidebar rows don't
+    // render avatars and the N+1 isn't worth it).
+    private async Task<Gabriel.Core.Entities.Project?> LoadProjectAsync(Guid? projectId, CancellationToken ct)
+    {
+        if (projectId is not { } pid) return null;
+        return await _projects.GetAsync(pid, ct);
     }
 
     [HttpGet]
@@ -52,7 +65,8 @@ public class ConversationsController : ControllerBase
     public async Task<ActionResult<ConversationResponse>> Get(Guid id, CancellationToken ct)
     {
         var conv = await _chat.GetConversationAsync(id, ct);
-        return Ok(conv.ToResponse(includeMessages: true));
+        var project = await LoadProjectAsync(conv.ProjectId, ct);
+        return Ok(conv.ToResponse(includeMessages: true, project: project));
     }
 
     [HttpPost]
@@ -61,7 +75,8 @@ public class ConversationsController : ControllerBase
         CancellationToken ct)
     {
         var conv = await _chat.CreateConversationAsync(request.ProjectId, request.Title, ct);
-        return CreatedAtAction(nameof(Get), new { id = conv.Id }, conv.ToResponse(includeMessages: true));
+        var project = await LoadProjectAsync(conv.ProjectId, ct);
+        return CreatedAtAction(nameof(Get), new { id = conv.Id }, conv.ToResponse(includeMessages: true, project: project));
     }
 
     [HttpPatch("{id:guid}")]
@@ -71,14 +86,41 @@ public class ConversationsController : ControllerBase
         CancellationToken ct)
     {
         var conv = await _chat.RenameConversationAsync(id, request.Title, ct);
-        return Ok(conv.ToResponse(includeMessages: false));
+        var project = await LoadProjectAsync(conv.ProjectId, ct);
+        return Ok(conv.ToResponse(includeMessages: false, project: project));
     }
 
     [HttpPost("{id:guid}/avatar/reroll")]
     public async Task<ActionResult<ConversationResponse>> RerollAvatar(Guid id, CancellationToken ct)
     {
         var conv = await _chat.RerollAvatarAsync(id, ct);
-        return Ok(conv.ToResponse(includeMessages: false));
+        var project = await LoadProjectAsync(conv.ProjectId, ct);
+        return Ok(conv.ToResponse(includeMessages: false, project: project));
+    }
+
+    // Pin (or clear) the conversation's avatar skin — meaningful for standalone
+    // (Default-project) chats only. Real-project chats render the project's
+    // skin, so a pinned conversation-skin is silently ignored at render time
+    // (still persisted, so a future "promote chat to project" flow could
+    // adopt it). PUT semantics + catalog validation match the project version.
+    [HttpPut("{id:guid}/skin")]
+    public async Task<ActionResult<ConversationResponse>> SetSkin(
+        Guid id,
+        [FromBody] Gabriel.API.Contracts.Projects.SetSkinRequest request,
+        CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(request.Pattern) && !SequenceCatalog.IsKnownPattern(request.Pattern))
+            return BadRequest(new { detail = $"Unknown pattern '{request.Pattern}'." });
+        if (!string.IsNullOrWhiteSpace(request.Palette) && !SequenceCatalog.IsKnownPalette(request.Palette))
+            return BadRequest(new { detail = $"Unknown palette '{request.Palette}'." });
+
+        var conv = await _chat.SetSkinAsync(
+            id,
+            SequenceCatalog.NormalizePattern(request.Pattern),
+            SequenceCatalog.NormalizePalette(request.Palette),
+            ct);
+        var project = await LoadProjectAsync(conv.ProjectId, ct);
+        return Ok(conv.ToResponse(includeMessages: false, project: project));
     }
 
     // Gabriel Sequence — the 64-frame, 16×16 RGB representation of this
@@ -90,6 +132,17 @@ public class ConversationsController : ControllerBase
     {
         var sequence = await _sequence.GetForConversationAsync(id, ct);
         return Ok(sequence.ToResponse());
+    }
+
+    // Context-window metrics — current tokens, provider window, the threshold
+    // at which the next turn would trigger MaybeCompactAsync, and whether any
+    // compact has already rolled. Used by the chat UI to draw a usage strip
+    // under the avatar; the numbers match the backend's compact decision.
+    [HttpGet("{id:guid}/metrics")]
+    public async Task<ActionResult<ContextMetricsResponse>> GetMetrics(Guid id, CancellationToken ct)
+    {
+        var metrics = await _agent.GetContextMetricsAsync(id, ct);
+        return Ok(metrics.ToResponse());
     }
 
     [HttpDelete("{id:guid}")]
@@ -110,7 +163,8 @@ public class ConversationsController : ControllerBase
         CancellationToken ct)
     {
         var conv = await _chat.DeleteMessageAsync(id, messageId, ct);
-        return Ok(conv.ToResponse(includeMessages: false));
+        var project = await LoadProjectAsync(conv.ProjectId, ct);
+        return Ok(conv.ToResponse(includeMessages: false, project: project));
     }
 
     // Switches which variant is active within a variant group. The chosen
@@ -123,7 +177,8 @@ public class ConversationsController : ControllerBase
         CancellationToken ct)
     {
         var conv = await _chat.SetActiveVariantAsync(id, messageId, ct);
-        return Ok(conv.ToResponse(includeMessages: true));
+        var project = await LoadProjectAsync(conv.ProjectId, ct);
+        return Ok(conv.ToResponse(includeMessages: true, project: project));
     }
 
     // Regenerate the assistant message at messageId. Same SSE wire format as

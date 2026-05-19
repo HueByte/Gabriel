@@ -3,6 +3,7 @@ using System;
 using Gabriel.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Gabriel.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260519040149_AddProjectAvatarSeedAndIsDefault")]
+    partial class AddProjectAvatarSeedAndIsDefault
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
@@ -28,14 +31,6 @@ namespace Gabriel.Infrastructure.Migrations
 
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("PaletteOverride")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PatternOverride")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
 
                     b.Property<Guid?>("ProjectId")
                         .HasColumnType("TEXT");
@@ -137,14 +132,6 @@ namespace Gabriel.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("OwnerUserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PaletteOverride")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PatternOverride")
-                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SystemPrompt")

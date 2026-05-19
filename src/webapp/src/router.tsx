@@ -16,6 +16,15 @@ const ChatPage = lazy(() =>
 const DiagnosticsPage = lazy(() =>
   import('./pages/DiagnosticsPage').then(m => ({ default: m.DiagnosticsPage })),
 );
+const ProjectDiagnosticsPage = lazy(() =>
+  import('./pages/DiagnosticsPage').then(m => ({ default: m.ProjectDiagnosticsPage })),
+);
+const ProjectSettingsPage = lazy(() =>
+  import('./pages/ProjectSettingsPage').then(m => ({ default: m.ProjectSettingsPage })),
+);
+const UserSettingsPage = lazy(() =>
+  import('./pages/UserSettingsPage').then(m => ({ default: m.UserSettingsPage })),
+);
 const LoginPage = lazy(() =>
   import('./pages/LoginPage').then(m => ({ default: m.LoginPage })),
 );
@@ -121,6 +130,18 @@ export const router = createBrowserRouter([
           {
             path: '/c/:conversationId/diagnostics',
             element: <LazyPage><DiagnosticsPage /></LazyPage>,
+          },
+          {
+            path: '/p/:projectId/diagnostics',
+            element: <LazyPage><ProjectDiagnosticsPage /></LazyPage>,
+          },
+          {
+            path: '/p/:projectId/settings',
+            element: <LazyPage><ProjectSettingsPage /></LazyPage>,
+          },
+          {
+            path: '/settings',
+            element: <LazyPage><UserSettingsPage /></LazyPage>,
           },
         ],
       },

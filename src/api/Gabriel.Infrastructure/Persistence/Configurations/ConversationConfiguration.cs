@@ -19,6 +19,8 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.Property(c => c.CreatedAt).IsRequired();
         builder.Property(c => c.UpdatedAt).IsRequired();
         builder.Property(c => c.AvatarSeed).IsRequired();
+        builder.Property(c => c.PatternOverride).HasMaxLength(32);
+        builder.Property(c => c.PaletteOverride).HasMaxLength(32);
 
         // Sidebar list (UserId + UpdatedAt desc) — the hot query for the dashboard.
         builder.HasIndex(c => new { c.UserId, c.UpdatedAt });

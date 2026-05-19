@@ -419,6 +419,36 @@ public class AgentService : IAgentService
         return idx < 0 ? conv.Messages : conv.Messages.Skip(idx + 1);
     }
 
+    public async Task<ContextMetrics> GetContextMetricsAsync(
+        Guid conversationId,
+        CancellationToken ct = default)
+    {
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException("Authenticated user required.");
+
+        var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
+            ?? throw new NotFoundException(nameof(Conversation), conversationId);
+
+        var window = _provider.ContextWindowTokens;
+        var ratio = _options.CompactThreshold;
+        // Match MaybeCompactAsync's calculation exactly so the UI's "trigger
+        // line" lands on the same number the backend would actually trip on.
+        var thresholdTokens = window > 0 ? (int)(window * ratio) : 0;
+
+        var summaryTokens = _tokens.EstimateText(conversation.Summary);
+        var postCut = MessagesAfterCut(conversation).ToList();
+        var currentTokens = summaryTokens + _tokens.EstimateMessages(postCut);
+
+        return new ContextMetrics(
+            CurrentTokens: currentTokens,
+            ContextWindowTokens: window,
+            CompactThresholdTokens: thresholdTokens,
+            CompactThresholdRatio: ratio,
+            MessagesAfterCut: postCut.Count,
+            IsSummarized: conversation.SummarizedThroughMessageId is not null,
+            SummaryTokens: summaryTokens);
+    }
+
     // --- Tool execution ----------------------------------------------------------
 
     // Maximum chars we put into a log message for tool args / results. Big

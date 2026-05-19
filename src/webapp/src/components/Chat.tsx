@@ -10,6 +10,7 @@ import {
 import { toast } from 'react-toastify';
 import { streamChat } from '../api/streamChat';
 import { notifyError } from '../lib/notify';
+import { useHideReactDetails } from '../lib/userPrefs';
 import { StreamingText } from './StreamingText';
 import { ThinkingPulse } from './ThinkingPulse';
 
@@ -118,6 +119,11 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // User preference: when on, hide ReAct scaffolding (thought / reasoning /
+  // tool calls + results) and show only user + final assistant bubbles.
+  // Lives in localStorage via the userPrefs hook so settings + Chat stay in
+  // sync across components within the tab.
+  const [hideReactDetails] = useHideReactDetails();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const messagesContentRef = useRef<HTMLDivElement | null>(null);
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -279,7 +285,14 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
           {entries.length === 0 && !busy && (
             <div className="empty">Say hi to get started.</div>
           )}
-          {entries.map(renderEntry)}
+          {/* When the user has opted out of ReAct details, drop every
+              scaffolding kind — only user/assistant text remains. The actual
+              assistant streaming bubble (kind === 'text', role === 'assistant')
+              still flows through so the typewriter effect works normally. */}
+          {(hideReactDetails
+            ? entries.filter(e => e.kind === 'text')
+            : entries
+          ).map(renderEntry)}
           {/* Thinking indicator — shows once the user has submitted and before
               the first delta arrives. The condition checks that no assistant
               bubble is currently streaming, which means tokens haven't started

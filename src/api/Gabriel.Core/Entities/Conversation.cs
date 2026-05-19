@@ -28,6 +28,14 @@ public class Conversation
     // cleanly through JSON.
     public long AvatarSeed { get; private set; }
 
+    // Optional "skin" pins for standalone (Default-project) chats — when set,
+    // they override the seed-derived pattern / palette picks. Mirrors the
+    // matching fields on Project; the sequence service prefers the project's
+    // overrides for project-shared sequences and falls back to the
+    // conversation's overrides for standalone chats. See SequenceCatalog.
+    public string? PatternOverride { get; private set; }
+    public string? PaletteOverride { get; private set; }
+
     // Rolling summary of everything up to and including SummarizedThroughMessageId.
     // History assembly prepends this as a system message and drops the messages it covers
     // so the provider context stays bounded.
@@ -74,6 +82,16 @@ public class Conversation
     public void RerollAvatar()
     {
         AvatarSeed = GenerateAvatarSeed();
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    // Mirror of Project.SetSkin — null/empty clears the override and lets the
+    // seed drive that dimension again. Catalog validation lives in the API
+    // layer (Engine has the catalog, Core can't reference Engine).
+    public void SetSkin(string? pattern, string? palette)
+    {
+        PatternOverride = string.IsNullOrWhiteSpace(pattern) ? null : pattern.Trim();
+        PaletteOverride = string.IsNullOrWhiteSpace(palette) ? null : palette.Trim();
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
