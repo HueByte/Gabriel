@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Entities;
 using Gabriel.Engine.Providers;
 
@@ -12,8 +13,19 @@ public class MockChatProvider : IChatProvider
 {
     public string Name => "mock";
 
-    // Small enough that compact behavior is exercisable in dev with a few chatty turns.
-    public int ContextWindowTokens => 8_000;
+    // Exposed to IModelCatalog so the UI picker shows a "mock" option in dev.
+    // Small context window so compact behavior is exercisable in dev with a
+    // few chatty turns. Not IsDefault — the real provider's IsActive entry
+    // wins the bootstrap when one is configured.
+    public IReadOnlyList<LLMModel> Models { get; } = new List<LLMModel>
+    {
+        new()
+        {
+            Name = "mock-default",
+            IsActive = false,
+            ContextWindowTokens = 8_000,
+        },
+    };
 
     private static readonly string[] Templates =
     [
@@ -26,8 +38,12 @@ public class MockChatProvider : IChatProvider
     public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
         IReadOnlyList<ChatProviderMessage> history,
         IReadOnlyList<ToolDescriptor> tools,
+        string modelName,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        // Mock ignores the model name — every entry in Models routes to the
+        // same canned-reply behavior. Param exists for interface compliance.
+        _ = modelName;
         // If we've never run a tool in this conversation and at least one is registered,
         // fire it once to prove the agent loop. Subsequent turns answer with text.
         var hasToolResult = history.Any(m => m.Role == MessageRole.Tool);

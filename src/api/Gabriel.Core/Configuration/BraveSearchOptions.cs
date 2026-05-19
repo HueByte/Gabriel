@@ -1,8 +1,8 @@
-namespace Gabriel.Infrastructure.Tools.Web;
+namespace Gabriel.Core.Configuration;
 
-public class BraveSearchOptions
+public class BraveSearchOptions : IConfigSection<BraveSearchOptions>
 {
-    public const string SectionName = "Tools:Web:Brave";
+    public static string SectionName => "Tools:Web:Brave";
 
     // Brave Search API base. Must end with a trailing slash so the
     // BaseAddress + relative path concat lands at /res/v1/web/search.

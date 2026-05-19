@@ -1,13 +1,8 @@
-using Gabriel.Core.Configuration;
-using Gabriel.Engine.Providers;
-
-namespace Gabriel.Infrastructure.Providers;
+namespace Gabriel.Core.Configuration;
 
 // xAI / Grok provider config. Inherits the shared LLM transport surface
 // (BaseUrl, ApiKey, TimeoutSeconds, Models[]) from LLMProviderOptions and
-// layers on the Grok-specific sampling knobs below. The static SectionName
-// lets services.ConfigureSection<GrokOptions>(config) bind without restating
-// the path.
+// layers on the Grok-specific sampling knobs below.
 public class GrokOptions : LLMProviderOptions, IConfigSection<GrokOptions>
 {
     public static string SectionName => "Providers:Grok";

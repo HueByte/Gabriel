@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Entities;
 using Gabriel.Engine.Providers;
 using Microsoft.Extensions.Logging;
@@ -36,19 +37,19 @@ public class GrokChatProvider : IChatProvider
 
     public string Name => "grok";
 
-    // Falls back to 0 if no model is marked active — the agent's token-budget
-    // accounting will then short-circuit and we let the provider's own context
-    // overflow be the ground truth. The options validator below already rejects
-    // that case at startup, so this is defensive only.
-    public int ContextWindowTokens => _options.GetActiveModel()?.ContextWindowTokens ?? 0;
+    // Surface the configured catalog so IModelCatalog can populate the UI
+    // picker. We snapshot the IOptions value rather than holding it live —
+    // the catalog itself is a singleton built once at startup.
+    public IReadOnlyList<LLMModel> Models => _options.Models.ToList();
 
     public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
         IReadOnlyList<ChatProviderMessage> history,
         IReadOnlyList<ToolDescriptor> tools,
+        string modelName,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var http = _httpFactory.CreateClient(HttpClientName);
-        var body = BuildRequestBody(history, tools);
+        var body = BuildRequestBody(history, tools, modelName);
         using var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
         {
             Content = JsonContent.Create(body),
@@ -134,16 +135,14 @@ public class GrokChatProvider : IChatProvider
         }
     }
 
-    private JsonObject BuildRequestBody(IReadOnlyList<ChatProviderMessage> history, IReadOnlyList<ToolDescriptor> tools)
+    private JsonObject BuildRequestBody(
+        IReadOnlyList<ChatProviderMessage> history,
+        IReadOnlyList<ToolDescriptor> tools,
+        string modelName)
     {
-        // Same fallback story as ContextWindowTokens above: the options validator
-        // rejects "no active model" at startup, so by the time we reach this
-        // hot path the null branch can never run.
-        var activeModelName = _options.GetActiveModel()?.Name ?? string.Empty;
-
         var body = new JsonObject
         {
-            ["model"] = activeModelName,
+            ["model"] = modelName,
             ["stream"] = true,
             ["messages"] = BuildMessages(history),
         };

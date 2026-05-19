@@ -32,7 +32,7 @@ internal static class PaletteTemplates
         new("mono",    new[] { Rgb(  0,   0,   0), Rgb(180, 180, 180), Rgb(255, 255, 255) }),
         new("void",    new[] { Rgb(  0,   0,   0), Rgb( 80,  40, 120), Rgb(200, 160, 255) }),
         new("forge",   new[] { Rgb( 20,  10,  30), Rgb(220,  80,  40), Rgb(255, 230, 120) }),
-        new("grok",    new[] { Rgb( 50,  20,  60), Rgb(200,  40, 130), Rgb(255, 100, 130), Rgb(255, 200, 160) }),
+        new("alive",   new[] { Rgb( 50,  20,  60), Rgb(200,  40, 130), Rgb(255, 100, 130), Rgb(255, 200, 160) }),
     };
 
     public static Template Pick(long seed)

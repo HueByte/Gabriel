@@ -205,21 +205,121 @@ button {
 }
 .project-picker-label svg { width: 14px; height: 14px; }
 .project-picker-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
   color: var(--text);
   font: inherit;
-  padding: 0.15rem 0.25rem;
+  padding: 0.2rem 0.35rem;
   cursor: pointer;
   outline: none;
+  text-align: left;
   /* Allow long project names to truncate rather than blow the grid out. */
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.project-picker-select:hover:not(:disabled),
+.project-picker-select.open {
+  border-color: var(--border);
+  background: var(--accent-dim);
 }
 .project-picker-select:disabled {
   color: var(--text-dim);
   cursor: progress;
+}
+.project-picker-select-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-picker-caret {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+  transition: transform 0.15s, color 0.15s;
+}
+.project-picker-select.open .project-picker-caret {
+  transform: rotate(180deg);
+  color: var(--text-dim);
+}
+
+/* Floating project dropdown - position: fixed coords come inline from the
+   trigger's bounding rect so it can escape any overflow clipping (mirrors the
+   conversation-row 3-dot menu pattern). */
+.project-picker-menu {
+  position: fixed;
+  z-index: 200;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: 60vh;
+  overflow-y: auto;
+  background: rgba(22, 22, 24, 0.98);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  animation: fade-in 0.12s ease-out;
+}
+.project-picker-menu::-webkit-scrollbar { width: 6px; }
+.project-picker-menu::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.project-picker-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: 0.83rem;
+  letter-spacing: -0.005em;
+  transition: color 0.12s, background 0.12s;
+}
+.project-picker-menu-item > svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+}
+.project-picker-menu-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-picker-menu-item-check {
+  color: var(--palette-accent, var(--accent)) !important;
+}
+.project-picker-menu-item:hover {
+  color: var(--text);
+  background: var(--accent-dim);
+}
+.project-picker-menu-item:hover > svg {
+  color: var(--text-dim);
+}
+.project-picker-menu-item.active {
+  color: var(--text);
+  background: var(--active-bg);
 }
 .project-picker-new {
   display: inline-flex;
@@ -763,7 +863,10 @@ button {
 .composer {
   display: flex;
   justify-content: center;
-  padding: 12px 0 18px;
+  /* Bottom margin lifts the input shell off the viewport edge so it doesn't
+     feel crammed against the bottom of the screen. Combined with .main-col's
+     own top padding this gives the chat column symmetric breathing room. */
+  padding: 12px 0 28px;
   background: transparent;
   border-top: none;
   animation: fade-in-up 0.55s cubic-bezier(0.4, 0, 0.2, 1) both;
@@ -2063,6 +2166,36 @@ button {
   background: var(--accent-dim);
   color: var(--text);
 }
+.model-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.model-selector-label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.model-selector-picker {
+  font-family: inherit;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--accent-dim);
+  width: 100%;
+  max-width: 480px;
+}
+.model-selector-picker:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.model-selector-picker:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
 .settings-field {
   display: flex;
   flex-direction: column;
@@ -2312,4 +2445,114 @@ button {
   accent-color: var(--palette-accent, var(--accent));
   cursor: pointer;
   flex: 0 0 auto;
+}
+
+/* ---------- Mobile responsiveness ----------
+   The desktop layout is the canonical design; these rules only shrink/repack
+   things that physically don't fit on small screens. Pixel art (avatar) gets
+   smaller, gutters tighten, and the chat content takes the full width minus
+   a small breathing margin. The composer keeps its lifted bottom padding so
+   the input doesn't sit flush against the device's bottom edge. */
+
+@media (max-width: 640px) {
+  /* Tighter outer gutters - the desktop 24px/16px feel cramped on phones
+     because there's no wide letterboxing to balance them against. */
+  .main-col {
+    padding: 16px 10px 0;
+  }
+
+  /* Pixel avatar shrinks to keep the canvas + ctx-stats strip from
+     dominating the viewport on a phone. The inline width/height set by
+     GabrielSequenceView lose to !important. */
+  .avatar-wrap {
+    width: 140px;
+  }
+  .avatar-wrap canvas {
+    width: 140px !important;
+    height: 140px !important;
+  }
+  .avatar-wrap::before {
+    width: 200px;
+    height: 200px;
+  }
+  .reroll {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* Context-stats strip matches the shrunk avatar so the two stay visually
+     paired (the bar's width was hard-coded to the old 200px). */
+  .ctx-stats {
+    width: 140px;
+    font-size: 9.5px;
+  }
+
+  /* Burger sits in the corner; nudging it down so it doesn't hug the very
+     edge on phones with rounded corners / notches. */
+  .sidebar-burger {
+    top: 0.65rem;
+    left: 0.65rem;
+    width: 38px;
+    height: 38px;
+  }
+
+  /* Sidebar inner padding tightens so the conversation list actually has
+     room to breathe at 100% viewport width. */
+  .sidebar {
+    padding: 1rem 0.85rem;
+  }
+
+  /* Composer fine-tuning - smaller radius/padding reads as proportional
+     to a phone-sized chat column. Bottom padding stays generous because
+     the on-screen keyboard already pushes the chrome up. */
+  .composer {
+    padding: 8px 0 20px;
+  }
+  .composer-shell {
+    border-radius: 14px;
+    padding: 6px 6px 6px 12px;
+  }
+  .composer-shell textarea {
+    font-size: 14px;
+  }
+
+  /* User bubble - 75% of a 360-ish-wide chat is too narrow once you account
+     for the assistant column padding. Push it wider so messages don't wrap
+     after every other word. */
+  .message.user {
+    max-width: 88%;
+  }
+
+  /* Settings pages - reclaim horizontal space the desktop pads aggressively. */
+  .settings {
+    padding: 16px 14px;
+  }
+  .settings-section {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  /* On very narrow phones the project picker grid (label / select / [settings] /
+     new) starts forcing the project name to truncate to one or two glyphs.
+     Drop the "Project" label - the folder icon already implies the meaning. */
+  .project-picker-label span {
+    display: none;
+  }
+  .project-picker {
+    gap: 0.35rem;
+    padding: 0.35rem 0.4rem;
+  }
+
+  /* Tighter conv-item padding so the title gets a few more pixels of width
+     before the 3-dot column eats into it. */
+  .conv-item {
+    padding: 0.5rem 0.6rem;
+  }
+
+  /* Floating menus already use viewport-based positioning - cap their
+     min-width so they don't blow past the screen edge on small phones. */
+  .conv-menu {
+    min-width: 150px;
+  }
 }

@@ -1,3 +1,4 @@
+using Gabriel.Core.Configuration;
 using Gabriel.Engine.Personality;
 using Gabriel.Engine.Sequence;
 using Gabriel.Engine.Services;
@@ -58,6 +59,9 @@ public static class DependencyInjection
         // host-vs-project hardening applies to every file tool.
         services.AddScoped<IAgentPathResolver, AgentPathResolver>();
         services.AddScoped<ITool, FileInfoTool>();
+        services.AddScoped<ITool, ListDirTool>();
+        services.AddScoped<ITool, FindTool>();
+        services.AddScoped<ITool, GrepTool>();
 
         return services;
     }

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { HiOutlineArrowLeft, HiOutlineArrowRightOnRectangle } from 'react-icons/hi2';
 import { useAuth } from '../auth/AuthContext';
 import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
+import { ModelSelector } from '../components/ModelSelector';
 
 // User-scoped settings: identity readout + sign-out. Intentionally minimal -
 // password change, email change, and theme controls will land here once the
@@ -40,6 +41,11 @@ export function UserSettingsPage() {
         {user === null && (
           <div className="error">Not signed in.</div>
         )}
+      </section>
+
+      <section className="settings-section">
+        <h2 className="settings-section-title">Model</h2>
+        <ModelSelector />
       </section>
 
       <section className="settings-section">

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Personality;
 using Microsoft.Extensions.Options;
 

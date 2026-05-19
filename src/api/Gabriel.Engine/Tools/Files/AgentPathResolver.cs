@@ -1,3 +1,4 @@
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Exceptions;
 using Gabriel.Core.Services;
 using Microsoft.Extensions.Options;

@@ -1,8 +1,8 @@
-namespace Gabriel.Infrastructure.Identity;
+namespace Gabriel.Core.Configuration;
 
-public class JwtOptions
+public class JwtOptions : IConfigSection<JwtOptions>
 {
-    public const string SectionName = "Jwt";
+    public static string SectionName => "Jwt";
 
     // What goes in the iss / aud claims and is validated on inbound JWTs.
     public string Issuer { get; set; } = "gabriel";

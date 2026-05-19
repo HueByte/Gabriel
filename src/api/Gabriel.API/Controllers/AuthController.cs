@@ -1,11 +1,13 @@
 using Gabriel.API.Contracts.Auth;
 using Gabriel.API.Identity;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Exceptions;
 using Gabriel.Core.Identity;
 using Gabriel.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Gabriel.API.Controllers;
 
@@ -30,6 +32,7 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signIn;
     private readonly IJwtTokenService _jwt;
     private readonly ICurrentUser _currentUser;
+    private readonly IOptionsMonitor<AuthOptions> _authOptions;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
@@ -37,18 +40,31 @@ public class AuthController : ControllerBase
         SignInManager<ApplicationUser> signIn,
         IJwtTokenService jwt,
         ICurrentUser currentUser,
+        IOptionsMonitor<AuthOptions> authOptions,
         ILogger<AuthController> logger)
     {
         _users = users;
         _signIn = signIn;
         _jwt = jwt;
         _currentUser = currentUser;
+        _authOptions = authOptions;
         _logger = logger;
     }
 
     [HttpPost("register")]
     public async Task<ActionResult<JwtResponse>> Register([FromBody] RegisterRequest request, CancellationToken ct)
     {
+        // Kill-switch for private / single-tenant deployments. We hit IOptionsMonitor
+        // each request so flipping the flag doesn't need an app restart.
+        if (!_authOptions.CurrentValue.RegistrationEnabled)
+        {
+            _logger.LogInformation("Rejected registration attempt for {Email} — registration is disabled.", request.Email);
+            return Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Registration disabled",
+                detail: "New account registration is disabled on this server.");
+        }
+
         var user = new ApplicationUser
         {
             UserName = request.Email,

@@ -6,7 +6,7 @@ namespace Gabriel.Engine.Sequence;
 // personality look distinct:
 //
 //   1. PALETTE is drawn from a curated set of vivid families (heat / cyber /
-//      aurora / plasma / void / matrix / forge / grok / ...). The seed picks
+//      aurora / plasma / void / matrix / forge / alive / ...). The seed picks
 //      one family; we expand its 2-4 gradient stops to a 16-entry palette.
 //
 //   2. PATTERN is one of five primitives (plasma, waves, spiral, pulse, shimmer)

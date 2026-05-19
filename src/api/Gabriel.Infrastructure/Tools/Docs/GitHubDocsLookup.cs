@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Gabriel.Core.Configuration;
 using Gabriel.Engine.Tools.Docs;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

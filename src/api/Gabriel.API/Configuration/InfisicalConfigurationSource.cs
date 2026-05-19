@@ -1,3 +1,4 @@
+using Gabriel.Core.Configuration;
 using Microsoft.Extensions.Configuration;
 
 namespace Gabriel.API.Configuration;

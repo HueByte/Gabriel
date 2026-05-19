@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using Gabriel.Core.Configuration;
 using Microsoft.Extensions.Configuration;
 
 namespace Gabriel.API.Configuration;

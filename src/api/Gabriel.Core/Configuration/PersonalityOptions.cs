@@ -1,8 +1,8 @@
-namespace Gabriel.Engine.Personality;
+namespace Gabriel.Core.Configuration;
 
-public class PersonalityOptions
+public class PersonalityOptions : IConfigSection<PersonalityOptions>
 {
-    public const string SectionName = "Personality";
+    public static string SectionName => "Personality";
 
     // Persona display name - injected into the system prompt and the few-shot block.
     // Future Phase 8 (per-project personality) replaces this with per-project config.

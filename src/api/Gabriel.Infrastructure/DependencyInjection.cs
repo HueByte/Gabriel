@@ -136,67 +136,76 @@ public static class DependencyInjection
 
     private static void AddChatProvider(IServiceCollection services, IConfiguration config)
     {
-        var active = config["Providers:Active"]?.ToLowerInvariant() ?? "mock";
+        // Mock is always registered — zero external deps, and acts as the
+        // safety-net provider so AgentService never crashes with "no provider
+        // available". It also gives dev a fallback in the UI picker.
+        services.AddSingleton<IChatProvider, MockChatProvider>();
 
-        switch (active)
+        // Grok registers when it's been configured with at least one model
+        // entry. The previous Providers:Active flag is gone — the active
+        // provider/model is now whatever the user picks (with the per-provider
+        // IsActive flag as the bootstrap default).
+        var grokModels = config.GetSection($"{GrokOptions.SectionName}:Models").GetChildren().ToList();
+        if (grokModels.Count > 0)
         {
-            case "grok":
-                // Read once at startup. The resilience pipeline's timeouts are
-                // pipeline-level - no per-request live tuning, so a captured
-                // value is correct here.
-                var grokTimeout = TimeSpan.FromSeconds(
-                    config.GetValue($"{GrokOptions.SectionName}:TimeoutSeconds", 900));
+            // Read once at startup. The resilience pipeline's timeouts are
+            // pipeline-level - no per-request live tuning, so a captured
+            // value is correct here.
+            var grokTimeout = TimeSpan.FromSeconds(
+                config.GetValue($"{GrokOptions.SectionName}:TimeoutSeconds", 900));
 
-                // Bind + validate options once. Validation fires the first time
-                // IOptions<GrokOptions>.Value is read (i.e. when the first
-                // HttpClient is created), producing a clear OptionsValidationException
-                // instead of an ad-hoc throw inside the HttpClient factory.
-                services.ConfigureSection<GrokOptions>(config)
-                    .Validate(
-                        o => !string.IsNullOrWhiteSpace(o.ApiKey),
-                        "Providers:Grok:ApiKey is required. Set via user-secrets or env var PROVIDERS__GROK__APIKEY.")
-                    .Validate(
-                        o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _),
-                        "Providers:Grok:BaseUrl must be a valid absolute URL ending with '/'.")
-                    .Validate(
-                        o => o.TimeoutSeconds > 0,
-                        "Providers:Grok:TimeoutSeconds must be greater than zero.")
-                    .Validate(
-                        o => o.Models.Count(m => m.IsActive) == 1,
-                        "Providers:Grok:Models must contain exactly one entry with IsActive=true.")
-                    .Validate(
-                        o => o.GetActiveModel() is { } m
-                             && !string.IsNullOrWhiteSpace(m.Name)
-                             && m.ContextWindowTokens > 0,
-                        "Providers:Grok:Models active entry must have a non-empty Name and ContextWindowTokens > 0.");
+            // Bind + validate options once. Validation fires the first time
+            // IOptions<GrokOptions>.Value is read (i.e. when the first
+            // HttpClient is created), producing a clear OptionsValidationException
+            // instead of an ad-hoc throw inside the HttpClient factory.
+            services.ConfigureSection<GrokOptions>(config)
+                .Validate(
+                    o => !string.IsNullOrWhiteSpace(o.ApiKey),
+                    "Providers:Grok:ApiKey is required. Set via user-secrets or env var PROVIDERS__GROK__APIKEY.")
+                .Validate(
+                    o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _),
+                    "Providers:Grok:BaseUrl must be a valid absolute URL ending with '/'.")
+                .Validate(
+                    o => o.TimeoutSeconds > 0,
+                    "Providers:Grok:TimeoutSeconds must be greater than zero.")
+                .Validate(
+                    // At most one default — zero is allowed (means "no preferred
+                    // default for this provider"); the IModelCatalog handles a
+                    // catalog-wide fallback if every provider declines.
+                    o => o.Models.Count(m => m.IsActive) <= 1,
+                    "Providers:Grok:Models must contain at most one entry with IsActive=true.")
+                .Validate(
+                    o => o.Models.All(m => !string.IsNullOrWhiteSpace(m.Name) && m.ContextWindowTokens > 0),
+                    "Providers:Grok:Models entries must have a non-empty Name and ContextWindowTokens > 0.");
 
-                // DelegatingHandler resolved per HttpClient creation. Transient is
-                // the required lifetime for handlers registered via AddHttpMessageHandler.
-                services.AddTransient<GrokAuthHandler>();
+            // DelegatingHandler resolved per HttpClient creation. Transient is
+            // the required lifetime for handlers registered via AddHttpMessageHandler.
+            services.AddTransient<GrokAuthHandler>();
 
-                // Named HttpClient - consumed via IHttpClientFactory.CreateClient(name)
-                // inside GrokChatProvider. The Bearer header is applied by the
-                // DelegatingHandler rather than DefaultRequestHeaders so a future
-                // key rotation flows through without recycling the client.
-                // HttpClient.Timeout is left infinite so the resilience pipeline
-                // (added below) is the only timeout authority.
-                services.AddHttpClient(GrokChatProvider.HttpClientName, (sp, client) =>
-                    {
-                        var opts = sp.GetRequiredService<IOptions<GrokOptions>>().Value;
-                        client.BaseAddress = new Uri(opts.BaseUrl);
-                        client.Timeout = Timeout.InfiniteTimeSpan;
-                    })
-                    .AddHttpMessageHandler<GrokAuthHandler>()
-                    .AddStandardResilienceHandler(opts => ConfigureGrokResilience(opts, grokTimeout));
+            // Named HttpClient - consumed via IHttpClientFactory.CreateClient(name)
+            // inside GrokChatProvider. The Bearer header is applied by the
+            // DelegatingHandler rather than DefaultRequestHeaders so a future
+            // key rotation flows through without recycling the client.
+            // HttpClient.Timeout is left infinite so the resilience pipeline
+            // (added below) is the only timeout authority.
+            services.AddHttpClient(GrokChatProvider.HttpClientName, (sp, client) =>
+                {
+                    var opts = sp.GetRequiredService<IOptions<GrokOptions>>().Value;
+                    client.BaseAddress = new Uri(opts.BaseUrl);
+                    client.Timeout = Timeout.InfiniteTimeSpan;
+                })
+                .AddHttpMessageHandler<GrokAuthHandler>()
+                .AddStandardResilienceHandler(opts => ConfigureGrokResilience(opts, grokTimeout));
 
-                services.AddSingleton<IChatProvider, GrokChatProvider>();
-                break;
-
-            case "mock":
-            default:
-                services.AddSingleton<IChatProvider, MockChatProvider>();
-                break;
+            services.AddSingleton<IChatProvider, GrokChatProvider>();
         }
+
+        // Provider registry + model catalog — singletons that walk the
+        // IEnumerable<IChatProvider> set above. Order of registration here
+        // matters: these must come after every AddSingleton<IChatProvider>
+        // call so the constructor's IEnumerable sees them all.
+        services.AddSingleton<IChatProviderRegistry, ChatProviderRegistry>();
+        services.AddSingleton<IModelCatalog, ModelCatalog>();
     }
 
     // Standard resilience pipeline tuned for SSE chat streams. The defaults

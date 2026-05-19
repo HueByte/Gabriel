@@ -1,4 +1,4 @@
-namespace Gabriel.Engine.Providers;
+namespace Gabriel.Core.Configuration;
 
 // Per-model metadata. A provider (Grok, Anthropic, etc.) typically exposes
 // several models — different sizes, different price points — and we want the
@@ -14,9 +14,10 @@ public class LLMModel
     // "claude-opus-4-7"). What the API expects, not the marketing name.
     public string Name { get; set; } = string.Empty;
 
-    // Exactly one model in the array should be IsActive=true. The provider
-    // picks it via LLMProviderOptions.GetActiveModel(); a missing or duplicate
-    // active flag is treated as a config error at validation time.
+    // The default/bootstrap selection. Per-user PreferredModel (on ApplicationUser)
+    // overrides this at runtime; IsActive is just the fallback when no user
+    // preference has been set yet. Models discovery (GET /api/models) returns
+    // every entry across every provider regardless of this flag.
     public bool IsActive { get; set; }
 
     // Total context budget for this model. Used by token-accounting code (e.g.

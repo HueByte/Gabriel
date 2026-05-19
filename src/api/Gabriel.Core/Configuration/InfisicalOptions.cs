@@ -1,8 +1,8 @@
-namespace Gabriel.API.Configuration;
+namespace Gabriel.Core.Configuration;
 
-public class InfisicalOptions
+public class InfisicalOptions : IConfigSection<InfisicalOptions>
 {
-    public const string SectionName = "Infisical";
+    public static string SectionName => "Infisical";
 
     public string Host { get; set; } = string.Empty;
     public string ProjectId { get; set; } = string.Empty;

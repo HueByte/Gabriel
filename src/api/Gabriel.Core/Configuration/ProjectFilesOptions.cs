@@ -1,8 +1,8 @@
-namespace Gabriel.Infrastructure.Projects;
+namespace Gabriel.Core.Configuration;
 
-public class ProjectFilesOptions
+public class ProjectFilesOptions : IConfigSection<ProjectFilesOptions>
 {
-    public const string SectionName = "Projects:Files";
+    public static string SectionName => "Projects:Files";
 
     // Root directory under which every project gets its own subfolder
     // ({Root}/{ProjectId:N}/{file}). Set via GABRIEL_PROJECTS__FILES__ROOT.

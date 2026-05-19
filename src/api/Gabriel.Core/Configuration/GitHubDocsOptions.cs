@@ -1,8 +1,8 @@
-namespace Gabriel.Infrastructure.Tools.Docs;
+namespace Gabriel.Core.Configuration;
 
-public class GitHubDocsOptions
+public class GitHubDocsOptions : IConfigSection<GitHubDocsOptions>
 {
-    public const string SectionName = "Tools:Docs:GitHub";
+    public static string SectionName => "Tools:Docs:GitHub";
 
     // The repository hosting Gabriel's docs. Defaults point at the canonical
     // upstream so the docs tool works out of the box with no config.

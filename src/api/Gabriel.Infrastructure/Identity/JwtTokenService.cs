@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Identity;
 using Gabriel.Core.Repositories;
 using Microsoft.AspNetCore.Identity;

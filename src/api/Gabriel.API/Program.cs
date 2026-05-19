@@ -2,6 +2,7 @@ using Gabriel.API.Configuration;
 using Gabriel.API.Identity;
 using Gabriel.API.Middleware;
 using Gabriel.Core;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Identity;
 using Gabriel.Engine;
 using Gabriel.Infrastructure;
@@ -9,6 +10,7 @@ using Gabriel.Infrastructure.Identity;
 using Gabriel.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using Serilog.Events;
 
 // Bootstrap logger - captures anything that happens BEFORE the host's logging
 // pipeline is built (config loading, Infisical fetches, container startup
@@ -27,9 +29,34 @@ try
     // The configuration call reads the "Serilog" section of appsettings(.*).json
     // - sinks, minimum levels, enrichers, source-context overrides all live in
     // config so deployment-time changes don't need a recompile.
-    builder.Services.AddSerilog((services, lc) => lc
-        .ReadFrom.Configuration(builder.Configuration)
-        .ReadFrom.Services(services));
+    builder.Services.AddSerilog((services, lc) =>
+    {
+        lc.ReadFrom.Configuration(builder.Configuration)
+          .ReadFrom.Services(services);
+
+        // The Map → File pipeline is wired here instead of in appsettings —
+        // Serilog.Settings.Configuration can't bind the Map sink's
+        // Action<TKey, LoggerSinkConfiguration> arg from JSON, so the
+        // path/template/size knobs live under "FileLog" in config and we
+        // assemble the sink in code.
+        var fileLog = builder.Configuration.GetSection("FileLog");
+        var path = fileLog["Path"] ?? "logs/gabriel-{0}.log";
+        var outputTemplate = fileLog["OutputTemplate"]
+            ?? "{Timestamp:MM-dd-yyyy HH:mm:ss.fff zzz} [{Level:u3}] [{ThreadId}] {SourceContext}: {Message:lj}{NewLine}{Exception}";
+        var fileSizeLimit = fileLog.GetValue<long?>("FileSizeLimitBytes") ?? 52_428_800L;
+
+        lc.WriteTo.Map(
+            keyPropertyName: "LogDate",
+            defaultKey: "00-00-0000",
+            configure: (date, sink) => sink.File(
+                path: string.Format(path, date),
+                restrictedToMinimumLevel: LogEventLevel.Verbose,
+                fileSizeLimitBytes: fileSizeLimit,
+                rollOnFileSizeLimit: true,
+                shared: true,
+                outputTemplate: outputTemplate),
+            sinkMapCountLimit: 10);
+    });
 
     // Pull secrets from Infisical before service registration so IOptions bindings
     // (e.g. GrokOptions reading Providers:Grok:ApiKey, JwtOptions reading Jwt:SigningKey)
@@ -39,6 +66,9 @@ try
 
     builder.Services.AddOptions<InfisicalOptions>()
         .Bind(builder.Configuration.GetSection(InfisicalOptions.SectionName));
+
+    // Auth-surface knobs (registration kill-switch + bootstrap seed user).
+    builder.Services.ConfigureSection<AuthOptions>(builder.Configuration);
 
     const string CorsPolicy = "WebApp";
 
@@ -96,6 +126,11 @@ try
         using var scope = app.Services.CreateScope();
         var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await ctx.Database.MigrateAsync();
+
+        // Seeded user (if configured) lives next to migrations on purpose: the
+        // Users table has to exist first, and we want startup to fail loudly
+        // if Identity can't create the account.
+        await IdentitySeeder.SeedAsync(scope.ServiceProvider);
     }
 
     app.UseExceptionHandler();

@@ -19,7 +19,7 @@ public static class SequenceCatalog
     public static readonly IReadOnlyList<string> Palettes = new[]
     {
         "heat", "ice", "plasma", "matrix", "sunset", "ocean", "aurora", "rose",
-        "cyber", "amber", "lime", "sakura", "mono", "void", "forge", "grok",
+        "cyber", "amber", "lime", "sakura", "mono", "void", "forge", "alive",
     };
 
     public static bool IsKnownPattern(string? name)

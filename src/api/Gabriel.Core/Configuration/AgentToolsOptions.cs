@@ -1,12 +1,12 @@
-namespace Gabriel.Engine.Tools.Files;
+namespace Gabriel.Core.Configuration;
 
 // Options for the filesystem + shell agent tools. Bound from "AgentTools:*"
 // in configuration. The single most important knob is HostRoot - every host-
 // mode filesystem op canonicalizes under it, and anything resolving outside
 // is rejected.
-public sealed class AgentToolsOptions
+public sealed class AgentToolsOptions : IConfigSection<AgentToolsOptions>
 {
-    public const string SectionName = "AgentTools";
+    public static string SectionName => "AgentTools";
 
     // Absolute directory the host-mode filesystem tools are pinned to. Relative
     // paths resolve against it; absolute paths must canonicalize under it.

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Entities;
 using Gabriel.Core.Exceptions;
 using Gabriel.Core.Identity;
@@ -27,7 +28,9 @@ public class AgentService : IAgentService
 
     private readonly IConversationRepository _conversations;
     private readonly IProjectRepository _projects;
-    private readonly IChatProvider _provider;
+    private readonly IChatProviderRegistry _providerRegistry;
+    private readonly IModelCatalog _modelCatalog;
+    private readonly IUserPreferences _userPrefs;
     private readonly IToolRegistry _tools;
     private readonly IToolExecutionContext _toolContext;
     private readonly IUnitOfWork _uow;
@@ -42,7 +45,9 @@ public class AgentService : IAgentService
     public AgentService(
         IConversationRepository conversations,
         IProjectRepository projects,
-        IChatProvider provider,
+        IChatProviderRegistry providerRegistry,
+        IModelCatalog modelCatalog,
+        IUserPreferences userPrefs,
         IToolRegistry tools,
         IToolExecutionContext toolContext,
         IUnitOfWork uow,
@@ -56,7 +61,9 @@ public class AgentService : IAgentService
     {
         _conversations = conversations;
         _projects = projects;
-        _provider = provider;
+        _providerRegistry = providerRegistry;
+        _modelCatalog = modelCatalog;
+        _userPrefs = userPrefs;
         _tools = tools;
         _toolContext = toolContext;
         _uow = uow;
@@ -100,9 +107,15 @@ public class AgentService : IAgentService
         _conversations.Update(conversation);
         await _uow.SaveChangesAsync(ct);
 
+        // Resolve the model for this turn (per-user preference → config default).
+        // We commit to a single selection up front and pass it through every
+        // helper so the compact threshold, the provider call, and the metrics
+        // calculation all agree.
+        var selection = await ResolveModelSelectionAsync(ct);
+
         // Compact here (between turns), never mid-iteration - cutting between an
         // assistant's tool_calls and its tool results would orphan them.
-        await MaybeCompactAsync(conversation, ct);
+        await MaybeCompactAsync(conversation, selection, ct);
 
         // Load the project's SystemPrompt once per turn (cheap indexed read).
         // Threaded into the iterator so each iteration re-uses the same prompt
@@ -114,7 +127,7 @@ public class AgentService : IAgentService
         // to without having the model fill in the projectId itself.
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
-        return RunStreamAsync(conversation, variantGroupIdOverride: null, projectPrompt, ct);
+        return RunStreamAsync(conversation, variantGroupIdOverride: null, projectPrompt, selection, ct);
     }
 
     public async Task<IAsyncEnumerable<AgentEvent>> RegenerateAsync(
@@ -150,15 +163,26 @@ public class AgentService : IAgentService
         _conversations.Update(conversation);
         await _uow.SaveChangesAsync(ct);
 
+        var selection = await ResolveModelSelectionAsync(ct);
+
         // No new user message + no state update - state was set when the user
         // originally sent this turn, and we're regenerating against that same
         // state. Compact between turns as usual.
-        await MaybeCompactAsync(conversation, ct);
+        await MaybeCompactAsync(conversation, selection, ct);
 
         var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
-        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, projectPrompt, ct);
+        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, projectPrompt, selection, ct);
+    }
+
+    // Centralised resolution: every entry point goes through this so a user
+    // who flips their preferred model on the settings page sees the change
+    // take effect on the very next turn.
+    private async Task<ModelSelection> ResolveModelSelectionAsync(CancellationToken ct)
+    {
+        var prefs = await _userPrefs.GetAsync(ct);
+        return _modelCatalog.Resolve(prefs.PreferredProvider, prefs.PreferredModel);
     }
 
     // One-shot lookup of the project's SystemPrompt for this turn. Returns null
@@ -175,9 +199,11 @@ public class AgentService : IAgentService
         Conversation conversation,
         Guid? variantGroupIdOverride,
         string? projectSystemPrompt,
+        ModelSelection selection,
         [EnumeratorCancellation] CancellationToken ct)
     {
         var toolDescriptors = _tools.AsDescriptors();
+        var provider = _providerRegistry.Resolve(selection.Provider);
 
         for (var iter = 0; iter < _options.MaxIterations; iter++)
         {
@@ -203,7 +229,7 @@ public class AgentService : IAgentService
                 }
 
                 var history = ToProviderHistory(conversation, projectSystemPrompt);
-                await foreach (var evt in _provider.StreamAsync(history, toolDescriptors, ct))
+                await foreach (var evt in provider.StreamAsync(history, toolDescriptors, selection.Name, ct))
                 {
                     switch (evt)
                     {
@@ -341,9 +367,9 @@ public class AgentService : IAgentService
 
     // Estimates the tokens we'd send right now and triggers a rolling-summary
     // compact if we're at/above the configured fraction of the provider's window.
-    private async Task MaybeCompactAsync(Conversation conv, CancellationToken ct)
+    private async Task MaybeCompactAsync(Conversation conv, ModelSelection selection, CancellationToken ct)
     {
-        var window = _provider.ContextWindowTokens;
+        var window = selection.ContextWindowTokens;
         if (window <= 0) return;
         var threshold = (int)(window * _options.CompactThreshold);
 
@@ -367,7 +393,7 @@ public class AgentService : IAgentService
         string newSummary;
         try
         {
-            newSummary = await GenerateSummaryAsync(conv.Summary, toSummarize, ct);
+            newSummary = await GenerateSummaryAsync(conv.Summary, toSummarize, selection, ct);
         }
         catch (Exception ex)
         {
@@ -408,6 +434,7 @@ public class AgentService : IAgentService
     private async Task<string> GenerateSummaryAsync(
         string? previousSummary,
         IReadOnlyList<Message> toSummarize,
+        ModelSelection selection,
         CancellationToken ct)
     {
         const string system =
@@ -441,7 +468,8 @@ public class AgentService : IAgentService
         };
 
         var text = new StringBuilder();
-        await foreach (var evt in _provider.StreamAsync(history, Array.Empty<ToolDescriptor>(), ct))
+        var provider = _providerRegistry.Resolve(selection.Provider);
+        await foreach (var evt in provider.StreamAsync(history, Array.Empty<ToolDescriptor>(), selection.Name, ct))
         {
             if (evt is TextDeltaEvent td) text.Append(td.Delta);
             else if (evt is FinishEvent) break;
@@ -476,7 +504,8 @@ public class AgentService : IAgentService
         var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
             ?? throw new NotFoundException(nameof(Conversation), conversationId);
 
-        var window = _provider.ContextWindowTokens;
+        var selection = await ResolveModelSelectionAsync(ct);
+        var window = selection.ContextWindowTokens;
         var ratio = _options.CompactThreshold;
         // Match MaybeCompactAsync's calculation exactly so the UI's "trigger
         // line" lands on the same number the backend would actually trip on.

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using Gabriel.Core.Configuration;
 using Gabriel.Engine.Tools.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

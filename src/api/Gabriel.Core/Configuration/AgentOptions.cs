@@ -1,8 +1,8 @@
-namespace Gabriel.Engine.Services;
+namespace Gabriel.Core.Configuration;
 
-public class AgentOptions
+public class AgentOptions : IConfigSection<AgentOptions>
 {
-    public const string SectionName = "Agent";
+    public static string SectionName => "Agent";
 
     // Hard cap on tool-call iterations per user turn. Going much higher invites
     // runaway loops + wasted spend.

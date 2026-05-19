@@ -28,7 +28,7 @@ export const PALETTES: Palette[] = [
   { name: 'mono',    stops: [[0, 0, 0],     [180, 180, 180], [255, 255, 255]] },
   { name: 'void',    stops: [[0, 0, 0],     [80, 40, 120],   [200, 160, 255]] },
   { name: 'forge',   stops: [[20, 10, 30],  [220, 80, 40],   [255, 230, 120]] },
-  { name: 'grok',    stops: [[50, 20, 60],  [200, 40, 130],  [255, 100, 130], [255, 200, 160]] },
+  { name: 'alive',   stops: [[50, 20, 60],  [200, 40, 130],  [255, 100, 130], [255, 200, 160]] },
 ];
 
 export function pickPalette(rng: Rand, name?: string): Palette {

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Exceptions;
 using Microsoft.Extensions.Options;
 

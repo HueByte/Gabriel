@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using Gabriel.Core.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace Gabriel.Infrastructure.Providers;

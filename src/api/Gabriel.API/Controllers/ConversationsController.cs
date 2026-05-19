@@ -3,6 +3,7 @@ using Gabriel.API.Contracts.Conversations;
 using Gabriel.API.Contracts.Messages;
 using Gabriel.API.Contracts.Sequence;
 using Gabriel.API.Mapping;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Services;
 using Gabriel.Engine.Personality;
 using Gabriel.Engine.Sequence;

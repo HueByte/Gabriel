@@ -1,4 +1,5 @@
 using System.Text;
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Identity;
 using Gabriel.Infrastructure.Persistence;
 using Gabriel.Infrastructure.Persistence.Repositories;
@@ -48,6 +49,10 @@ public static class GabrielIdentityExtensions
 
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
+
+        // Per-user preferences (preferred model selection, etc.) — backed by
+        // ApplicationUser fields, so it's scoped alongside UserManager.
+        services.AddScoped<IUserPreferences, UserPreferencesService>();
 
         // IdentityCore - user store + password hashing + UserManager + SignInManager.
         // No AddApiEndpoints (no MapIdentityApi), no AddDefaultUI.

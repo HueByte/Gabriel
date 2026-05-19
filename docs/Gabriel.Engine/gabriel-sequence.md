@@ -92,7 +92,7 @@ Three seed-derived choices drive the visual:
 
 | Decision | Source | Output |
 | --- | --- | --- |
-| **Palette family** | `seed ^ (seed >> 32) ^ 0x9E3779B1` mod 16 | One of: heat, ice, plasma, matrix, sunset, ocean, aurora, rose, cyber, amber, lime, sakura, mono, void, forge, grok |
+| **Palette family** | `seed ^ (seed >> 32) ^ 0x9E3779B1` mod 16 | One of: heat, ice, plasma, matrix, sunset, ocean, aurora, rose, cyber, amber, lime, sakura, mono, void, forge, alive |
 | **Pattern kind** | `\|seed ^ (seed >> 32)\|` mod 5 | One of: Plasma, Waves, Spiral, Pulse, Shimmer |
 | **Pattern parameters** | `seed ^ (seed >> 32) ^ 0xC2B2AE35` as `Random` seed | Pattern-specific (angle, frequency, arms, etc.) |
 
