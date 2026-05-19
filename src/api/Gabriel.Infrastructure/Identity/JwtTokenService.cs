@@ -50,6 +50,16 @@ public class JwtTokenService : IJwtTokenService
         var (access, accessExpires) = MintAccessJwt(userId, email);
         var (refreshPlaintext, refreshEntity) = await PersistNewRefreshTokenAsync(userId, ct);
 
+        // Commit the refresh-token row to the DB. Without this, the entity sits
+        // in the EF change tracker and gets discarded when the request scope
+        // ends — Identity's UserManager has AutoSaveChanges, but its save only
+        // fires when *Identity itself* writes (e.g. lockout-counter reset on
+        // failed login). For a clean user with AccessFailedCount==0, no save
+        // happens, our refresh token is never persisted, and the next refresh
+        // returns "invalid" because the hash was never in the DB. RefreshAsync
+        // (rotation path) already calls SaveChanges; Issue did not.
+        await _uow.SaveChangesAsync(ct);
+
         return new TokenPair(access, accessExpires, refreshPlaintext, refreshEntity.ExpiresAt);
     }
 
