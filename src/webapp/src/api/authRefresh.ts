@@ -12,9 +12,14 @@ async function postRefresh(): Promise<boolean> {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      // Empty body — webapp sends the refresh token via cookie; the server falls
-      // back to body for external clients but ignores it for us.
-      body: '{}',
+      // The server reads the refresh token from the HttpOnly cookie when present
+      // and falls back to body.refreshToken otherwise (external clients). We
+      // MUST include the field even with an empty value: the controller's
+      // [FromBody] RefreshTokenRequest has a non-nullable string member, and
+      // [ApiController]'s auto-validation rejects `{}` as a 400 before the
+      // cookie-fallback code in the action runs. With the field present (any
+      // value), validation passes and the action picks up the cookie.
+      body: JSON.stringify({ refreshToken: '' }),
     });
     return res.ok;
   } catch {

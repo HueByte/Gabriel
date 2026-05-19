@@ -68,10 +68,53 @@ export function rgbToCss([r, g, b]: RGB, alpha = 1): string {
 // Pick the brightest stop of a palette as a single "accent" color. Used where
 // a gradient isn't appropriate (e.g. solid glow color, link tint).
 export function paletteAccent(palette: Palette): RGB {
-  return palette.stops[palette.stops.length - 1];
+  return brightestStop(palette.stops);
 }
 
 export function paletteGradientCss(palette: Palette): string {
-  const stops = palette.stops.map((s, i) => `${rgbToCss(s)} ${(i / Math.max(1, palette.stops.length - 1)) * 100}%`);
-  return `linear-gradient(90deg, ${stops.join(', ')})`;
+  return gradientCssFromStops(palette.stops);
+}
+
+// ----- stop-array variants -----
+// For palettes that don't come from PALETTES (e.g. server-driven Gabriel
+// Sequence palettes), operate on a bare RGB[] directly. Used by App.tsx when
+// the sequence response arrives.
+
+export function brightestStop(stops: readonly RGB[]): RGB {
+  // Sum-of-channels is a cheap proxy for luminance and produces sensible
+  // "most vivid" picks for the small curated palettes we ship and the larger
+  // ones the server emits. For the pulse palettes the last stop is already
+  // brightest, so existing behavior is preserved.
+  let best = stops[0];
+  let bestSum = best[0] + best[1] + best[2];
+  for (let i = 1; i < stops.length; i++) {
+    const s = stops[i];
+    const sum = s[0] + s[1] + s[2];
+    if (sum > bestSum) { best = s; bestSum = sum; }
+  }
+  return best;
+}
+
+export function gradientCssFromStops(stops: readonly RGB[]): string {
+  if (stops.length === 0) return 'transparent';
+  if (stops.length === 1) return rgbToCss(stops[0]);
+  // Many-stop palettes (server sequences ship 16+) can read as muddy when
+  // every color is given equal weight. Sort by brightness and take a
+  // representative 5-stop subset so the gradient has clear dim→bright flow.
+  const sorted = [...stops].sort((a, b) => (a[0] + a[1] + a[2]) - (b[0] + b[1] + b[2]));
+  const sample = sorted.length <= 5
+    ? sorted
+    : [0, 0.25, 0.5, 0.75, 1].map(t => sorted[Math.round(t * (sorted.length - 1))]);
+  const parts = sample.map((s, i) => `${rgbToCss(s)} ${(i / (sample.length - 1)) * 100}%`);
+  return `linear-gradient(90deg, ${parts.join(', ')})`;
+}
+
+/** Build the three palette CSS variables consumed by .palette-scope. */
+export function paletteVarsFromStops(stops: readonly RGB[]): Record<string, string> {
+  const accent = brightestStop(stops);
+  return {
+    '--palette-accent': rgbToCss(accent),
+    '--palette-accent-soft': rgbToCss(accent, 0.22),
+    '--palette-gradient': gradientCssFromStops(stops),
+  };
 }

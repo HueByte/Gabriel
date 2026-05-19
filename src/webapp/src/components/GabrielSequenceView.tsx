@@ -27,12 +27,17 @@ interface GabrielSequenceViewProps {
   refreshKey?: number;
   /** Display size in pixels (square). Defaults to 200 to match the prior Three.js avatar. */
   size?: number;
+  /** Fired once per successful fetch with the raw sequence so the parent can
+   *  derive shared UI accents (galactic gradient, thinking-pulse colors, link
+   *  tints) from the same server-driven palette. */
+  onSequenceLoaded?: (sequence: GabrielSequence) => void;
 }
 
 export function GabrielSequenceView({
   conversationId,
   refreshKey,
   size = 200,
+  onSequenceLoaded,
 }: GabrielSequenceViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sequenceRef = useRef<GabrielSequence | null>(null);
@@ -43,7 +48,10 @@ export function GabrielSequenceView({
   useEffect(() => {
     const ctrl = new AbortController();
     fetchGabrielSequence(conversationId, ctrl.signal)
-      .then(seq => { sequenceRef.current = seq; })
+      .then(seq => {
+        sequenceRef.current = seq;
+        onSequenceLoaded?.(seq);
+      })
       .catch(e => {
         if ((e as Error).name !== 'AbortError') {
           // Keep the previous frame visible on error rather than wiping to black.

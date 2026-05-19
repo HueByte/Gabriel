@@ -27,7 +27,17 @@ export function installAuthInterceptor() {
       // Don't try to refresh on auth endpoints themselves — that would loop.
       const isAuthCall = AUTH_PATHS.some(p => url.startsWith(p));
 
-      if (status !== 401 || original?._retried || isAuthCall) {
+      if (status !== 401 || isAuthCall) {
+        return Promise.reject(error);
+      }
+
+      // Already attempted a refresh+retry for this request and still got 401 —
+      // the session is unrecoverable. Signal so AuthContext clears local state
+      // and revokes server-side (logout flow). Falling through silently would
+      // log the user out via AuthContext.refreshMe's catch but skip the proper
+      // server-side cleanup.
+      if (original?._retried) {
+        signalSessionExpired();
         return Promise.reject(error);
       }
 
@@ -36,6 +46,10 @@ export function installAuthInterceptor() {
       const ok = await refreshSession();
 
       if (!ok) {
+        // Refresh itself failed — refresh token expired/revoked/etc. Only at
+        // this point do we treat the session as dead. Matches the user's mental
+        // model: logout happens only when BOTH the access JWT and the refresh
+        // token are unusable.
         signalSessionExpired();
         return Promise.reject(error);
       }

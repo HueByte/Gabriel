@@ -7,7 +7,8 @@ import { Sidebar } from './components/Sidebar';
 import { DefaultLayout } from './layouts/DefaultLayout';
 import { ConversationsService, type ConversationResponse } from './api/generated';
 import { notifyError } from './lib/notify';
-import { paletteForSeed, paletteAccent, paletteGradientCss, rgbToCss } from './pulse/palettes';
+import { paletteForSeed, paletteVarsFromStops, type RGB } from './pulse/palettes';
+import type { GabrielSequence } from './api/sequence';
 
 const SIDEBAR_STORAGE_KEY = 'gabriel.sidebar.collapsed';
 const ACTIVE_CONVERSATION_KEY = 'gabriel.activeConversationId';
@@ -44,7 +45,14 @@ export function App() {
   const [conversationId, setConversationIdState] = useState<string | null>(loadActiveConversation);
   const [avatarSeed, setAvatarSeed] = useState<number>(FALLBACK_AVATAR_SEED);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(loadSidebarCollapsed);
+  // Two refresh signals so each refetch only fires when its target actually
+  // changed. sidebarRefresh bumps on anything that reorders/recolors the
+  // conversation list (rename/delete/new-chat/send/reroll). sequenceRefresh
+  // bumps only when the Gabriel Sequence's inputs change (send/reroll) —
+  // renaming or deleting a sibling conversation does NOT change the active
+  // conversation's sequence, so we don't waste an HTTP call there.
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
+  const [sequenceRefresh, setSequenceRefresh] = useState(0);
   const [thinking, setThinking] = useState(false);
   const bootRef = useRef(false);
 
@@ -55,14 +63,30 @@ export function App() {
   }, []);
 
   const bumpSidebar = useCallback(() => setSidebarRefresh(n => n + 1), []);
+  const bumpSequence = useCallback(() => setSequenceRefresh(n => n + 1), []);
 
-  const toggleSidebar = () => {
+  // Convenience for "a chat turn just completed" — both list ordering AND
+  // sequence Live State are affected. Stable identity so Chat doesn't see a
+  // new prop on every parent render.
+  const onTurnComplete = useCallback(() => {
+    setSidebarRefresh(n => n + 1);
+    setSequenceRefresh(n => n + 1);
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
     setSidebarCollapsed(prev => {
       const next = !prev;
       try { localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? '1' : '0'); } catch { /* ignore */ }
       return next;
     });
-  };
+  }, []);
+
+  // Stable handler so Sidebar's onSelect prop reference doesn't change on
+  // every App re-render (the previous inline `id => setConversationId(id)`
+  // was creating a fresh closure each pass).
+  const selectConversation = useCallback((id: string) => {
+    setConversationId(id);
+  }, [setConversationId]);
 
   // Chat fires this once it loads the conversation's metadata — lets us pick up
   // the avatar seed without doing a duplicate fetch.
@@ -109,11 +133,15 @@ export function App() {
     try {
       const conv = await ConversationsService.postApiConversationsAvatarReroll({ id: conversationId });
       setAvatarSeed(conv.avatarSeed);
+      // Reroll changes the seed → the sequence's palette + pattern change.
+      // Both signals fire: sidebar list reflects the updated updatedAt,
+      // sequence refetches with the new visual identity.
       bumpSidebar();
+      bumpSequence();
     } catch (e: unknown) {
       notifyError(e);
     }
-  }, [conversationId, bumpSidebar]);
+  }, [conversationId, bumpSidebar, bumpSequence]);
 
   // Boot: if we have nothing stored, create a fresh conversation. If a stored
   // id exists we leave it — Chat will load it; on 404 the user can pick another
@@ -130,7 +158,7 @@ export function App() {
       activeId={conversationId}
       collapsed={sidebarCollapsed}
       onToggleCollapsed={toggleSidebar}
-      onSelect={id => setConversationId(id)}
+      onSelect={selectConversation}
       onNewChat={startNewConversation}
       onRename={renameConversation}
       onDelete={deleteConversation}
@@ -157,12 +185,14 @@ export function App() {
       <div style={paletteVars} className="palette-scope">
         <div className={`avatar-wrap${thinking ? ' thinking' : ''}`}>
           {conversationId ? (
-            // Server-driven Gabriel Sequence — refetches on every sidebar bump
-            // (covers: new message sent, avatar rerolled). The seed lives on the
-            // Conversation, so reroll naturally produces a new sequence.
+            // Server-driven Gabriel Sequence. refreshKey is the dedicated
+            // sequenceRefresh signal — only bumps on send + reroll, so renames
+            // / deletes / new-chat creations don't trigger pointless refetches.
+            // (A conversationId change naturally remounts the component, which
+            // already triggers the initial fetch.)
             <GabrielSequenceView
               conversationId={conversationId}
-              refreshKey={sidebarRefresh}
+              refreshKey={sequenceRefresh}
             />
           ) : (
             // Booting / no active conversation yet — show the procedural avatar
@@ -185,7 +215,10 @@ export function App() {
           <Chat
             conversationId={conversationId}
             avatarSeed={avatarSeed}
-            onMessageSent={bumpSidebar}
+            // onTurnComplete bumps BOTH sidebar (list re-sort by updatedAt)
+            // AND the Gabriel Sequence (Live State just changed) in one stable
+            // callback. Chat sees a single stable prop instead of two.
+            onMessageSent={onTurnComplete}
             onBusyChange={setThinking}
             onConversationLoaded={handleConversationLoaded}
           />
