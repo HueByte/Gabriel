@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HiOutlineArrowPath } from 'react-icons/hi2';
 import { Avatar } from './components/Avatar';
 import { Chat } from './components/Chat';
+import { GabrielSequenceView } from './components/GabrielSequenceView';
 import { Sidebar } from './components/Sidebar';
 import { DefaultLayout } from './layouts/DefaultLayout';
 import { ConversationsService, type ConversationResponse } from './api/generated';
@@ -155,7 +156,19 @@ export function App() {
     <DefaultLayout sidebar={sidebar}>
       <div style={paletteVars} className="palette-scope">
         <div className={`avatar-wrap${thinking ? ' thinking' : ''}`}>
-          <Avatar seed={avatarSeed} />
+          {conversationId ? (
+            // Server-driven Gabriel Sequence — refetches on every sidebar bump
+            // (covers: new message sent, avatar rerolled). The seed lives on the
+            // Conversation, so reroll naturally produces a new sequence.
+            <GabrielSequenceView
+              conversationId={conversationId}
+              refreshKey={sidebarRefresh}
+            />
+          ) : (
+            // Booting / no active conversation yet — show the procedural avatar
+            // as a placeholder so the wrap doesn't collapse.
+            <Avatar seed={avatarSeed} />
+          )}
           <button
             type="button"
             className="reroll"

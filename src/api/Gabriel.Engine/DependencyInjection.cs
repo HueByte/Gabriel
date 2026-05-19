@@ -2,6 +2,8 @@ using Gabriel.Engine.Personality;
 using Gabriel.Engine.Sequence;
 using Gabriel.Engine.Services;
 using Gabriel.Engine.Tools;
+using Gabriel.Engine.Tools.Docs;
+using Gabriel.Engine.Tools.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,7 +36,14 @@ public static class DependencyInjection
 
         // Tool registrations. Each ITool added here is automatically discovered
         // by ToolRegistry via the IEnumerable<ITool> constructor injection.
+        // Tools that depend on Infrastructure-side providers (IWebSearch,
+        // IDocsLookup) are registered here but their providers come from
+        // Gabriel.Infrastructure.DependencyInjection.AddInfrastructure.
         services.AddScoped<ITool, GetCurrentTimeTool>();
+        services.AddScoped<ITool, WebSearchTool>();
+        services.AddScoped<ITool, WebFetchTool>();
+        services.AddScoped<ITool, DocsListTool>();
+        services.AddScoped<ITool, DocsReadTool>();
 
         return services;
     }
