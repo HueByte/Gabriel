@@ -37,9 +37,7 @@ It's built as a **playground for chat-agent ideas** - tool-using agents, rolling
 
 ## Highlights
 
-<table>
-<tr>
-<td valign="top">
+<img src="assets/showcase-0.png" align="right" width="300" alt="Gabriel webapp showcase">
 
 ### The avatar
 
@@ -49,14 +47,7 @@ A 16×16 pixel-grid avatar lives in the corner of every conversation, rendered i
 
 Responses stream in token-by-token through `StreamingText`, with a `GalacticTypewriter` adding a bit of flavor on top. Markdown renders with [GFM](https://github.github.com/gfm/), and the heavy formatting gear is all baked in: syntax highlighting via [highlight.js](https://highlightjs.org/), math via [KaTeX](https://katex.org/), and [Mermaid](https://mermaid.js.org/) diagrams that render inline. A live `ContextStats` panel shows token usage growing as the conversation does, and the shell spans Chat, Diagnostics, Project Settings, and User Settings pages with [react-toastify](https://fkhadra.github.io/react-toastify/) for transient feedback.
 
-</td>
-<td valign="top" width="320">
-
-<img src="assets/showcase-0.png" alt="Gabriel webapp showcase" width="300">
-
-</td>
-</tr>
-</table>
+<br clear="all">
 
 ### The agent
 
