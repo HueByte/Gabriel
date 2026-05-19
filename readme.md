@@ -4,7 +4,7 @@
 
 # Gabriel
 
-_A chat app with a little pixel-grid soul._
+_An agent with a little pixel-grid soul._
 
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![ASP.NET Core](https://img.shields.io/badge/ASP.NET%20Core-API-512BD4?logo=dotnet&logoColor=white)](https://learn.microsoft.com/aspnet/core)
