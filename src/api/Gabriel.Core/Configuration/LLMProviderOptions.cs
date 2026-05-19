@@ -1,39 +1,47 @@
 namespace Gabriel.Core.Configuration;
 
 // Shared shape for every LLM provider's config block. Provider-level concerns
-// (auth, transport, transport timeouts) live here so the concrete provider
-// classes can focus on sampling / format-specific knobs.
+// (auth, transport, sampling, model catalog) live here so each concrete
+// provider's options class can be a thin subclass that only sets its
+// SectionName.
 //
-// The Models[] array is the multi-model surface: each concrete provider's
-// section in appsettings.json carries one block of models and the user picks
-// which one to use at runtime via the UI. IsActive is just the bootstrap
-// default — see ApplicationUser.PreferredModel for the per-user override.
+// Identity (the "Grok" / "OpenAI" / "Anthropic" name) lives on the
+// IChatProvider implementation, not here — the JSON section path is the
+// discriminator at bind time, the provider's Name is the discriminator at
+// runtime (used by IChatProviderRegistry).
 public abstract class LLMProviderOptions
 {
-    // Must end with a trailing slash so relative HttpClient paths resolve correctly.
+    // Must end with a trailing slash so relative HttpClient paths resolve
+    // correctly.
     public string BaseUrl { get; set; } = string.Empty;
 
-    // Never commit. Supply via env var (PROVIDERS__<NAME>__APIKEY), user-secrets,
-    // or Infisical.
+    // Never commit. Supply via env var (PROVIDERS__<Name>__APIKEY),
+    // user-secrets, or Infisical.
     public string ApiKey { get; set; } = string.Empty;
 
-    // Total HTTP budget for one chat call, applied via the resilience pipeline.
-    // SSE streaming calls can run for minutes — keep this generous so long
-    // generations don't cut mid-token.
+    // Total HTTP budget for one chat call, applied via the resilience
+    // pipeline. SSE streaming calls can run for minutes — keep this generous
+    // so long generations don't cut mid-token.
     public int TimeoutSeconds { get; set; } = 900;
 
-    // Catalog of models exposed under this provider. Add an entry per model
-    // you want available in the UI selector; the user picks from this list.
+    // Sampling controls. Optional — providers that don't honour them just
+    // ignore the field. Live at the provider level (not per-model) because
+    // most vendors apply them identically across their model catalog; if a
+    // future model needs different defaults, add per-model overrides on
+    // LLMModel instead.
+    public double? Temperature { get; set; }
+    public double? TopP { get; set; }
+
+    // Catalog of models exposed under this provider. The UI selector pulls
+    // from here; the user picks one and it persists onto
+    // ApplicationUser.PreferredModel.
     public IList<LLMModel> Models { get; set; } = new List<LLMModel>();
 
-    // Resolved default model — the one config marks IsActive=true. Returns
-    // null when no model is flagged; callers should treat that as a fallback
-    // signal (try first model, or surface a config error).
+    // Resolved default model — the entry config marks IsActive=true. Null
+    // when no model is flagged; the IModelCatalog handles the catalog-wide
+    // fallback in that case.
     public LLMModel? GetDefaultModel() => Models.FirstOrDefault(m => m.IsActive);
 
-    // Resolve a model by its wire-level name. Returns null if not found —
-    // callers should treat that as "user picked a stale/removed model"
-    // and fall back to GetDefaultModel().
     public LLMModel? FindModel(string name) =>
         Models.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.Ordinal));
 }

@@ -58,9 +58,9 @@ try
             sinkMapCountLimit: 10);
     });
 
-    // Pull secrets from Infisical before service registration so IOptions bindings
-    // (e.g. GrokOptions reading Providers:Grok:ApiKey, JwtOptions reading Jwt:SigningKey)
-    // see the live values.
+    // Pull secrets from Infisical before service registration so config-bound
+    // values (e.g. Providers[0]:ApiKey, Jwt:SigningKey) see the live values
+    // by the time the catalog + IOptions bindings read them below.
     builder.Configuration.AddInfisical(opts =>
         builder.Configuration.GetSection(InfisicalOptions.SectionName).Bind(opts));
 

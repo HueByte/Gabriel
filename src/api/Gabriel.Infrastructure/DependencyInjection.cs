@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<IMemoryRepository, MemoryRepository>();
 
         // Project file storage (Phase 8). Options bound from Projects:Files,
         // disk-backed implementation persists under {Root}/{ProjectId:N}.
@@ -141,42 +142,42 @@ public static class DependencyInjection
         // available". It also gives dev a fallback in the UI picker.
         services.AddSingleton<IChatProvider, MockChatProvider>();
 
-        // Grok registers when it's been configured with at least one model
-        // entry. The previous Providers:Active flag is gone — the active
-        // provider/model is now whatever the user picks (with the per-provider
-        // IsActive flag as the bootstrap default).
-        var grokModels = config.GetSection($"{GrokOptions.SectionName}:Models").GetChildren().ToList();
-        if (grokModels.Count > 0)
+        // Grok wires up only when Providers:Grok exists in config with at
+        // least one model. Each provider is its own named section bound via
+        // the standard Options pipeline — secrets address the section by
+        // name (PROVIDERS__GROK__APIKEY), independent of any ordering.
+        var grokSection = config.GetSection(GrokOptions.SectionName);
+        var grokModelsCount = grokSection.GetSection(nameof(LLMProviderOptions.Models)).GetChildren().Count();
+        if (grokSection.Exists() && grokModelsCount > 0)
         {
-            // Read once at startup. The resilience pipeline's timeouts are
-            // pipeline-level - no per-request live tuning, so a captured
-            // value is correct here.
-            var grokTimeout = TimeSpan.FromSeconds(
-                config.GetValue($"{GrokOptions.SectionName}:TimeoutSeconds", 900));
-
-            // Bind + validate options once. Validation fires the first time
-            // IOptions<GrokOptions>.Value is read (i.e. when the first
-            // HttpClient is created), producing a clear OptionsValidationException
-            // instead of an ad-hoc throw inside the HttpClient factory.
             services.ConfigureSection<GrokOptions>(config)
                 .Validate(
                     o => !string.IsNullOrWhiteSpace(o.ApiKey),
-                    "Providers:Grok:ApiKey is required. Set via user-secrets or env var PROVIDERS__GROK__APIKEY.")
+                    $"{GrokOptions.SectionName}:ApiKey is required. Set via env var PROVIDERS__GROK__APIKEY or Infisical.")
                 .Validate(
                     o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _),
-                    "Providers:Grok:BaseUrl must be a valid absolute URL ending with '/'.")
+                    $"{GrokOptions.SectionName}:BaseUrl must be a valid absolute URL ending with '/'.")
                 .Validate(
                     o => o.TimeoutSeconds > 0,
-                    "Providers:Grok:TimeoutSeconds must be greater than zero.")
+                    $"{GrokOptions.SectionName}:TimeoutSeconds must be greater than zero.")
                 .Validate(
                     // At most one default — zero is allowed (means "no preferred
-                    // default for this provider"); the IModelCatalog handles a
+                    // default for this provider"); IModelCatalog handles a
                     // catalog-wide fallback if every provider declines.
                     o => o.Models.Count(m => m.IsActive) <= 1,
-                    "Providers:Grok:Models must contain at most one entry with IsActive=true.")
+                    $"{GrokOptions.SectionName}:Models must contain at most one entry with IsActive=true.")
                 .Validate(
                     o => o.Models.All(m => !string.IsNullOrWhiteSpace(m.Name) && m.ContextWindowTokens > 0),
-                    "Providers:Grok:Models entries must have a non-empty Name and ContextWindowTokens > 0.");
+                    $"{GrokOptions.SectionName}:Models entries must have a non-empty Name and ContextWindowTokens > 0.")
+                .ValidateOnStart();
+
+            // Read TimeoutSeconds once at startup for the resilience pipeline —
+            // pipeline-level timeouts can't be tuned per request anyway, so a
+            // captured value is correct here. Falls back to the default when
+            // the key isn't set yet (validation above will catch that on host
+            // start before any request reaches the pipeline).
+            var grokTimeout = TimeSpan.FromSeconds(
+                grokSection.GetValue(nameof(LLMProviderOptions.TimeoutSeconds), 900));
 
             // DelegatingHandler resolved per HttpClient creation. Transient is
             // the required lifetime for handlers registered via AddHttpMessageHandler.

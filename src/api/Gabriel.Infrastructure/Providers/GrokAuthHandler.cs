@@ -6,7 +6,8 @@ namespace Gabriel.Infrastructure.Providers;
 
 // Attaches the Grok API key as a Bearer token on every outbound request sent
 // through the named Grok HttpClient. Reads via IOptionsMonitor so a rotated
-// key takes effect without recycling the pooled handler.
+// key (e.g. swapped via Infisical and a reload signal) takes effect without
+// recycling the pooled handler.
 internal sealed class GrokAuthHandler : DelegatingHandler
 {
     private readonly IOptionsMonitor<GrokOptions> _options;

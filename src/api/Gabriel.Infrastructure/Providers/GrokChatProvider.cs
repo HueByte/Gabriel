@@ -20,6 +20,7 @@ namespace Gabriel.Infrastructure.Providers;
 public class GrokChatProvider : IChatProvider
 {
     public const string HttpClientName = "Grok";
+    public const string ProviderName = "Grok";
 
     private readonly IHttpClientFactory _httpFactory;
     private readonly GrokOptions _options;
@@ -35,11 +36,11 @@ public class GrokChatProvider : IChatProvider
         _logger = logger;
     }
 
-    public string Name => "grok";
+    public string Name => ProviderName;
 
     // Surface the configured catalog so IModelCatalog can populate the UI
-    // picker. We snapshot the IOptions value rather than holding it live —
-    // the catalog itself is a singleton built once at startup.
+    // picker. Snapshot once at construction — the catalog itself is a
+    // singleton built once at startup.
     public IReadOnlyList<LLMModel> Models => _options.Models.ToList();
 
     public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(

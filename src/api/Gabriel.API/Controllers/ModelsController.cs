@@ -38,6 +38,7 @@ public class ModelsController : ControllerBase
                 Provider: m.Provider,
                 Name: m.Name,
                 ContextWindowTokens: m.ContextWindowTokens,
+                CompactThreshold: m.CompactThreshold,
                 InputPricePerMTokens: m.InputPricePerMTokens,
                 OutputPricePerMTokens: m.OutputPricePerMTokens,
                 CacheReadPricePerMTokens: m.CacheReadPricePerMTokens,

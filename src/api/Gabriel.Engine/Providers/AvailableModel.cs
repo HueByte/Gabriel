@@ -8,6 +8,7 @@ public sealed record AvailableModel(
     string Provider,
     string Name,
     int ContextWindowTokens,
+    double? CompactThreshold,
     decimal InputPricePerMTokens,
     decimal OutputPricePerMTokens,
     decimal CacheReadPricePerMTokens,

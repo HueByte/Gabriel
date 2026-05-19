@@ -12,6 +12,9 @@ export interface ModelDto {
   provider: string;
   name: string;
   contextWindowTokens: number;
+  // null = inherit the global AgentOptions.CompactThreshold; a number is the
+  // model-specific fraction (e.g. 0.18 = compact at 18% of the window).
+  compactThreshold: number | null;
   inputPricePerMTokens: number;
   outputPricePerMTokens: number;
   cacheReadPricePerMTokens: number;

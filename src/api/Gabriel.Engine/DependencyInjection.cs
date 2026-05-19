@@ -5,6 +5,7 @@ using Gabriel.Engine.Services;
 using Gabriel.Engine.Tools;
 using Gabriel.Engine.Tools.Docs;
 using Gabriel.Engine.Tools.Files;
+using Gabriel.Engine.Tools.Memory;
 using Gabriel.Engine.Tools.Projects;
 using Gabriel.Engine.Tools.Web;
 using Microsoft.Extensions.Configuration;
@@ -54,6 +55,12 @@ public static class DependencyInjection
         services.AddScoped<ITool, DocsReadTool>();
         services.AddScoped<ITool, ListProjectFilesTool>();
         services.AddScoped<ITool, ReadProjectFileTool>();
+
+        // Memory tools — Claude-style. Scope is "user" (cross-project) or
+        // "project" (this conversation's project only).
+        services.AddScoped<ITool, MemorySaveTool>();
+        services.AddScoped<ITool, MemoryListTool>();
+        services.AddScoped<ITool, MemoryRemoveTool>();
 
         // Filesystem tools (Phase 12). Path resolution is shared so the same
         // host-vs-project hardening applies to every file tool.

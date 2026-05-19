@@ -23,6 +23,7 @@ public sealed class ModelCatalog : IModelCatalog
                     Provider: provider.Name,
                     Name: model.Name,
                     ContextWindowTokens: model.ContextWindowTokens,
+                    CompactThreshold: model.CompactThreshold,
                     InputPricePerMTokens: model.InputPricePerMTokens,
                     OutputPricePerMTokens: model.OutputPricePerMTokens,
                     CacheReadPricePerMTokens: model.CacheReadPricePerMTokens,
@@ -48,13 +49,14 @@ public sealed class ModelCatalog : IModelCatalog
         {
             throw new InvalidOperationException(
                 "No chat models registered. Every IChatProvider returned an empty Models list. " +
-                "Register Mock (always available) or configure at least one Providers:* block.");
+                "Register Mock (always available) or configure at least one Providers[] entry.");
         }
 
         _default = new ModelSelection(
             bootstrapDefault.Provider,
             bootstrapDefault.Name,
-            bootstrapDefault.ContextWindowTokens);
+            bootstrapDefault.ContextWindowTokens,
+            bootstrapDefault.CompactThreshold);
     }
 
     public IReadOnlyList<AvailableModel> AvailableModels => _models;
@@ -69,7 +71,11 @@ public sealed class ModelCatalog : IModelCatalog
 
             if (match is not null)
             {
-                return new ModelSelection(match.Provider, match.Name, match.ContextWindowTokens);
+                return new ModelSelection(
+                    match.Provider,
+                    match.Name,
+                    match.ContextWindowTokens,
+                    match.CompactThreshold);
             }
             // Stale preference (model was removed from config) — silently fall
             // back to the default. The user will see the dropdown reflect the

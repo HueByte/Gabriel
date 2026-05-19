@@ -17,6 +17,7 @@ import {
 import { notifyError } from '../lib/notify';
 import { toast } from 'react-toastify';
 import { SkinPicker } from '../components/SkinPicker';
+import { MemoryList } from '../components/MemoryList';
 
 // Project-scoped settings: name + description, the appended system prompt,
 // the file library, and a deep-link to the project's shared diagnostics. The
@@ -332,6 +333,13 @@ export function ProjectSettingsPage() {
               ))}
             </ul>
           )}
+        </section>
+      )}
+
+      {!project.isDefault && (
+        <section className="settings-section">
+          <h2 className="settings-section-title">Memory</h2>
+          <MemoryList scope={{ kind: 'project', projectId }} />
         </section>
       )}
 

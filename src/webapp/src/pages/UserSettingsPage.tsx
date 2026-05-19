@@ -3,6 +3,7 @@ import { HiOutlineArrowLeft, HiOutlineArrowRightOnRectangle } from 'react-icons/
 import { useAuth } from '../auth/AuthContext';
 import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
 import { ModelSelector } from '../components/ModelSelector';
+import { MemoryList } from '../components/MemoryList';
 
 // User-scoped settings: identity readout + sign-out. Intentionally minimal -
 // password change, email change, and theme controls will land here once the
@@ -46,6 +47,11 @@ export function UserSettingsPage() {
       <section className="settings-section">
         <h2 className="settings-section-title">Model</h2>
         <ModelSelector />
+      </section>
+
+      <section className="settings-section">
+        <h2 className="settings-section-title">Memory</h2>
+        <MemoryList scope={{ kind: 'user' }} />
       </section>
 
       <section className="settings-section">

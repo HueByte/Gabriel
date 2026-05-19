@@ -762,6 +762,139 @@ button {
   color: var(--palette-accent, var(--accent));
 }
 
+/* ---------- Context breakdown (expanded) ----------
+   Subtle "details" toggle sits below the meta strip; clicking it reveals a
+   16x16 grid + a small legend showing which categories make up the current
+   budget. Same idea as the Claude Code console indicator. The collapsed
+   strip stays at 200px to match the avatar above; when expanded the column
+   grows to ~280px so the grid + legend sit side-by-side without cramping. */
+/* Smoothly expand the column when the user opens the breakdown. .main-col
+   centers its children so growing wider extends evenly on both sides of
+   the avatar above. The base width: 200px lives in the original .ctx-stats
+   block - this only layers on the transition + expanded state. */
+.ctx-stats {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ctx-stats.expanded {
+  width: 280px;
+}
+
+.ctx-stats-toggle {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.ctx-stats-toggle:hover {
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 8%, transparent);
+}
+.ctx-stats-toggle:focus-visible {
+  outline: 1px solid var(--palette-accent, var(--accent));
+  outline-offset: 1px;
+}
+
+.ctx-stats-chev {
+  width: 11px;
+  height: 11px;
+  transition: transform 0.25s ease;
+}
+.ctx-stats.expanded .ctx-stats-chev {
+  transform: rotate(180deg);
+}
+
+.ctx-stats-details {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 5%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  animation: fade-in 0.25s ease-out both;
+}
+
+/* 16x16 of small squares. Cells are coloured in legend order (system, project,
+   memory, summary, tools, conversation) - reading left-to-right top-to-bottom
+   gives a stacked-bar effect at a glance. */
+.ctx-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 6px);
+  grid-template-rows: repeat(16, 6px);
+  gap: 1px;
+  flex: 0 0 auto;
+}
+
+.ctx-stats-cell {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--border);
+}
+.ctx-stats-cell.free {
+  background: color-mix(in srgb, var(--text-faint) 12%, transparent);
+}
+
+.ctx-stats-legend {
+  flex: 1 1 auto;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  letter-spacing: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.ctx-stats-legend li {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.2;
+}
+
+.ctx-stats-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--border);
+}
+.ctx-stats-swatch.free {
+  background: color-mix(in srgb, var(--text-faint) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-faint) 25%, transparent);
+}
+
+.ctx-stats-legend-label {
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctx-stats-legend-tokens {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.ctx-stats-legend-free .ctx-stats-legend-label,
+.ctx-stats-legend-free .ctx-stats-legend-tokens {
+  color: var(--text-faint);
+}
+
 /* ---------- Chat (borderless, merged with background) ---------- */
 
 .chat {
@@ -826,6 +959,9 @@ button {
   word-wrap: break-word;
   font-size: 14.5px;
   line-height: 1.6;
+  /* Anchor for the hover overlay (delete / regenerate / variant picker). The
+     overlay positions itself relative to this. */
+  position: relative;
 }
 
 .message.user {
@@ -849,6 +985,128 @@ button {
 .message.pending {
   opacity: 0.55;
   font-style: italic;
+}
+
+/* ---------- Message hover actions (delete / regenerate / variant picker) ---------- */
+
+/* Overlay sits just outside the bubble's bottom-trailing corner. Hidden by
+   default so messages stay clean; fades in on hover or focus-within so
+   keyboard users can reach it too. The variant picker stays visible even
+   without hover so the user knows there are alternatives to navigate. */
+.message-actions {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 8px;
+  background: transparent;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* User bubbles sit on the right; the action bar sits below-left of the bubble
+   so it doesn't crowd the avatar gutter. Assistant bubbles run the full width
+   on the left; the action bar sits below-left under the text. */
+.message.user .message-actions {
+  bottom: -28px;
+  right: 0;
+}
+
+.message.assistant .message-actions {
+  bottom: -22px;
+  left: 0;
+}
+
+.message:hover .message-actions,
+.message:focus-within .message-actions,
+.message .message-actions:has(.variant-picker) {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.message-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.message-action svg {
+  width: 14px;
+  height: 14px;
+}
+.message-action:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+.message-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.message-action-danger:hover:not(:disabled) {
+  color: #e57676;
+  border-color: #4a2828;
+  background: rgba(229, 118, 118, 0.08);
+}
+
+/* `< N/M >` chrome for the variant picker. Always-visible (no hover gate) so
+   the user can see at a glance that multiple variants exist. */
+.variant-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-feature-settings: "tnum";
+}
+.variant-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.variant-arrow svg {
+  width: 12px;
+  height: 12px;
+}
+.variant-arrow:hover:not(:disabled) {
+  background: var(--active-bg);
+  color: var(--text);
+}
+.variant-arrow:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.variant-count {
+  padding: 0 4px;
+  min-width: 28px;
+  text-align: center;
+  user-select: none;
 }
 
 .empty {
@@ -2196,6 +2454,227 @@ button {
   opacity: 0.6;
   cursor: progress;
 }
+
+/* ===== Memory list ====================================================== */
+.memory-list { display: flex; flex-direction: column; gap: 12px; }
+.memory-list-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  justify-content: space-between;
+}
+.memory-list-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-dim);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.memory-list-add:hover:not(:disabled) { background: var(--accent-dim); }
+.memory-list-add:disabled { opacity: 0.5; cursor: not-allowed; }
+.memory-empty {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  padding: 12px;
+  border: 1px dashed var(--accent-dim);
+  border-radius: 6px;
+  text-align: center;
+}
+.memory-items { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.memory-item {
+  border: 1px solid var(--accent-dim);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.memory-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; }
+.memory-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.memory-type {
+  display: inline-block;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-dim);
+  color: var(--text-dim);
+}
+.memory-type-user      { background: rgba(110, 168, 254, 0.18); color: #6ea8fe; }
+.memory-type-feedback  { background: rgba(255, 165, 89, 0.18); color: #ffa559; }
+.memory-type-project   { background: rgba(120, 219, 168, 0.18); color: #78dba8; }
+.memory-type-reference { background: rgba(189, 158, 250, 0.18); color: #bd9efa; }
+.memory-name {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.memory-row-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+}
+.memory-row-action {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+.memory-row-action:hover { background: var(--accent-dim); color: var(--text); }
+.memory-row-danger:hover { color: #ff6b6b; }
+.memory-description {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.memory-body {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--accent-dim);
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.memory-editor {
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.memory-editor-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+}
+.memory-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.memory-editor-field input,
+.memory-editor-field select,
+.memory-editor-field textarea {
+  font-family: inherit;
+  font-size: 13.5px;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--accent-dim);
+  background: var(--bg);
+  color: var(--text);
+}
+.memory-editor-field textarea {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  resize: vertical;
+  min-height: 100px;
+}
+.memory-editor-field input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.memory-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.memory-editor-cancel,
+.memory-editor-save {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.memory-editor-cancel {
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  color: var(--text-dim);
+}
+.memory-editor-save {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--bg);
+}
+.memory-editor-cancel:disabled,
+.memory-editor-save:disabled { opacity: 0.5; cursor: progress; }
+
+/* "Remember this" modal — used from the chat message action. */
+.memory-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.memory-modal {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.memory-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.memory-modal-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.memory-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.memory-modal-close:hover {
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
 .settings-field {
   display: flex;
   flex-direction: column;
@@ -2485,6 +2964,19 @@ button {
   .ctx-stats {
     width: 140px;
     font-size: 9.5px;
+  }
+  /* Mobile breakdown: stack grid above legend so a 140px column still fits.
+     The grid stays its native ~111px; the legend reflows underneath. */
+  .ctx-stats.expanded {
+    width: 220px;
+  }
+  .ctx-stats-details {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .ctx-stats-legend {
+    width: 100%;
   }
 
   /* Burger sits in the corner; nudging it down so it doesn't hug the very

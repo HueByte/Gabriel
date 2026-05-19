@@ -109,7 +109,12 @@ internal static class ContractMappings
             m.CompactThresholdRatio,
             m.MessagesAfterCut,
             m.IsSummarized,
-            m.SummaryTokens);
+            m.SystemPromptTokens,
+            m.ProjectPromptTokens,
+            m.MemoryTokens,
+            m.SummaryTokens,
+            m.ToolsTokens,
+            m.ConversationTokens);
 
     public static GabrielSequenceResponse ToResponse(this GabrielSequence sequence)
     {

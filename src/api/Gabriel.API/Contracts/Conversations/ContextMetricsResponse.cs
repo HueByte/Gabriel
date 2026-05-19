@@ -4,8 +4,8 @@ namespace Gabriel.API.Contracts.Conversations;
 // a separate record so the API surface doesn't leak engine-layer types and
 // stays stable across internal refactors.
 public record ContextMetricsResponse(
-    // Estimated tokens we'd send for the next turn - sum of the rolling
-    // summary (if any) plus every message after the last compact cut.
+    // Sum of every category below - matches the threshold MaybeCompactAsync
+    // compares against, and what the provider will actually receive.
     int CurrentTokens,
     // Provider's total context window (e.g. 256_000 for Grok 4).
     int ContextWindowTokens,
@@ -19,5 +19,20 @@ public record ContextMetricsResponse(
     // True once at least one compact has rolled. Lets the UI show a small
     // "summarized" hint.
     bool IsSummarized,
-    // Token cost of the rolling summary itself (0 when not summarized).
-    int SummaryTokens);
+    // --- Per-category breakdown ---------------------------------------------
+    // Each field is the estimated token cost of one piece of what
+    // AgentContext.ToProviderHistory assembles, in the same order the UI grid
+    // legend reads top-to-bottom. The fields sum to CurrentTokens.
+    //
+    // Persona system prompt built per-turn from ConversationState.
+    int SystemPromptTokens,
+    // Per-project SystemPrompt override (0 when project has none).
+    int ProjectPromptTokens,
+    // Saved memories block (user + project scope, 0 when empty).
+    int MemoryTokens,
+    // Rolling summary system message (0 when not summarized).
+    int SummaryTokens,
+    // Tool descriptors sent in the "tools" sibling field of the chat call.
+    int ToolsTokens,
+    // Active post-cut messages (excludes the rolling summary).
+    int ConversationTokens);

@@ -7,6 +7,7 @@ using Gabriel.Core.Exceptions;
 using Gabriel.Core.Identity;
 using Gabriel.Core.Personality;
 using Gabriel.Core.Repositories;
+using Gabriel.Core.Services;
 using Gabriel.Engine.Personality;
 using Gabriel.Engine.Providers;
 using Gabriel.Engine.Tools;
@@ -31,6 +32,7 @@ public class AgentService : IAgentService
     private readonly IChatProviderRegistry _providerRegistry;
     private readonly IModelCatalog _modelCatalog;
     private readonly IUserPreferences _userPrefs;
+    private readonly IMemoryService _memories;
     private readonly IToolRegistry _tools;
     private readonly IToolExecutionContext _toolContext;
     private readonly IUnitOfWork _uow;
@@ -48,6 +50,7 @@ public class AgentService : IAgentService
         IChatProviderRegistry providerRegistry,
         IModelCatalog modelCatalog,
         IUserPreferences userPrefs,
+        IMemoryService memories,
         IToolRegistry tools,
         IToolExecutionContext toolContext,
         IUnitOfWork uow,
@@ -64,6 +67,7 @@ public class AgentService : IAgentService
         _providerRegistry = providerRegistry;
         _modelCatalog = modelCatalog;
         _userPrefs = userPrefs;
+        _memories = memories;
         _tools = tools;
         _toolContext = toolContext;
         _uow = uow;
@@ -113,21 +117,21 @@ public class AgentService : IAgentService
         // calculation all agree.
         var selection = await ResolveModelSelectionAsync(ct);
 
+        // Load the stable-through-turn prompt pieces (persona / project /
+        // memory / tools). These don't change between iterations and feed
+        // both the compact decision and the stream itself.
+        var prompts = await LoadTurnPromptsAsync(conversation, userId, ct);
+
         // Compact here (between turns), never mid-iteration - cutting between an
         // assistant's tool_calls and its tool results would orphan them.
-        await MaybeCompactAsync(conversation, selection, ct);
-
-        // Load the project's SystemPrompt once per turn (cheap indexed read).
-        // Threaded into the iterator so each iteration re-uses the same prompt
-        // without re-querying the DB.
-        var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
+        await MaybeCompactAsync(conversation, prompts, selection, ct);
 
         // Populate the scoped tool-execution context so project-aware tools
         // (list_project_files / read_project_file) know which project to scope
         // to without having the model fill in the projectId itself.
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
-        return RunStreamAsync(conversation, variantGroupIdOverride: null, projectPrompt, selection, ct);
+        return RunStreamAsync(conversation, variantGroupIdOverride: null, prompts, selection, ct);
     }
 
     public async Task<IAsyncEnumerable<AgentEvent>> RegenerateAsync(
@@ -168,12 +172,12 @@ public class AgentService : IAgentService
         // No new user message + no state update - state was set when the user
         // originally sent this turn, and we're regenerating against that same
         // state. Compact between turns as usual.
-        await MaybeCompactAsync(conversation, selection, ct);
+        var prompts = await LoadTurnPromptsAsync(conversation, userId, ct);
+        await MaybeCompactAsync(conversation, prompts, selection, ct);
 
-        var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
-        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, projectPrompt, selection, ct);
+        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, prompts, selection, ct);
     }
 
     // Centralised resolution: every entry point goes through this so a user
@@ -195,14 +199,78 @@ public class AgentService : IAgentService
         return project?.SystemPrompt;
     }
 
+    // Formats the user's saved memories as a single system message. Two
+    // sections (user-scope first, project-scope after) so the model can tell
+    // which entries follow them everywhere versus only inside this project.
+    // Returns null when there's nothing to inject.
+    private async Task<string?> LoadMemoryBlockAsync(Guid? projectId, CancellationToken ct)
+    {
+        var entries = await _memories.ListForConversationAsync(projectId, ct);
+        if (entries.Count == 0) return null;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("[Saved memories]");
+        sb.AppendLine("Durable facts the user has asked Gabriel to remember. Apply these unless the user contradicts them in the current conversation. Each entry has a scope (user = applies everywhere; project = only in this project), a type (user/feedback/project/reference), and a body.");
+        sb.AppendLine();
+
+        var userScope = entries.Where(m => m.ProjectId is null).ToList();
+        var projectScope = entries.Where(m => m.ProjectId is not null).ToList();
+
+        if (userScope.Count > 0)
+        {
+            sb.AppendLine("## User-scope memories");
+            foreach (var m in userScope) AppendMemory(sb, m);
+            sb.AppendLine();
+        }
+        if (projectScope.Count > 0)
+        {
+            sb.AppendLine("## Project-scope memories");
+            foreach (var m in projectScope) AppendMemory(sb, m);
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private static void AppendMemory(StringBuilder sb, Core.Entities.MemoryEntry m)
+    {
+        sb.Append("### [").Append(m.Type.ToString().ToLowerInvariant()).Append("] ").AppendLine(m.Name);
+        sb.AppendLine(m.Description);
+        sb.AppendLine();
+        sb.AppendLine(m.Body);
+        sb.AppendLine();
+    }
+
+    // The four prompt pieces that are stable through a single turn: persona
+    // (derived from ConversationState, which only updates on user input),
+    // project SystemPrompt override, saved memories block, and tool
+    // descriptors. Loaded once per turn and threaded through MaybeCompactAsync
+    // + RunStreamAsync so the compact decision, the stream call, and the UI
+    // metrics all see the same numbers.
+    private async Task<TurnPrompts> LoadTurnPromptsAsync(Conversation conversation, Guid userId, CancellationToken ct)
+    {
+        var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
+        var memoryBlock = await LoadMemoryBlockAsync(conversation.ProjectId, ct);
+        var personaPrompt = _promptBuilder.Build(conversation.GetState());
+        var tools = _tools.AsDescriptors();
+        return new TurnPrompts(personaPrompt, projectPrompt, memoryBlock, tools);
+    }
+
+    // Bundle of per-turn prompt inputs used to construct AgentContext. Private
+    // because callers shouldn't reach in and reorder the pieces - assembly
+    // happens in AgentContext.Build.
+    private sealed record TurnPrompts(
+        string PersonaPrompt,
+        string? ProjectPrompt,
+        string? MemoryBlock,
+        IReadOnlyList<ToolDescriptor> Tools);
+
     private async IAsyncEnumerable<AgentEvent> RunStreamAsync(
         Conversation conversation,
         Guid? variantGroupIdOverride,
-        string? projectSystemPrompt,
+        TurnPrompts prompts,
         ModelSelection selection,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        var toolDescriptors = _tools.AsDescriptors();
         var provider = _providerRegistry.Resolve(selection.Provider);
 
         for (var iter = 0; iter < _options.MaxIterations; iter++)
@@ -228,8 +296,17 @@ public class AgentService : IAgentService
                     await Task.Delay(EmptyStopRetryDelayMs * emptyRetry, ct);
                 }
 
-                var history = ToProviderHistory(conversation, projectSystemPrompt);
-                await foreach (var evt in provider.StreamAsync(history, toolDescriptors, selection.Name, ct))
+                // Rebuild context per iteration - assistant tool_calls and
+                // tool results from the previous iter are now part of the
+                // conversation and need to be in the next provider call.
+                var context = AgentContext.Build(
+                    conversation,
+                    prompts.PersonaPrompt,
+                    prompts.ProjectPrompt,
+                    prompts.MemoryBlock,
+                    prompts.Tools);
+                var history = context.ToProviderHistory();
+                await foreach (var evt in provider.StreamAsync(history, prompts.Tools, selection.Name, ct))
                 {
                     switch (evt)
                     {
@@ -365,15 +442,30 @@ public class AgentService : IAgentService
 
     // --- Compact / summarization -------------------------------------------------
 
-    // Estimates the tokens we'd send right now and triggers a rolling-summary
-    // compact if we're at/above the configured fraction of the provider's window.
-    private async Task MaybeCompactAsync(Conversation conv, ModelSelection selection, CancellationToken ct)
+    // Decides whether to trigger a rolling-summary compact this turn.
+    // Compares the full AgentContext breakdown (persona + project + memory +
+    // summary + tools + conversation) against the configured fraction of the
+    // provider's window. The fraction is the per-model CompactThreshold when
+    // set (e.g. grok-4.3 trims early so the conversation stays inside its
+    // cheaper <200k tier), otherwise the global AgentOptions.CompactThreshold.
+    //
+    // Using the full breakdown rather than the old "summary + post-cut
+    // messages" estimate means a heavy project prompt or memory block also
+    // counts toward the trigger - matching what the provider actually sees.
+    private async Task MaybeCompactAsync(
+        Conversation conv,
+        TurnPrompts prompts,
+        ModelSelection selection,
+        CancellationToken ct)
     {
         var window = selection.ContextWindowTokens;
         if (window <= 0) return;
-        var threshold = (int)(window * _options.CompactThreshold);
+        var ratio = selection.CompactThreshold ?? _options.CompactThreshold;
+        var threshold = (int)(window * ratio);
 
-        var currentTokens = EstimateCurrentTokens(conv);
+        var context = AgentContext.Build(
+            conv, prompts.PersonaPrompt, prompts.ProjectPrompt, prompts.MemoryBlock, prompts.Tools);
+        var currentTokens = context.ComputeBreakdown(_tokens).Total;
         if (currentTokens < threshold) return;
 
         var messages = conv.Messages.ToList();
@@ -477,23 +569,6 @@ public class AgentService : IAgentService
         return text.ToString().Trim();
     }
 
-    private int EstimateCurrentTokens(Conversation conv)
-    {
-        var summaryTokens = _tokens.EstimateText(conv.Summary);
-        var postCut = MessagesAfterCut(conv);
-        return summaryTokens + _tokens.EstimateMessages(postCut);
-    }
-
-    private static IEnumerable<Message> MessagesAfterCut(Conversation conv)
-    {
-        if (conv.SummarizedThroughMessageId is null)
-            return conv.Messages;
-
-        var cutId = conv.SummarizedThroughMessageId.Value;
-        var idx = conv.Messages.ToList().FindIndex(m => m.Id == cutId);
-        return idx < 0 ? conv.Messages : conv.Messages.Skip(idx + 1);
-    }
-
     public async Task<ContextMetrics> GetContextMetricsAsync(
         Guid conversationId,
         CancellationToken ct = default)
@@ -506,23 +581,29 @@ public class AgentService : IAgentService
 
         var selection = await ResolveModelSelectionAsync(ct);
         var window = selection.ContextWindowTokens;
-        var ratio = _options.CompactThreshold;
         // Match MaybeCompactAsync's calculation exactly so the UI's "trigger
         // line" lands on the same number the backend would actually trip on.
+        var ratio = selection.CompactThreshold ?? _options.CompactThreshold;
         var thresholdTokens = window > 0 ? (int)(window * ratio) : 0;
 
-        var summaryTokens = _tokens.EstimateText(conversation.Summary);
-        var postCut = MessagesAfterCut(conversation).ToList();
-        var currentTokens = summaryTokens + _tokens.EstimateMessages(postCut);
+        var prompts = await LoadTurnPromptsAsync(conversation, userId, ct);
+        var context = AgentContext.Build(
+            conversation, prompts.PersonaPrompt, prompts.ProjectPrompt, prompts.MemoryBlock, prompts.Tools);
+        var breakdown = context.ComputeBreakdown(_tokens);
 
         return new ContextMetrics(
-            CurrentTokens: currentTokens,
+            CurrentTokens: breakdown.Total,
             ContextWindowTokens: window,
             CompactThresholdTokens: thresholdTokens,
             CompactThresholdRatio: ratio,
-            MessagesAfterCut: postCut.Count,
+            MessagesAfterCut: context.Messages.Count,
             IsSummarized: conversation.SummarizedThroughMessageId is not null,
-            SummaryTokens: summaryTokens);
+            SummaryTokens: breakdown.SummaryTokens,
+            SystemPromptTokens: breakdown.SystemPromptTokens,
+            ProjectPromptTokens: breakdown.ProjectPromptTokens,
+            MemoryTokens: breakdown.MemoryTokens,
+            ToolsTokens: breakdown.ToolsTokens,
+            ConversationTokens: breakdown.ConversationTokens);
     }
 
     // --- Tool execution ----------------------------------------------------------
@@ -589,101 +670,6 @@ public class AgentService : IAgentService
         // Collapse newlines so multi-line tool output stays on one log line.
         var flat = text.Replace('\n', ' ').Replace('\r', ' ');
         return flat.Length <= LogPreviewLimit ? flat : flat[..LogPreviewLimit] + "…";
-    }
-
-    // --- History assembly --------------------------------------------------------
-
-    // Builds the message list sent to the provider:
-    //   1. Persona system message (static persona + per-turn dynamic guidance)
-    //   2. (Optional) Project SystemPrompt - Phase 8 per-project personality override
-    //   3. (Optional) system message containing the rolling summary
-    //   4. All messages strictly after SummarizedThroughMessageId - filtered to
-    //      active variants. Tool messages are additionally required to point at
-    //      an active assistant's tool_call.id, so orphaned tool aftermath from
-    //      a deactivated regen turn never reaches the provider.
-    private IReadOnlyList<ChatProviderMessage> ToProviderHistory(Conversation conv, string? projectSystemPrompt)
-    {
-        var messages = conv.Messages.ToList();
-        var startIdx = 0;
-        if (conv.SummarizedThroughMessageId is { } cutId)
-        {
-            var cutIdx = messages.FindIndex(m => m.Id == cutId);
-            if (cutIdx >= 0) startIdx = cutIdx + 1;
-        }
-
-        // Collect tool_call.ids referenced by active assistant messages so we
-        // can keep their tool results (and drop everyone else's).
-        var activeToolCallIds = new HashSet<string>(StringComparer.Ordinal);
-        for (var i = startIdx; i < messages.Count; i++)
-        {
-            var m = messages[i];
-            if (m.Role != MessageRole.Assistant || !m.IsActiveVariant) continue;
-            if (string.IsNullOrEmpty(m.ToolCallsJson)) continue;
-
-            using var doc = JsonDocument.Parse(m.ToolCallsJson);
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                var id = el.GetProperty("id").GetString();
-                if (id is not null) activeToolCallIds.Add(id);
-            }
-        }
-
-        var result = new List<ChatProviderMessage>(messages.Count - startIdx + 3);
-
-        // Persona prompt always goes first - it's the "who you are" header. State
-        // may be null on the very first call before the updater has run; the
-        // builder handles null gracefully.
-        result.Add(new ChatProviderMessage(
-            MessageRole.System,
-            _promptBuilder.Build(conv.GetState())));
-
-        // Per-project personality override. Sits between the global persona and
-        // the rolling summary so the model treats it as additional identity
-        // context BEFORE absorbing the conversation's specific history.
-        if (!string.IsNullOrWhiteSpace(projectSystemPrompt))
-        {
-            result.Add(new ChatProviderMessage(
-                MessageRole.System,
-                $"[Project context]\n{projectSystemPrompt}"));
-        }
-
-        if (!string.IsNullOrEmpty(conv.Summary))
-        {
-            result.Add(new ChatProviderMessage(
-                MessageRole.System,
-                $"[Summary of earlier conversation]\n{conv.Summary}"));
-        }
-
-        for (var i = startIdx; i < messages.Count; i++)
-        {
-            var m = messages[i];
-
-            // Filter inactive variants. Tool messages are kept iff their parent
-            // assistant's tool_call.id is still in the active set - this catches
-            // legacy tool messages that were created before variant grouping
-            // covered the tool aftermath.
-            if (m.Role == MessageRole.Tool)
-            {
-                if (m.ToolCallId is null || !activeToolCallIds.Contains(m.ToolCallId)) continue;
-            }
-            else if (!m.IsActiveVariant)
-            {
-                continue;
-            }
-
-            List<ChatProviderToolCall>? toolCalls = null;
-            if (!string.IsNullOrEmpty(m.ToolCallsJson))
-            {
-                using var doc = JsonDocument.Parse(m.ToolCallsJson);
-                toolCalls = doc.RootElement.EnumerateArray().Select(el => new ChatProviderToolCall(
-                    Id: el.GetProperty("id").GetString()!,
-                    Name: el.GetProperty("function").GetProperty("name").GetString()!,
-                    ArgumentsJson: el.GetProperty("function").GetProperty("arguments").GetString()!
-                )).ToList();
-            }
-            result.Add(new ChatProviderMessage(m.Role, m.Content, m.ToolCallId, toolCalls));
-        }
-        return result;
     }
 
     private static string SerializeToolCalls(IReadOnlyList<ChatProviderToolCall> calls)

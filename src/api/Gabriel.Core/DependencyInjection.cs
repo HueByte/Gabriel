@@ -11,6 +11,7 @@ public static class DependencyInjection
     {
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<IProjectService, ProjectService>();
+        services.AddScoped<IMemoryService, MemoryService>();
         return services;
     }
 }

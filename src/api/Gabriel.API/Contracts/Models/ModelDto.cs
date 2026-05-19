@@ -6,6 +6,10 @@ public sealed record ModelDto(
     string Provider,
     string Name,
     int ContextWindowTokens,
+    // Per-model rolling-compact trigger fraction. Null means "use the global
+    // AgentOptions.CompactThreshold"; a value like 0.18 means "trigger at 18%
+    // of the context window" (useful when a model has tiered pricing).
+    double? CompactThreshold,
     decimal InputPricePerMTokens,
     decimal OutputPricePerMTokens,
     decimal CacheReadPricePerMTokens,

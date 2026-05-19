@@ -86,5 +86,12 @@ export function ModelSelector() {
 function labelFor(m: ModelDto): string {
   const tag = m.isDefault ? ' (default)' : '';
   const window = (m.contextWindowTokens / 1000).toFixed(0);
-  return `${m.provider} / ${m.name} — ${window}k ctx${tag}`;
+  // Surface a per-model compact override in the dropdown so the user can
+  // see at a glance which models trim early (e.g. grok-4.3 to stay under
+  // its 200k pricing tier).
+  const trim =
+    m.compactThreshold != null
+      ? `, compact @ ${Math.round(m.compactThreshold * 100)}%`
+      : '';
+  return `${m.provider} / ${m.name} — ${window}k ctx${trim}${tag}`;
 }

@@ -1,5 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { HiOutlineArrowUp } from 'react-icons/hi2';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import {
+  HiOutlineArrowPath,
+  HiOutlineArrowUp,
+  HiOutlineBookmarkSquare,
+  HiOutlineChevronLeft,
+  HiOutlineChevronRight,
+  HiOutlineTrash,
+} from 'react-icons/hi2';
 import {
   ApiError,
   ConversationsService,
@@ -8,11 +15,12 @@ import {
   type MessageToolCall,
 } from '../api/generated';
 import { toast } from 'react-toastify';
-import { streamChat } from '../api/streamChat';
+import { streamChat, streamRegenerate } from '../api/streamChat';
 import { notifyError } from '../lib/notify';
 import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
 import { StreamingText } from './StreamingText';
 import { ThinkingPulse } from './ThinkingPulse';
+import { MemoryQuickSave } from './MemoryQuickSave';
 
 // Chat entries are heterogeneous - text bubbles (user/assistant), individual
 // tool calls, tool results, and the model's "thoughts" (reasoning text that
@@ -25,8 +33,15 @@ import { ThinkingPulse } from './ThinkingPulse';
 // Detecting a thought is purely structural: assistant content that lives on a
 // Message which ALSO carries tool calls is - by construction of the backend
 // loop - the reasoning text the model emitted before requesting the tool.
+type VariantMeta = {
+  variantGroupId: string;
+  variantIndex: number;
+  variantCount: number;
+  variantSiblingIds: readonly string[];
+};
+
 type ChatEntry =
-  | { kind: 'text'; id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean }
+  | { kind: 'text'; id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean; variant?: VariantMeta }
   | { kind: 'thought'; id: string; content: string; streaming?: boolean }
   // `reasoning` carries the dedicated reasoning_content stream (Grok 4,
   // DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking). Rendered the
@@ -37,11 +52,22 @@ type ChatEntry =
   | { kind: 'toolCall'; id: string; toolCallId: string; name: string; argumentsJson: string }
   | { kind: 'toolResult'; id: string; toolCallId: string; content: string };
 
+function variantMetaOf(m: MessageResponse): VariantMeta {
+  return {
+    variantGroupId: m.variantGroupId,
+    variantIndex: m.variantIndex,
+    variantCount: m.variantCount,
+    variantSiblingIds: m.variantSiblingIds,
+  };
+}
+
 function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
   const entries: ChatEntry[] = [];
   for (const m of messages) {
     if (m.role === 'user') {
-      if (m.content) entries.push({ kind: 'text', id: m.id, role: 'user', content: m.content });
+      if (m.content) {
+        entries.push({ kind: 'text', id: m.id, role: 'user', content: m.content, variant: variantMetaOf(m) });
+      }
     } else if (m.role === 'assistant') {
       // Reasoning stream (reasoning_content) renders first if the provider
       // captured one for this turn - it precedes both the model's regular
@@ -57,7 +83,13 @@ function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
         if (hasToolCalls) {
           entries.push({ kind: 'thought', id: m.id, content: m.content });
         } else {
-          entries.push({ kind: 'text', id: m.id, role: 'assistant', content: m.content });
+          entries.push({
+            kind: 'text',
+            id: m.id,
+            role: 'assistant',
+            content: m.content,
+            variant: variantMetaOf(m),
+          });
         }
       }
       if (m.toolCalls) {
@@ -119,6 +151,13 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // Conversation's projectId — tracked locally so the "Remember this" modal
+  // can offer project-scope memories when relevant. Null = standalone chat
+  // (Default-project) → modal shows user-scope only.
+  const [projectId, setProjectId] = useState<string | null>(null);
+  // Open-modal state for the "Remember this" button. `seedBody` is the
+  // selected message's content, used to pre-fill the body textarea.
+  const [rememberDraft, setRememberDraft] = useState<{ seedBody: string } | null>(null);
   // User preferences: per-kind ReAct visibility. Each toggle independently
   // suppresses one category of scaffolding in the transcript:
   //   - thinking:   `thought` + `reasoning` entries (chain-of-thought)
@@ -138,18 +177,57 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   // an IntersectionObserver. Ref because we read from non-React callbacks and
   // don't need re-renders on every change.
   const isAtBottomRef = useRef(true);
+  // Latest canonical message list from the server, kept in a ref so the
+  // regenerate handler can prune by variantGroupId without depending on stale
+  // state. Updated on initial load, every refetch, and PATCH /active responses.
+  // Not used during streaming - the entries layer owns the live tail.
+  const messagesRef = useRef<MessageResponse[]>([]);
+
+  // Single source of truth for "is the chat busy" - covers the regular send
+  // path, regenerate, and the delete/switch refetch round-trip. The buttons
+  // and composer all gate on this so we never have two streams in flight.
+  const setBusyState = useCallback((value: boolean) => {
+    setBusy(value);
+  }, []);
+
+  // Apply a fresh ConversationResponse to local state - swaps the entries and
+  // re-seeds messagesRef. Used by the initial load, refetch, and variant
+  // switch paths so they all stay consistent.
+  const applyConversation = useCallback((conv: ConversationResponse) => {
+    const msgs = conv.messages ?? [];
+    messagesRef.current = msgs;
+    setEntries(historyToEntries(msgs));
+    setProjectId(conv.projectId ?? null);
+    onConversationLoaded?.(conv);
+  }, [onConversationLoaded]);
+
+  // Refetch the conversation from the server and reset the entries. Used after
+  // delete + after regenerate streams finish + after sends complete. Catches
+  // the conversation-deleted race so the parent can navigate away cleanly.
+  const refetchConversation = useCallback(async () => {
+    try {
+      const conv = await ConversationsService.getApiConversations1({ id: conversationId });
+      applyConversation(conv);
+    } catch (e: unknown) {
+      if (e instanceof ApiError && e.status === 404) {
+        onConversationMissing?.();
+        return;
+      }
+      notifyError(e);
+    }
+  }, [conversationId, applyConversation, onConversationMissing]);
 
   // Load history on conversation switch.
   useEffect(() => {
     let cancelled = false;
     setEntries([]);
+    messagesRef.current = [];
     // Re-engage auto-anchor on conversation switch so we land at the bottom.
     isAtBottomRef.current = true;
     ConversationsService.getApiConversations1({ id: conversationId })
       .then(conv => {
         if (cancelled) return;
-        setEntries(historyToEntries(conv.messages ?? []));
-        onConversationLoaded?.(conv);
+        applyConversation(conv);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -241,7 +319,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     if (!text || busy) return;
 
     setInput('');
-    setBusy(true);
+    setBusyState(true);
 
     // Sending always re-engages stick-to-bottom, even if the user was scrolled
     // up reading older content. The ResizeObserver below will scroll on the
@@ -261,15 +339,121 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
         if (evt.type === 'done' || evt.type === 'error') break;
       }
       onMessageSent?.();
+      // Re-pull canonical history so the temporary user entry is replaced by
+      // the persisted server message (with its real id + variant metadata).
+      await refetchConversation();
     } catch (e: unknown) {
       // Network failure / pre-flight 4xx - drop the streaming placeholder if any.
       notifyError(e);
       setEntries(prev => prev.filter(e2 => !(e2.kind === 'text' && e2.role === 'assistant' && e2.streaming)));
     } finally {
-      setBusy(false);
+      setBusyState(false);
       abortRef.current = null;
     }
   };
+
+  // Opens the "Remember this" modal seeded with the targeted message's text.
+  // The modal does the actual POST /api/memories call; we just route the
+  // content here so the user doesn't have to retype it.
+  const handleRemember = useCallback((messageId: string) => {
+    const entry = entries.find(e => e.kind === 'text' && e.id === messageId);
+    const seed = entry?.kind === 'text' ? entry.content : '';
+    setRememberDraft({ seedBody: seed });
+  }, [entries]);
+
+  // Delete the targeted message and every later message (server-side anchors
+  // on the earliest sibling of its variant group, so a regen tail goes
+  // cleanly). The confirm dialog is intentionally blocking - the action is
+  // destructive and the rest of the conversation goes with it.
+  const handleDelete = useCallback(async (messageId: string) => {
+    if (busy) return;
+    const ok = window.confirm(
+      'Delete this message and everything after it? This cannot be undone.',
+    );
+    if (!ok) return;
+
+    setBusyState(true);
+    try {
+      await ConversationsService.deleteApiConversationsMessages({
+        id: conversationId,
+        messageId,
+      });
+      await refetchConversation();
+    } catch (e: unknown) {
+      notifyError(e);
+    } finally {
+      setBusyState(false);
+    }
+  }, [busy, conversationId, refetchConversation, setBusyState]);
+
+  // Switch the active variant inside a group. The PATCH response carries the
+  // conversation with the new active message set - we replace entries from it
+  // directly (no extra GET round-trip).
+  const handleVariantSwitch = useCallback(async (targetId: string) => {
+    if (busy) return;
+    setBusyState(true);
+    try {
+      const conv = await ConversationsService.patchApiConversationsMessagesActive({
+        id: conversationId,
+        messageId: targetId,
+      });
+      applyConversation(conv);
+    } catch (e: unknown) {
+      notifyError(e);
+    } finally {
+      setBusyState(false);
+    }
+  }, [busy, conversationId, applyConversation, setBusyState]);
+
+  // Regenerate the assistant turn at messageId. Server-side: the existing
+  // variant group is deactivated and a new sibling turn streams in. Locally:
+  // prune any entries derived from messages that share the target's variant
+  // group so the old answer (and any of its reasoning / tool aftermath that
+  // shared the group id) disappears immediately when the user clicks regen;
+  // the live SSE then writes the new turn into the tail. On done we refetch
+  // so variantCount + sibling ids land on the new bubble.
+  const handleRegenerate = useCallback(async (messageId: string) => {
+    if (busy) return;
+
+    // Find the target's variantGroupId from the canonical messages list. If
+    // it's not there (race: button clicked before the refetch settled),
+    // bail rather than risk a misplaced prune.
+    const target = messagesRef.current.find(m => m.id === messageId);
+    if (!target) return;
+    const groupId = target.variantGroupId;
+
+    setBusyState(true);
+    isAtBottomRef.current = true;
+
+    // Drop messages in the target's variant group and rebuild entries from
+    // what remains. Earlier turns (different group ids) stay. The streaming
+    // consumer appends the new turn on top.
+    const pruned = messagesRef.current.filter(m => m.variantGroupId !== groupId);
+    setEntries(historyToEntries(pruned));
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      for await (const evt of streamRegenerate(conversationId, messageId, { signal: controller.signal })) {
+        applyAgentEvent(evt, setEntries);
+        if (evt.type === 'done' || evt.type === 'error') break;
+      }
+      // Refetch so variantCount + sibling ids land on the new bubble.
+      await refetchConversation();
+      onMessageSent?.();
+    } catch (e: unknown) {
+      notifyError(e);
+      // On failure, drop any in-flight streaming placeholder and refetch so
+      // the UI matches the server state (which may still hold the now-
+      // inactive original variant + nothing from the failed regen).
+      setEntries(prev => prev.filter(e2 => !(e2.kind === 'text' && e2.role === 'assistant' && e2.streaming)));
+      await refetchConversation();
+    } finally {
+      setBusyState(false);
+      abortRef.current = null;
+    }
+  }, [busy, conversationId, onMessageSent, refetchConversation, setBusyState]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -299,7 +483,13 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
             if (e.kind === 'toolCall') return !hideToolCalls;
             if (e.kind === 'toolResult') return !hideToolResults;
             return true;
-          }).map(renderEntry)}
+          }).map(e => renderEntry(e, {
+            busy,
+            onDelete: handleDelete,
+            onRegenerate: handleRegenerate,
+            onVariantSwitch: handleVariantSwitch,
+            onRemember: handleRemember,
+          }))}
           {/* Thinking indicator - shows once the user has submitted and before
               the first delta arrives. The condition checks that no assistant
               bubble is currently streaming, which means tokens haven't started
@@ -329,6 +519,13 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
           </button>
         </div>
       </form>
+      {rememberDraft && (
+        <MemoryQuickSave
+          seedBody={rememberDraft.seedBody}
+          projectId={projectId}
+          onClose={() => setRememberDraft(null)}
+        />
+      )}
     </div>
   );
 }
@@ -347,7 +544,15 @@ function lastIndexWhere<T>(arr: readonly T[], pred: (e: T) => boolean): number {
   return -1;
 }
 
-function renderEntry(e: ChatEntry) {
+interface EntryActions {
+  busy: boolean;
+  onDelete: (messageId: string) => void;
+  onRegenerate: (messageId: string) => void;
+  onVariantSwitch: (targetId: string) => void;
+  onRemember: (messageId: string) => void;
+}
+
+function renderEntry(e: ChatEntry, actions: EntryActions) {
   switch (e.kind) {
     case 'text': {
       // Assistant text gets the two-cursor typewriter (galactic lead + english
@@ -357,12 +562,70 @@ function renderEntry(e: ChatEntry) {
       // `caret` stays true for assistant entries; StreamingText hides it once
       // typing has caught up to text.
       const isLiveAssistant = e.role === 'assistant' && e.streaming === true;
+      // Actions only apply to persisted messages - streaming bubbles use a
+      // synthetic id (`streaming-...`) and a not-yet-saved user entry uses a
+      // `tmp-...` id; the overlay is hidden in both cases.
+      const isPersisted = !e.streaming && !e.id.startsWith('tmp-') && !e.id.startsWith('streaming-');
+      // Regenerate is only meaningful on the latest variant of an assistant
+      // turn - regenerating off an older one would require the user to first
+      // switch to it via the picker, by design.
+      const isLatestVariant = !!e.variant && e.variant.variantIndex === e.variant.variantCount - 1;
+      const showActions = isPersisted;
+      const canRegenerate = showActions && e.role === 'assistant' && isLatestVariant;
+      const hasVariants = !!e.variant && e.variant.variantCount > 1;
       return (
         <div key={e.id} className={`message ${e.role}${e.streaming ? ' streaming' : ''}`}>
           {e.role === 'assistant' ? (
             <StreamingText text={e.content} animate={isLiveAssistant} caret galactic />
           ) : (
             e.content
+          )}
+          {(showActions || hasVariants) && (
+            <div className="message-actions">
+              {hasVariants && e.variant && (
+                <VariantPicker
+                  variant={e.variant}
+                  disabled={actions.busy}
+                  onSwitch={actions.onVariantSwitch}
+                />
+              )}
+              {canRegenerate && (
+                <button
+                  type="button"
+                  className="message-action"
+                  title="Regenerate response"
+                  aria-label="Regenerate response"
+                  disabled={actions.busy}
+                  onClick={() => actions.onRegenerate(e.id)}
+                >
+                  <HiOutlineArrowPath aria-hidden="true" />
+                </button>
+              )}
+              {showActions && (
+                <button
+                  type="button"
+                  className="message-action"
+                  title="Save as memory"
+                  aria-label="Save as memory"
+                  disabled={actions.busy}
+                  onClick={() => actions.onRemember(e.id)}
+                >
+                  <HiOutlineBookmarkSquare aria-hidden="true" />
+                </button>
+              )}
+              {showActions && (
+                <button
+                  type="button"
+                  className="message-action message-action-danger"
+                  title="Delete this message and everything after"
+                  aria-label="Delete this message and everything after"
+                  disabled={actions.busy}
+                  onClick={() => actions.onDelete(e.id)}
+                >
+                  <HiOutlineTrash aria-hidden="true" />
+                </button>
+              )}
+            </div>
           )}
         </div>
       );
@@ -381,6 +644,56 @@ function renderEntry(e: ChatEntry) {
     case 'reasoning':
       return <Reasoning key={e.id} content={e.content} streaming={e.streaming} />;
   }
+}
+
+// `< {n}/{m} >` chrome above an assistant bubble that has more than one
+// regenerated variant. Buttons wrap around the ends so the user can move in a
+// circle without needing to think about "is this the first/last variant".
+function VariantPicker({
+  variant,
+  disabled,
+  onSwitch,
+}: {
+  variant: VariantMeta;
+  disabled: boolean;
+  onSwitch: (targetId: string) => void;
+}) {
+  const { variantIndex, variantCount, variantSiblingIds } = variant;
+  const prev = () => {
+    const next = (variantIndex - 1 + variantCount) % variantCount;
+    onSwitch(variantSiblingIds[next]);
+  };
+  const advance = () => {
+    const next = (variantIndex + 1) % variantCount;
+    onSwitch(variantSiblingIds[next]);
+  };
+  return (
+    <div className="variant-picker" role="group" aria-label="Switch variant">
+      <button
+        type="button"
+        className="variant-arrow"
+        title="Previous variant"
+        aria-label="Previous variant"
+        disabled={disabled}
+        onClick={prev}
+      >
+        <HiOutlineChevronLeft aria-hidden="true" />
+      </button>
+      <span className="variant-count" aria-live="polite">
+        {variantIndex + 1}/{variantCount}
+      </span>
+      <button
+        type="button"
+        className="variant-arrow"
+        title="Next variant"
+        aria-label="Next variant"
+        disabled={disabled}
+        onClick={advance}
+      >
+        <HiOutlineChevronRight aria-hidden="true" />
+      </button>
+    </div>
+  );
 }
 
 // Dedicated reasoning-stream panel. Distinct badge ("thinking") so the user
