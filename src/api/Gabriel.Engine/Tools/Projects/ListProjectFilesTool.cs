@@ -37,15 +37,21 @@ public sealed class ListProjectFilesTool : ITool
         if (files.Count == 0)
             return "No files uploaded to this project yet.";
 
+        // The id MUST be in the output — read_project_file requires the GUID,
+        // and prior versions of this tool printed only filenames, which left
+        // the model passing the name as `file_id` and tripping the Guid parser.
         var sb = new StringBuilder();
         sb.Append("Project has ").Append(files.Count).AppendLine(" file(s):");
         foreach (var f in files)
         {
             sb.Append("- ").Append(f.Name)
-              .Append("  (").Append(FormatSize(f.SizeBytes))
+              .Append("  [id: ").Append(f.Id.ToString())
+              .Append(", ").Append(FormatSize(f.SizeBytes))
               .Append(", ").Append(f.ContentType)
-              .Append(", uploaded ").Append(f.UploadedAt.ToString("u")).AppendLine(")");
+              .Append(", uploaded ").Append(f.UploadedAt.ToString("u")).AppendLine("]");
         }
+        sb.AppendLine();
+        sb.Append("Pass the bracketed `id:` value as `file_id` to read_project_file.");
         return sb.ToString().TrimEnd();
     }
 

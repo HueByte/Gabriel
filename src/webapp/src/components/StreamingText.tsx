@@ -137,7 +137,11 @@ export function StreamingText({ text, animate, caret = false, galactic = false }
 
   return (
     <>
-      <Markdown text={markdownSource} />
+      {/* `streaming` tells Markdown to skip rehype-highlight and rehype-katex
+          while the typewriter is still revealing chars — those plugins would
+          otherwise re-run on every tick (up to 200/sec). Colors and math
+          snap in the instant typing finishes. */}
+      <Markdown text={markdownSource} streaming={stillTyping} />
       {caret && stillTyping && <span className="caret" aria-hidden="true">▍</span>}
     </>
   );

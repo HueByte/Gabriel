@@ -24,8 +24,9 @@ public sealed class ReadProjectFileTool : ITool
     public string Name => "read_project_file";
 
     public string Description =>
-        "Read the contents of a file in THIS conversation's project, BY ID. " +
-        "Get IDs from list_project_files first. " +
+        "Read the contents of a file in THIS conversation's project. " +
+        "Accepts either the file's GUID (from list_project_files) OR its filename " +
+        "(case-insensitive). " +
         "Only text-like files (code, markdown, JSON, plain text, etc.) can be read; " +
         "binary files (PDFs, DOCX, images) are refused — ask the user to convert. " +
         "Output is capped at ~20,000 chars by default; pass `max_bytes` up to 80,000 " +
@@ -37,7 +38,7 @@ public sealed class ReadProjectFileTool : ITool
           "properties": {
             "file_id": {
               "type": "string",
-              "description": "The file's GUID. Use list_project_files to discover available IDs."
+              "description": "The file's GUID (from list_project_files) or its filename (case-insensitive)."
             },
             "max_bytes": {
               "type": "integer",
@@ -61,8 +62,30 @@ public sealed class ReadProjectFileTool : ITool
 
         if (!root.TryGetProperty("file_id", out var idEl) || idEl.ValueKind != JsonValueKind.String)
             return "Error: 'file_id' is required and must be a string. Use list_project_files first.";
-        if (!Guid.TryParse(idEl.GetString(), out var fileId))
-            return "Error: 'file_id' is not a valid GUID.";
+        var raw = idEl.GetString();
+        if (string.IsNullOrWhiteSpace(raw))
+            return "Error: 'file_id' is required and must be a non-empty string.";
+
+        // Accept either the GUID (preferred) or the filename. Resolving by
+        // name costs one extra list query but lets the model recover when it
+        // copies the filename out of the list instead of the bracketed id.
+        Guid fileId;
+        if (Guid.TryParse(raw, out fileId))
+        {
+            // good — direct id path
+        }
+        else
+        {
+            IReadOnlyList<Core.Entities.ProjectFile> files;
+            try { files = await _files.ListAsync(projectId, ct); }
+            catch (Exception ex) { return $"Error: could not resolve filename — {ex.Message}"; }
+
+            var match = files.FirstOrDefault(f =>
+                string.Equals(f.Name, raw, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+                return $"Error: no file matches '{raw}'. Call list_project_files to see available files.";
+            fileId = match.Id;
+        }
 
         var maxBytes = DefaultMaxBytes;
         if (root.TryGetProperty("max_bytes", out var maxEl) && maxEl.ValueKind == JsonValueKind.Number)

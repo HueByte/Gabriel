@@ -4,8 +4,7 @@ import { App } from './App';
 import { installAuthInterceptor } from './api/authInterceptor';
 import 'react-toastify/dist/ReactToastify.css';
 // Syntax highlighting theme — applied to .hljs spans that rehype-highlight
-// emits inside `.md pre code` blocks. github-dark sits well on our dark
-// background and uses neutral hues that don't fight the palette accent.
+// emits inside `.md pre code` blocks.
 import 'highlight.js/styles/github-dark.css';
 // KaTeX font / layout styles for the math nodes rehype-katex produces.
 import 'katex/dist/katex.min.css';

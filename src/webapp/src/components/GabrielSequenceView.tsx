@@ -78,6 +78,15 @@ export function GabrielSequenceView({
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
 
+    // Allocate the pixel buffer ONCE and reuse it across frames. The previous
+    // pattern of `ctx.createImageData(...)` per frame produced ~1KB of garbage
+    // every 16ms — 60KB/sec of GC pressure on the main thread, just to draw
+    // an avatar. Reusing means we only ever touch the same backing array.
+    // Alpha is constant (255) so we set it once at init and never rewrite it.
+    const imageData = ctx.createImageData(FRAME_W, FRAME_H);
+    const data = imageData.data;
+    for (let p = 0; p < PIXEL_COUNT; p++) data[p * 4 + 3] = 255;
+
     let raf = 0;
     const draw = (now: number) => {
       const seq = sequenceRef.current;
@@ -95,8 +104,6 @@ export function GabrielSequenceView({
 
         const a = seq.frames[i];
         const b = seq.frames[next];
-        const imageData = ctx.createImageData(FRAME_W, FRAME_H);
-        const data = imageData.data;
         for (let p = 0; p < PIXEL_COUNT; p++) {
           const ca = seq.palette[a[p]];
           const cb = seq.palette[b[p]];
@@ -104,7 +111,7 @@ export function GabrielSequenceView({
           data[offset    ] = Math.round(ca[0] + (cb[0] - ca[0]) * t);
           data[offset + 1] = Math.round(ca[1] + (cb[1] - ca[1]) * t);
           data[offset + 2] = Math.round(ca[2] + (cb[2] - ca[2]) * t);
-          data[offset + 3] = 255;
+          // offset + 3 (alpha) — set once at init, no per-frame write needed.
         }
         ctx.putImageData(imageData, 0, 0);
       }

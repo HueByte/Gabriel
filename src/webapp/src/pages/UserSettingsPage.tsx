@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { HiOutlineArrowLeft, HiOutlineArrowRightOnRectangle } from 'react-icons/hi2';
 import { useAuth } from '../auth/AuthContext';
-import { useHideReactDetails } from '../lib/userPrefs';
+import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
 
 // User-scoped settings: identity readout + sign-out. Intentionally minimal —
 // password change, email change, and theme controls will land here once the
@@ -10,7 +10,9 @@ import { useHideReactDetails } from '../lib/userPrefs';
 export function UserSettingsPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [hideReactDetails, setHideReactDetails] = useHideReactDetails();
+  const [hideThinking, setHideThinking] = useHideThinking();
+  const [hideToolCalls, setHideToolCalls] = useHideToolCalls();
+  const [hideToolResults, setHideToolResults] = useHideToolResults();
 
   return (
     <div className="settings palette-scope">
@@ -43,17 +45,33 @@ export function UserSettingsPage() {
       <section className="settings-section">
         <h2 className="settings-section-title">Chat display</h2>
         <p className="settings-hint">
-          The ReAct agent loop emits intermediate steps — thinking, tool calls,
-          tool results — that Gabriel uses to reason through requests. Hiding
-          them shows only the final reply for a cleaner transcript.
+          The ReAct agent loop emits intermediate steps that Gabriel uses to
+          reason through a request. Toggle each kind independently — final
+          answers always remain visible.
         </p>
         <label className="settings-toggle">
           <input
             type="checkbox"
-            checked={hideReactDetails}
-            onChange={e => setHideReactDetails(e.target.checked)}
+            checked={hideThinking}
+            onChange={e => setHideThinking(e.target.checked)}
           />
-          <span>Hide ReAct details (thinking / tool calls / observations)</span>
+          <span>Hide thinking <span className="settings-faint">(chain-of-thought + pre-tool reasoning)</span></span>
+        </label>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={hideToolCalls}
+            onChange={e => setHideToolCalls(e.target.checked)}
+          />
+          <span>Hide tool calls <span className="settings-faint">(the `action` step — tool name + arguments)</span></span>
+        </label>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={hideToolResults}
+            onChange={e => setHideToolResults(e.target.checked)}
+          />
+          <span>Hide tool results <span className="settings-faint">(the `observation` step — collapsed output)</span></span>
         </label>
       </section>
 

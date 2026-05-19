@@ -479,6 +479,13 @@ button {
   min-width: 0;
   align-items: center;
   padding: 24px 16px 0;
+  /* Outer column never scrolls. Pages that need to scroll their own content
+     (`.diagnostics`, `.settings`) set `flex: 1 1 auto; min-height: 0;
+     overflow-y: auto` on their root, which lets them stretch to the
+     remaining viewport height and scroll internally — same pattern as
+     `.chat`'s inner `.messages`. This avoids the sub-pixel rounding that
+     made the outer column show a ghost scrollbar on the chat page when the
+     content perfectly fit. */
   overflow: hidden;
 }
 
@@ -1800,9 +1807,25 @@ button {
   flex-direction: column;
   gap: 18px;
   padding: 20px 24px;
+  /* Take remaining viewport height under .main-col (which is overflow: hidden)
+     and scroll internally — mirrors how .diagnostics handles its own scroll.
+     width: 100% so the max-width centering still applies via .main-col's
+     align-items: center. */
+  width: 100%;
   max-width: 760px;
-  margin: 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
   animation: fade-in-up 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.settings::-webkit-scrollbar {
+  width: 8px;
+}
+.settings::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
 }
 .settings-head {
   display: flex;

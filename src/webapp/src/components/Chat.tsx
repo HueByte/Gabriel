@@ -10,7 +10,7 @@ import {
 import { toast } from 'react-toastify';
 import { streamChat } from '../api/streamChat';
 import { notifyError } from '../lib/notify';
-import { useHideReactDetails } from '../lib/userPrefs';
+import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
 import { StreamingText } from './StreamingText';
 import { ThinkingPulse } from './ThinkingPulse';
 
@@ -119,11 +119,16 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  // User preference: when on, hide ReAct scaffolding (thought / reasoning /
-  // tool calls + results) and show only user + final assistant bubbles.
-  // Lives in localStorage via the userPrefs hook so settings + Chat stay in
-  // sync across components within the tab.
-  const [hideReactDetails] = useHideReactDetails();
+  // User preferences: per-kind ReAct visibility. Each toggle independently
+  // suppresses one category of scaffolding in the transcript:
+  //   - thinking:   `thought` + `reasoning` entries (chain-of-thought)
+  //   - tool calls: `toolCall` entries (action badge)
+  //   - tool results: `toolResult` entries (observation badge)
+  // The actual assistant text bubble (kind='text', role='assistant') always
+  // shows so the typewriter still works.
+  const [hideThinking] = useHideThinking();
+  const [hideToolCalls] = useHideToolCalls();
+  const [hideToolResults] = useHideToolResults();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const messagesContentRef = useRef<HTMLDivElement | null>(null);
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -285,14 +290,16 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
           {entries.length === 0 && !busy && (
             <div className="empty">Say hi to get started.</div>
           )}
-          {/* When the user has opted out of ReAct details, drop every
-              scaffolding kind — only user/assistant text remains. The actual
-              assistant streaming bubble (kind === 'text', role === 'assistant')
-              still flows through so the typewriter effect works normally. */}
-          {(hideReactDetails
-            ? entries.filter(e => e.kind === 'text')
-            : entries
-          ).map(renderEntry)}
+          {/* Per-kind ReAct visibility filter. Each toggle independently
+              drops one scaffolding kind from the transcript while leaving
+              the user + assistant text bubbles intact. `text` always passes
+              through so the streaming typewriter keeps working. */}
+          {entries.filter(e => {
+            if (e.kind === 'thought' || e.kind === 'reasoning') return !hideThinking;
+            if (e.kind === 'toolCall') return !hideToolCalls;
+            if (e.kind === 'toolResult') return !hideToolResults;
+            return true;
+          }).map(renderEntry)}
           {/* Thinking indicator — shows once the user has submitted and before
               the first delta arrives. The condition checks that no assistant
               bubble is currently streaming, which means tokens haven't started

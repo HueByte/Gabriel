@@ -7,7 +7,21 @@
 
 import { useEffect, useState } from 'react';
 
-const HIDE_REACT_DETAILS_KEY = 'gabriel.prefs.hideReactDetails';
+// Per-kind ReAct visibility toggles. Replaced the single boolean
+// `hideReactDetails` so users can keep e.g. tool calls visible while hiding
+// the model's chain-of-thought (or any other combination). One key per kind
+// keeps the storage shape trivial and the storage-event listener (below)
+// simple — toggling one doesn't perturb the others.
+const HIDE_THINKING_KEY = 'gabriel.prefs.hideThinking';
+const HIDE_TOOL_CALLS_KEY = 'gabriel.prefs.hideToolCalls';
+const HIDE_TOOL_RESULTS_KEY = 'gabriel.prefs.hideToolResults';
+
+// Legacy single-boolean key (pre-split). Migrated on first read of any of
+// the new keys: if the new key is absent but the legacy key was `1`, treat
+// the new key as `1` so we don't surprise users who had toggled the old
+// flag on. We DON'T write back the legacy value — once any of the new keys
+// is touched, the legacy entry can be cleaned up via removeItem.
+const LEGACY_HIDE_REACT_DETAILS_KEY = 'gabriel.prefs.hideReactDetails';
 
 // Storage-event channel for cross-component sync within a single tab.
 // localStorage's native 'storage' event only fires across tabs, so we
@@ -67,10 +81,32 @@ export function useBoolPref(key: string, fallback: boolean): [boolean, (next: bo
   return [value, set];
 }
 
-// "Hide ReAct details" — when on, the chat hides thought / reasoning /
-// tool-call / tool-result entries and shows only the final assistant text.
-// Useful when the user wants a clean transcript without the agent's
-// scaffolding visible.
-export function useHideReactDetails(): [boolean, (next: boolean) => void] {
-  return useBoolPref(HIDE_REACT_DETAILS_KEY, false);
+// Reads the legacy single-boolean once on module load, used only as the
+// fallback default for the new per-kind toggles. After the user touches any
+// of the new toggles, the legacy key becomes irrelevant.
+function readLegacyHideReactDetails(): boolean {
+  try {
+    return localStorage.getItem(LEGACY_HIDE_REACT_DETAILS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+// Per-kind toggles. Each independently hides one category of ReAct
+// scaffolding from the chat transcript:
+//   - thinking  → `thought` + `reasoning` entries (model's chain-of-thought,
+//                 pre-tool reasoning text and dedicated reasoning_content)
+//   - tool calls → `toolCall` entries (the action badge + tool name/args)
+//   - tool results → `toolResult` entries (the observation badge + payload)
+//
+// Each defaults to the legacy single-flag value so users who previously
+// set "hide ReAct details" keep that behavior across all three.
+export function useHideThinking(): [boolean, (next: boolean) => void] {
+  return useBoolPref(HIDE_THINKING_KEY, readLegacyHideReactDetails());
+}
+export function useHideToolCalls(): [boolean, (next: boolean) => void] {
+  return useBoolPref(HIDE_TOOL_CALLS_KEY, readLegacyHideReactDetails());
+}
+export function useHideToolResults(): [boolean, (next: boolean) => void] {
+  return useBoolPref(HIDE_TOOL_RESULTS_KEY, readLegacyHideReactDetails());
 }

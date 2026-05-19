@@ -60,13 +60,18 @@ public class Conversation
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId is required.", nameof(projectId));
 
-        return new Conversation
+        // Construct first so we can use the freshly-allocated Id as the
+        // default title when the caller didn't supply one. Each new chat
+        // therefore gets a unique, distinguishable name out of the box — the
+        // user (or a future auto-titler) can still rename via PATCH.
+        var conv = new Conversation
         {
             UserId = userId,
             ProjectId = projectId,
-            Title = string.IsNullOrWhiteSpace(title) ? "New conversation" : title.Trim(),
             AvatarSeed = GenerateAvatarSeed(),
         };
+        conv.Title = string.IsNullOrWhiteSpace(title) ? conv.Id.ToString() : title.Trim();
+        return conv;
     }
 
     // Used by the lazy backfill when a Default project is created for a user

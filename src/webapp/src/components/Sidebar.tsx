@@ -211,7 +211,9 @@ export function Sidebar({ refreshKey }: SidebarProps) {
       // Pass the active projectId so the new chat lands in the right folder.
       // If null, the server falls back to the user's Default project.
       const conv = await ConversationsService.postApiConversations({
-        requestBody: { title: 'New chat', projectId: activeProjectId ?? undefined },
+        // Null title → backend defaults to the conversation's GUID, giving
+        // each new chat a unique distinguishable name out of the box.
+        requestBody: { title: null, projectId: activeProjectId ?? undefined },
       });
       bumpLocal();
       navigate(`/c/${encodeURIComponent(conv.id)}`);

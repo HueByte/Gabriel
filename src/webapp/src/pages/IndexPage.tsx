@@ -28,7 +28,10 @@ export function IndexPage() {
       return;
     }
 
-    ConversationsService.postApiConversations({ requestBody: { title: 'New chat' } })
+    // Title intentionally null — backend defaults to the conversation's GUID
+    // so each new chat has a unique, distinguishable identifier out of the
+    // box. The user (or a future auto-titler) can rename via PATCH.
+    ConversationsService.postApiConversations({ requestBody: { title: null } })
       .then(conv => {
         navigate(`/c/${encodeURIComponent(conv.id)}`, { replace: true });
       })
