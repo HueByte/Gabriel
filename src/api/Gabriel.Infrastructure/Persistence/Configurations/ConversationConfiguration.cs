@@ -11,6 +11,10 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.ToTable("Conversations");
         builder.HasKey(c => c.Id);
         builder.Property(c => c.UserId).IsRequired();
+        // Project containment (Phase 8). Nullable so pre-existing conversations
+        // survive the migration; backfilled lazily when the user first creates
+        // or visits a project.
+        builder.Property(c => c.ProjectId);
         builder.Property(c => c.Title).HasMaxLength(256).IsRequired();
         builder.Property(c => c.CreatedAt).IsRequired();
         builder.Property(c => c.UpdatedAt).IsRequired();
@@ -18,6 +22,8 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
 
         // Sidebar list (UserId + UpdatedAt desc) — the hot query for the dashboard.
         builder.HasIndex(c => new { c.UserId, c.UpdatedAt });
+        // Project filter — list conversations within a single project.
+        builder.HasIndex(c => new { c.ProjectId, c.UpdatedAt });
 
         // Rolling-summary columns — both nullable until the conversation crosses the compact threshold.
         builder.Property(c => c.Summary);

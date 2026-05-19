@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Gabriel.API.Contracts.Conversations;
 using Gabriel.API.Contracts.Messages;
+using Gabriel.API.Contracts.Projects;
 using Gabriel.API.Contracts.Sequence;
 using Gabriel.Core.Entities;
 using Gabriel.Engine.Sequence;
@@ -9,11 +10,24 @@ namespace Gabriel.API.Mapping;
 
 internal static class ContractMappings
 {
+    public static ProjectResponse ToResponse(this Project p, bool includeFiles)
+    {
+        var files = includeFiles
+            ? p.Files.Select(f => f.ToResponse()).ToList()
+            : null;
+        return new ProjectResponse(
+            p.Id, p.Name, p.Description, p.SystemPrompt,
+            p.CreatedAt, p.UpdatedAt, files);
+    }
+
+    public static ProjectFileResponse ToResponse(this ProjectFile f)
+        => new(f.Id, f.Name, f.SizeBytes, f.ContentType, f.UploadedAt);
+
     public static ConversationResponse ToResponse(this Conversation c, bool includeMessages)
     {
         if (!includeMessages)
         {
-            return new ConversationResponse(c.Id, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, null);
+            return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, null);
         }
 
         var allMessages = c.Messages;
@@ -67,10 +81,11 @@ internal static class ContractMappings
                 siblings.Count,
                 siblings,
                 m.ToolCallId,
-                ParseToolCalls(m.ToolCallsJson)));
+                ParseToolCalls(m.ToolCallsJson),
+                m.ReasoningContent));
         }
 
-        return new ConversationResponse(c.Id, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, messages);
+        return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, messages);
     }
 
     public static GabrielSequenceResponse ToResponse(this GabrielSequence sequence)

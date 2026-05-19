@@ -29,6 +29,9 @@ namespace Gabriel.Infrastructure.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("StateJson")
                         .HasColumnType("TEXT");
 
@@ -50,6 +53,8 @@ namespace Gabriel.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "UpdatedAt");
 
                     b.HasIndex("UserId", "UpdatedAt");
 
@@ -74,6 +79,9 @@ namespace Gabriel.Infrastructure.Migrations
                     b.Property<bool>("IsActiveVariant")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ReasoningContent")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Role")
                         .HasColumnType("INTEGER");
 
@@ -94,6 +102,80 @@ namespace Gabriel.Infrastructure.Migrations
                     b.HasIndex("ConversationId", "VariantGroupId");
 
                     b.ToTable("Messages", (string)null);
+                });
+
+            modelBuilder.Entity("Gabriel.Core.Entities.Project", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SystemPrompt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "UpdatedAt");
+
+                    b.ToTable("Projects", (string)null);
+                });
+
+            modelBuilder.Entity("Gabriel.Core.Entities.ProjectFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UploadedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "RelativePath")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "UploadedAt");
+
+                    b.ToTable("ProjectFiles", (string)null);
                 });
 
             modelBuilder.Entity("Gabriel.Core.Identity.RefreshToken", b =>
@@ -332,6 +414,15 @@ namespace Gabriel.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Gabriel.Core.Entities.ProjectFile", b =>
+                {
+                    b.HasOne("Gabriel.Core.Entities.Project", null)
+                        .WithMany("Files")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", null)
@@ -386,6 +477,11 @@ namespace Gabriel.Infrastructure.Migrations
             modelBuilder.Entity("Gabriel.Core.Entities.Conversation", b =>
                 {
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("Gabriel.Core.Entities.Project", b =>
+                {
+                    b.Navigation("Files");
                 });
 #pragma warning restore 612, 618
         }

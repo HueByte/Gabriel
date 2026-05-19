@@ -17,8 +17,10 @@ namespace Gabriel.Engine.Services;
 public class AgentService : IAgentService
 {
     private readonly IConversationRepository _conversations;
+    private readonly IProjectRepository _projects;
     private readonly IChatProvider _provider;
     private readonly IToolRegistry _tools;
+    private readonly IToolExecutionContext _toolContext;
     private readonly IUnitOfWork _uow;
     private readonly ITokenEstimator _tokens;
     private readonly ICurrentUser _currentUser;
@@ -30,8 +32,10 @@ public class AgentService : IAgentService
 
     public AgentService(
         IConversationRepository conversations,
+        IProjectRepository projects,
         IChatProvider provider,
         IToolRegistry tools,
+        IToolExecutionContext toolContext,
         IUnitOfWork uow,
         ITokenEstimator tokens,
         ICurrentUser currentUser,
@@ -42,8 +46,10 @@ public class AgentService : IAgentService
         ILogger<AgentService> logger)
     {
         _conversations = conversations;
+        _projects = projects;
         _provider = provider;
         _tools = tools;
+        _toolContext = toolContext;
         _uow = uow;
         _tokens = tokens;
         _currentUser = currentUser;
@@ -70,6 +76,10 @@ public class AgentService : IAgentService
         var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
             ?? throw new NotFoundException(nameof(Conversation), conversationId);
 
+        _logger.LogInformation(
+            "ReAct turn start | conv={ConversationId} project={ProjectId} userId={UserId} inputChars={InputLen} messageCount={MsgCount}",
+            conversationId, conversation.ProjectId, userId, userInput.Length, conversation.Messages.Count);
+
         // Persist the user message before starting the stream so the timeline is
         // consistent even if the client disconnects mid-loop. State is updated in
         // the same save — the new state feeds the per-turn system prompt and the
@@ -85,7 +95,17 @@ public class AgentService : IAgentService
         // assistant's tool_calls and its tool results would orphan them.
         await MaybeCompactAsync(conversation, ct);
 
-        return RunStreamAsync(conversation, variantGroupIdOverride: null, ct);
+        // Load the project's SystemPrompt once per turn (cheap indexed read).
+        // Threaded into the iterator so each iteration re-uses the same prompt
+        // without re-querying the DB.
+        var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
+
+        // Populate the scoped tool-execution context so project-aware tools
+        // (list_project_files / read_project_file) know which project to scope
+        // to without having the model fill in the projectId itself.
+        _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
+
+        return RunStreamAsync(conversation, variantGroupIdOverride: null, projectPrompt, ct);
     }
 
     public async Task<IAsyncEnumerable<AgentEvent>> RegenerateAsync(
@@ -98,6 +118,10 @@ public class AgentService : IAgentService
 
         var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
             ?? throw new NotFoundException(nameof(Conversation), conversationId);
+
+        _logger.LogInformation(
+            "ReAct regenerate | conv={ConversationId} project={ProjectId} userId={UserId} targetMsg={TargetMessageId}",
+            conversationId, conversation.ProjectId, userId, assistantMessageId);
 
         var target = conversation.Messages.FirstOrDefault(m => m.Id == assistantMessageId)
             ?? throw new NotFoundException(nameof(Message), assistantMessageId);
@@ -122,20 +146,35 @@ public class AgentService : IAgentService
         // state. Compact between turns as usual.
         await MaybeCompactAsync(conversation, ct);
 
-        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, ct);
+        var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
+        _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
+
+        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, projectPrompt, ct);
+    }
+
+    // One-shot lookup of the project's SystemPrompt for this turn. Returns null
+    // when the conversation has no ProjectId yet (legacy pre-Phase-8 data that
+    // hasn't been backfilled) or the project has no prompt set.
+    private async Task<string?> LoadProjectSystemPromptAsync(Conversation conversation, Guid userId, CancellationToken ct)
+    {
+        if (conversation.ProjectId is not { } pid) return null;
+        var project = await _projects.GetByIdAsync(pid, userId, ct);
+        return project?.SystemPrompt;
     }
 
     private async IAsyncEnumerable<AgentEvent> RunStreamAsync(
         Conversation conversation,
         Guid? variantGroupIdOverride,
+        string? projectSystemPrompt,
         [EnumeratorCancellation] CancellationToken ct)
     {
         var toolDescriptors = _tools.AsDescriptors();
 
         for (var iter = 0; iter < _options.MaxIterations; iter++)
         {
-            var history = ToProviderHistory(conversation);
+            var history = ToProviderHistory(conversation, projectSystemPrompt);
             var textBuffer = new StringBuilder();
+            var reasoningBuffer = new StringBuilder();
             var pendingCalls = new List<ChatProviderToolCall>();
             FinishReason? finish = null;
 
@@ -146,6 +185,11 @@ public class AgentService : IAgentService
                     case TextDeltaEvent td:
                         textBuffer.Append(td.Delta);
                         yield return new AgentTextDelta(td.Delta);
+                        break;
+
+                    case ReasoningDeltaEvent rd:
+                        reasoningBuffer.Append(rd.Delta);
+                        yield return new AgentReasoningDelta(rd.Delta);
                         break;
 
                     case ToolCallReadyEvent tc:
@@ -164,15 +208,20 @@ public class AgentService : IAgentService
                 // OpenAI/xAI allow assistant messages to carry both text and tool_calls;
                 // preserve any leading reasoning text we accumulated.
                 var leadingText = textBuffer.Length > 0 ? textBuffer.ToString() : null;
-                var assistantMessage = conversation.AppendAssistantToolCalls(toolCallsJson, leadingText, variantGroupIdOverride);
+                var reasoningForCall = reasoningBuffer.Length > 0 ? reasoningBuffer.ToString() : null;
+                var assistantMessage = conversation.AppendAssistantToolCalls(toolCallsJson, leadingText, variantGroupIdOverride, reasoningForCall);
                 _conversations.AddMessage(assistantMessage);
                 await _uow.SaveChangesAsync(ct);
+
+                _logger.LogInformation(
+                    "Iter {Iter}: model requested {ToolCount} tool call(s) | conv={ConversationId} reasoningChars={ReasoningLen}",
+                    iter, pendingCalls.Count, conversation.Id, reasoningForCall?.Length ?? 0);
 
                 foreach (var call in pendingCalls)
                 {
                     yield return new AgentToolCall(assistantMessage.Id, call.Id, call.Name, call.ArgumentsJson);
 
-                    var observation = await ExecuteToolSafelyAsync(call, ct);
+                    var observation = await ExecuteToolSafelyAsync(call, conversation.Id, ct);
 
                     var toolMessage = conversation.AppendToolResult(call.Id, observation, variantGroupIdOverride);
                     _conversations.AddMessage(toolMessage);
@@ -190,6 +239,9 @@ public class AgentService : IAgentService
                 var rawText = textBuffer.ToString();
                 if (string.IsNullOrWhiteSpace(rawText))
                 {
+                    _logger.LogWarning(
+                        "Iter {Iter}: provider finished Stop with empty text | conv={ConversationId}",
+                        iter, conversation.Id);
                     yield return new AgentError("Provider returned an empty response.");
                     yield return new AgentDone();
                     yield break;
@@ -201,19 +253,32 @@ public class AgentService : IAgentService
                 // empty — Message.Create rejects empty assistant content.
                 var cleaned = _postProcessor.Clean(rawText, conversation.GetState());
                 var toPersist = string.IsNullOrWhiteSpace(cleaned) ? rawText : cleaned;
-                var assistantMessage = conversation.AppendAssistantText(toPersist, variantGroupIdOverride);
+                var reasoningForFinal = reasoningBuffer.Length > 0 ? reasoningBuffer.ToString() : null;
+                var assistantMessage = conversation.AppendAssistantText(toPersist, variantGroupIdOverride, reasoningForFinal);
                 _conversations.AddMessage(assistantMessage);
                 await _uow.SaveChangesAsync(ct);
-                yield return new AgentAssistantMessage(assistantMessage.Id, rawText);
+
+                _logger.LogInformation(
+                    "ReAct turn complete | conv={ConversationId} iters={Iters} rawChars={RawLen} cleanChars={CleanLen} reasoningChars={ReasoningLen}",
+                    conversation.Id, iter + 1, rawText.Length, toPersist.Length, reasoningForFinal?.Length ?? 0);
+
+                yield return new AgentAssistantMessage(assistantMessage.Id, rawText, reasoningForFinal);
                 yield return new AgentDone();
                 yield break;
             }
 
             // Length / Error / unexpected — bail out.
+            _logger.LogWarning(
+                "Iter {Iter}: provider finished unexpectedly with {Finish} | conv={ConversationId}",
+                iter, finish?.ToString() ?? "no-finish-event", conversation.Id);
             yield return new AgentError($"Provider finished unexpectedly: {finish?.ToString() ?? "no finish event"}.");
             yield return new AgentDone();
             yield break;
         }
+
+        _logger.LogWarning(
+            "Hit MaxIterations={Max} without final answer | conv={ConversationId}",
+            _options.MaxIterations, conversation.Id);
 
         // Hit the iteration cap without the model giving a final answer.
         var giveup = conversation.AppendAssistantText(
@@ -356,36 +421,81 @@ public class AgentService : IAgentService
 
     // --- Tool execution ----------------------------------------------------------
 
-    private async Task<string> ExecuteToolSafelyAsync(ChatProviderToolCall call, CancellationToken ct)
+    // Maximum chars we put into a log message for tool args / results. Big
+    // payloads (a fetched web page, a 12k-char file read) would otherwise
+    // bloat the log file without adding diagnostic value.
+    private const int LogPreviewLimit = 240;
+
+    private async Task<string> ExecuteToolSafelyAsync(ChatProviderToolCall call, Guid conversationId, CancellationToken ct)
     {
         var tool = _tools.Find(call.Name);
         if (tool is null)
         {
-            _logger.LogWarning("Model called unknown tool {Tool}", call.Name);
+            _logger.LogWarning(
+                "Tool call REJECTED — unknown tool | conv={ConversationId} tool={Tool} callId={CallId} args={Args}",
+                conversationId, call.Name, call.Id, Preview(call.ArgumentsJson));
             return $"Error: tool '{call.Name}' is not registered.";
         }
 
+        _logger.LogInformation(
+            "Tool call START | conv={ConversationId} tool={Tool} callId={CallId} args={Args}",
+            conversationId, call.Name, call.Id, Preview(call.ArgumentsJson));
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            return await tool.ExecuteAsync(call.ArgumentsJson, ct);
+            var observation = await tool.ExecuteAsync(call.ArgumentsJson, ct);
+            sw.Stop();
+
+            // A tool's "soft error" (it returns a string starting with "Error:"
+            // rather than throwing) is a meaningful signal — log at Warning so
+            // it stands out from successful executions.
+            var isSoftError = observation?.StartsWith("Error", StringComparison.OrdinalIgnoreCase) == true;
+            var resultLen = observation?.Length ?? 0;
+
+            if (isSoftError)
+            {
+                _logger.LogWarning(
+                    "Tool call SOFT-ERROR | conv={ConversationId} tool={Tool} callId={CallId} elapsedMs={ElapsedMs} resultLen={ResultLen} result={Result}",
+                    conversationId, call.Name, call.Id, sw.ElapsedMilliseconds, resultLen, Preview(observation));
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Tool call OK | conv={ConversationId} tool={Tool} callId={CallId} elapsedMs={ElapsedMs} resultLen={ResultLen} resultPreview={Preview}",
+                    conversationId, call.Name, call.Id, sw.ElapsedMilliseconds, resultLen, Preview(observation));
+            }
+            return observation ?? string.Empty;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Tool {Tool} threw", call.Name);
+            sw.Stop();
+            _logger.LogError(ex,
+                "Tool call THREW | conv={ConversationId} tool={Tool} callId={CallId} elapsedMs={ElapsedMs}",
+                conversationId, call.Name, call.Id, sw.ElapsedMilliseconds);
             return $"Error executing {call.Name}: {ex.Message}";
         }
+    }
+
+    private static string Preview(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "(empty)";
+        // Collapse newlines so multi-line tool output stays on one log line.
+        var flat = text.Replace('\n', ' ').Replace('\r', ' ');
+        return flat.Length <= LogPreviewLimit ? flat : flat[..LogPreviewLimit] + "…";
     }
 
     // --- History assembly --------------------------------------------------------
 
     // Builds the message list sent to the provider:
     //   1. Persona system message (static persona + per-turn dynamic guidance)
-    //   2. (Optional) system message containing the rolling summary
-    //   3. All messages strictly after SummarizedThroughMessageId — filtered to
+    //   2. (Optional) Project SystemPrompt — Phase 8 per-project personality override
+    //   3. (Optional) system message containing the rolling summary
+    //   4. All messages strictly after SummarizedThroughMessageId — filtered to
     //      active variants. Tool messages are additionally required to point at
     //      an active assistant's tool_call.id, so orphaned tool aftermath from
     //      a deactivated regen turn never reaches the provider.
-    private IReadOnlyList<ChatProviderMessage> ToProviderHistory(Conversation conv)
+    private IReadOnlyList<ChatProviderMessage> ToProviderHistory(Conversation conv, string? projectSystemPrompt)
     {
         var messages = conv.Messages.ToList();
         var startIdx = 0;
@@ -412,7 +522,7 @@ public class AgentService : IAgentService
             }
         }
 
-        var result = new List<ChatProviderMessage>(messages.Count - startIdx + 2);
+        var result = new List<ChatProviderMessage>(messages.Count - startIdx + 3);
 
         // Persona prompt always goes first — it's the "who you are" header. State
         // may be null on the very first call before the updater has run; the
@@ -420,6 +530,16 @@ public class AgentService : IAgentService
         result.Add(new ChatProviderMessage(
             MessageRole.System,
             _promptBuilder.Build(conv.GetState())));
+
+        // Per-project personality override. Sits between the global persona and
+        // the rolling summary so the model treats it as additional identity
+        // context BEFORE absorbing the conversation's specific history.
+        if (!string.IsNullOrWhiteSpace(projectSystemPrompt))
+        {
+            result.Add(new ChatProviderMessage(
+                MessageRole.System,
+                $"[Project context]\n{projectSystemPrompt}"));
+        }
 
         if (!string.IsNullOrEmpty(conv.Summary))
         {

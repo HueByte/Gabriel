@@ -29,7 +29,7 @@ flowchart LR
     I --> A
 ```
 
-Five things to know that aren't obvious from the diagram:
+Six things to know that aren't obvious from the diagram:
 
 1. **One agent service, two entry points.** `RunAsync(convId, userInput)` is a fresh turn. `RegenerateAsync(convId, assistantMessageId)` re-uses the prior user turn's state and stamps the new reply with the original message's `VariantGroupId` so the picker UI can navigate between alternatives. Both delegate to the same private streaming iterator. See [agent-loop.md](agent-loop.md) and [variants-and-history.md](variants-and-history.md).
 
@@ -40,6 +40,8 @@ Five things to know that aren't obvious from the diagram:
 4. **Streaming raw, cleaning on save.** The SSE controller forwards model deltas with a human-typing pacing simulation. After the stream finishes, the accumulated text is post-processed (AI-ism strip + length cap) and the cleaned version is what gets persisted. The live client view sees the raw text; reloads show the cleaned version. Trade-off accepted to avoid mid-stream rewrites.
 
 5. **Rolling summary, not history truncation.** When estimated history tokens cross $\theta \cdot W$ (default $\theta = 0.8$, $W$ = provider context window), the agent generates a summary of the earliest portion and from then on prepends it as a system message instead of the raw messages it covers. The user still sees the full transcript; the model sees `summary + recent`.
+
+6. **Two reasoning channels coexist per turn.** The loop captures both the provider's *native* chain-of-thought (Grok 4 `reasoning_content`, DeepSeek-R1, OpenAI o-series — streamed as `ReasoningDeltaEvent`, persisted on `Message.ReasoningContent`) **and** the model's *external* ReAct reasoning (regular text content emitted alongside a tool-call iteration, persisted on `Message.Content`). The first gives transparency when the provider supports it; the second works for any tool-capable model and gets re-fed to the next iteration as part of the visible history. See [agent-loop.md#reasoning-channels-native-cot--external-react](agent-loop.md#reasoning-channels--native-cot--external-react).
 
 ## Key types at a glance
 

@@ -1,8 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { AuthProvider } from './auth/AuthContext';
-import { AuthGate } from './auth/AuthGate';
 import { installAuthInterceptor } from './api/authInterceptor';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles.css';
@@ -12,10 +10,6 @@ installAuthInterceptor();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <AuthGate>
-        <App />
-      </AuthGate>
-    </AuthProvider>
+    <App />
   </StrictMode>,
 );

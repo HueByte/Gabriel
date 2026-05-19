@@ -3,6 +3,8 @@ using Gabriel.Engine.Sequence;
 using Gabriel.Engine.Services;
 using Gabriel.Engine.Tools;
 using Gabriel.Engine.Tools.Docs;
+using Gabriel.Engine.Tools.Files;
+using Gabriel.Engine.Tools.Projects;
 using Gabriel.Engine.Tools.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,10 +21,15 @@ public static class DependencyInjection
     {
         services.Configure<AgentOptions>(config.GetSection(AgentOptions.SectionName));
         services.Configure<PersonalityOptions>(config.GetSection(PersonalityOptions.SectionName));
+        services.Configure<AgentToolsOptions>(config.GetSection(AgentToolsOptions.SectionName));
 
         services.AddScoped<IAgentService, AgentService>();
         services.AddScoped<IToolRegistry, ToolRegistry>();
         services.AddSingleton<ITokenEstimator, NaiveTokenEstimator>();
+
+        // Per-request tool execution context. AgentService.Set populates it
+        // once per turn; project-scoped tools read from it.
+        services.AddScoped<IToolExecutionContext, ToolExecutionContext>();
 
         // Personality stack — all three are pure / config-driven, so singleton.
         services.AddSingleton<IConversationStateUpdater, HeuristicConversationStateUpdater>();
@@ -44,6 +51,13 @@ public static class DependencyInjection
         services.AddScoped<ITool, WebFetchTool>();
         services.AddScoped<ITool, DocsListTool>();
         services.AddScoped<ITool, DocsReadTool>();
+        services.AddScoped<ITool, ListProjectFilesTool>();
+        services.AddScoped<ITool, ReadProjectFileTool>();
+
+        // Filesystem tools (Phase 12). Path resolution is shared so the same
+        // host-vs-project hardening applies to every file tool.
+        services.AddScoped<IAgentPathResolver, AgentPathResolver>();
+        services.AddScoped<ITool, FileInfoTool>();
 
         return services;
     }

@@ -6,8 +6,14 @@ namespace Gabriel.Core.Services;
 // calls) lives in IAgentService — this stays focused on lifecycle.
 public interface IChatService
 {
-    Task<Conversation> CreateConversationAsync(string? title, CancellationToken ct = default);
-    Task<IReadOnlyList<Conversation>> ListConversationsAsync(CancellationToken ct = default);
+    // `projectId` is optional — if absent, the conversation falls into the
+    // user's Default project (auto-created on first call).
+    Task<Conversation> CreateConversationAsync(Guid? projectId, string? title, CancellationToken ct = default);
+
+    // List the user's conversations. Optionally filter by project — null means
+    // "all conversations across all projects".
+    Task<IReadOnlyList<Conversation>> ListConversationsAsync(Guid? projectId, CancellationToken ct = default);
+
     Task<Conversation> GetConversationAsync(Guid id, CancellationToken ct = default);
     Task<Conversation> RenameConversationAsync(Guid id, string title, CancellationToken ct = default);
     Task<Conversation> RerollAvatarAsync(Guid id, CancellationToken ct = default);

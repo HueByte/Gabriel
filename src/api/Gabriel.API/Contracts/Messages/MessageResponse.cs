@@ -10,7 +10,8 @@ public record MessageResponse(
     int VariantCount,                              // total siblings in the variant group (1 for non-regenerated turns)
     IReadOnlyList<Guid> VariantSiblingIds,         // all sibling Ids in this variant group, sorted by CreatedAt (includes self)
     string? ToolCallId = null,                     // set on tool-role messages
-    IReadOnlyList<MessageToolCall>? ToolCalls = null  // set on assistant messages that requested tool calls
+    IReadOnlyList<MessageToolCall>? ToolCalls = null, // set on assistant messages that requested tool calls
+    string? ReasoningContent = null                // optional model "thinking" stream for reasoning-capable providers
 );
 
 public record MessageToolCall(string Id, string Name, string ArgumentsJson);

@@ -15,6 +15,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(m => m.Content);                         // nullable: assistant-with-only-tool-calls
         builder.Property(m => m.ToolCallId).HasMaxLength(64);    // nullable: set only on Tool-role messages
         builder.Property(m => m.ToolCallsJson);                  // nullable: set only on Assistant-with-tool-calls
+        builder.Property(m => m.ReasoningContent);                // nullable: model "thinking" stream, when the provider supplies one
         builder.Property(m => m.CreatedAt).IsRequired();
 
         // Variant grouping — same value for all regen siblings; equals Id for singletons.

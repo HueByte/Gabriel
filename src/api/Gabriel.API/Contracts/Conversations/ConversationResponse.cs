@@ -4,6 +4,7 @@ namespace Gabriel.API.Contracts.Conversations;
 
 public record ConversationResponse(
     Guid Id,
+    Guid? ProjectId,
     string Title,
     long AvatarSeed,
     DateTimeOffset CreatedAt,

@@ -50,8 +50,8 @@ sequenceDiagram
     loop ReAct iteration (max N)
         Agent->>Agent: ToProviderHistory (filter active variants)
         Agent->>Provider: StreamAsync(history, tools)
-        Provider-->>Agent: TextDeltaEvent... ToolCallReadyEvent... FinishEvent
-        Agent-->>Caller: AgentTextDelta (yield)
+        Provider-->>Agent: ReasoningDeltaEvent / TextDeltaEvent / ToolCallReadyEvent / FinishEvent
+        Agent-->>Caller: AgentReasoningDelta + AgentTextDelta (yield as they arrive)
 
         alt finish == ToolCalls
             Agent->>Db: AppendAssistantToolCalls + SaveChanges
@@ -83,6 +83,7 @@ The provider emits `ChatProviderEvent`s — the transport-level shape:
 | Type | Meaning |
 | --- | --- |
 | `TextDeltaEvent(string Delta)` | Partial assistant text. Buffer + yield to client. |
+| `ReasoningDeltaEvent(string Delta)` | Partial **reasoning** token — the model's private chain-of-thought stream (Grok 4 `reasoning_content`, DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking). Providers without a reasoning channel simply never emit these. |
 | `ToolCallReadyEvent(Id, Name, ArgsJson)` | A complete tool call. The provider buffers partial JSON internally; agent only sees fully-assembled calls. |
 | `FinishEvent(FinishReason)` | `Stop` / `ToolCalls` / `Length` / `Error`. Terminates the current provider call. |
 
@@ -91,13 +92,83 @@ The agent transforms these into `AgentEvent`s for the SSE wire:
 | Type | When |
 | --- | --- |
 | `AgentTextDelta(Delta)` | Every text delta forwarded as-is. |
+| `AgentReasoningDelta(Delta)` | Every reasoning delta forwarded as-is. Surfaces in the UI as a collapsible "thinking" panel. |
 | `AgentToolCall(MessageId, ToolCallId, Name, ArgsJson)` | After persisting the assistant's tool-call message. |
 | `AgentToolResult(MessageId, ToolCallId, Content)` | After tool execution + persistence. |
-| `AgentAssistantMessage(MessageId, Content)` | Final assistant text — carries raw model output (see Save-vs-stream below). |
+| `AgentAssistantMessage(MessageId, Content, ReasoningContent?)` | Final assistant text — carries raw model output (see Save-vs-stream below) plus the accumulated reasoning so reloads stay consistent with the live view. |
 | `AgentError(Message)` | In-stream failure. |
 | `AgentDone()` | Terminal — loop exited. |
 
-Polymorphic JSON: every `AgentEvent` serializes with a `type` discriminator (`"textDelta"`, `"toolCall"`, etc.) via `[JsonPolymorphic]`. The webapp's `streamChat.ts` switches on that string.
+Polymorphic JSON: every `AgentEvent` serializes with a `type` discriminator (`"textDelta"`, `"reasoningDelta"`, `"toolCall"`, etc.) via `[JsonPolymorphic]`. The webapp's `streamChat.ts` switches on that string.
+
+## Reasoning channels — native CoT + external ReAct
+
+Gabriel deliberately runs **two independent reasoning channels** per iteration; both can fire on a single turn:
+
+1. **Provider-native chain-of-thought** — `reasoning_content` from reasoning-capable models. Streamed as `ReasoningDeltaEvent`, accumulated in a `reasoningBuffer`, emitted to the client as `AgentReasoningDelta`, and persisted on `Message.ReasoningContent` (a column distinct from `Message.Content`). The model's own private CoT — useful for transparency and a UI "thinking" indicator, but **not the answer**.
+
+2. **External ReAct reasoning** — the model's regular text content emitted **alongside** a tool-call iteration. OpenAI / xAI permit an assistant message to carry both `content` and `tool_calls`; that leading text is the "Thought" in Thought → Action → Observation. It's persisted on `Message.Content` of an assistant-with-tool-calls message and rendered as a separate `thought` ChatEntry in the webapp.
+
+```mermaid
+flowchart LR
+    P[Provider stream] --> R{event type}
+    R -- reasoning_content --> RC[ReasoningDeltaEvent]
+    R -- content --> TC[TextDeltaEvent]
+    R -- tool_calls --> TL[ToolCallReadyEvent]
+    RC --> RB[reasoningBuffer]
+    TC --> TB[textBuffer]
+    RB --> M1[Message.ReasoningContent]
+    TB --> M2[Message.Content<br/>+ optional ToolCallsJson]
+    M1 --> UI1[UI: reasoning panel<br/>thinking badge]
+    M2 -- with tool_calls --> UI2[UI: thought panel<br/>thought badge]
+    M2 -- without tool_calls --> UI3[UI: assistant bubble]
+```
+
+### Why both
+
+Native CoT gives us free transparency when the provider supports it — no prompt engineering required. But:
+
+- Not every model exposes a reasoning channel.
+- Native CoT is generally **ephemeral**: the model doesn't re-read its own prior `reasoning_content` on subsequent turns; only the visible `content` flows back into the next iteration's history.
+
+External ReAct reasoning (the model writing "I should call `web_search` because the user is asking about a current event…" before the actual tool call) is in `Message.Content`, which **is** re-fed to the provider on the next iteration. That gives the loop a stable trail of decisions to refer back to, regardless of whether native CoT is available.
+
+Combining the two: when both fire, you get a private, fine-grained CoT *and* a publicly-visible decision trail. When only ReAct fires (non-reasoning model), you still get the decision trail. When only CoT fires (rare — usually a one-shot answer with no tool calls), the user still sees the thinking panel.
+
+### Implications for new providers
+
+When implementing a new `IChatProvider`:
+
+- Parse the reasoning-channel field if the API exposes one (`reasoning_content`, `thinking_blocks`, etc.) and emit `ReasoningDeltaEvent` for each chunk.
+- The regular text-content channel emits `TextDeltaEvent` as always. The ReAct side is automatically handled by the loop — no provider-level work needed.
+- Never collapse the two into a single channel. The data model and the UI treat them as separate entities by design.
+
+## Observability
+
+Every turn emits Info-level structured logs via Serilog (configured in `Gabriel.API/appsettings.json`, sinks to Console + rolling daily file under `logs/`). The intent is that an operator can read the file and reconstruct any turn end-to-end without enabling Debug.
+
+`AgentService` logs at these points:
+
+| Event | Level | Fields |
+| --- | --- | --- |
+| Turn start (`RunAsync`) | Info | conv, project, userId, inputChars, messageCount |
+| Regenerate start | Info | conv, project, userId, targetMsg |
+| Per-iteration tool-call summary | Info | iter, toolCount, conv, reasoningChars |
+| **Tool call START** | Info | conv, tool, callId, args (preview to 240 chars) |
+| **Tool call OK** | Info | conv, tool, callId, elapsedMs, resultLen, resultPreview |
+| **Tool call SOFT-ERROR** (tool returned `"Error: …"` without throwing) | Warning | conv, tool, callId, elapsedMs, resultLen, result |
+| **Tool call THREW** (unhandled exception) | Error | conv, tool, callId, elapsedMs, + exception |
+| Unknown-tool rejection | Warning | conv, tool, callId, args |
+| Turn complete | Info | conv, iters, rawChars, cleanChars, reasoningChars |
+| Provider Stop with empty text | Warning | iter, conv |
+| Unexpected finish reason | Warning | iter, finish, conv |
+| MaxIterations hit | Warning | max, conv |
+| Compact summary failure / empty | Warning | exception (if any) |
+| Compact applied | Info | conv, cut count, current tokens, threshold |
+
+Result and arguments are flattened to a single line and truncated to 240 characters (`AgentService.LogPreviewLimit`) so big payloads — a fetched web page, a 12k-char file read — don't bloat the file.
+
+`Microsoft.*` and `System.*` namespaces are pinned to Warning (`Microsoft.Hosting.Lifetime` excepted) in `appsettings.json` so framework noise stays out. `Gabriel.*` runs at Information in production, Debug in `appsettings.Development.json`. `UseSerilogRequestLogging` adds one HTTP line per request: `HTTP {Method} {Path} → {Status} in {Elapsed} ms`.
 
 ## Save-vs-stream semantics
 
@@ -210,7 +281,7 @@ The `8` constant accounts for role markers and JSON separators that surround the
 
 ## What this loop deliberately does NOT do
 
-- **Stream the provider's reasoning tokens**: only text deltas and tool calls. Models with separate "thinking" streams (some xAI / Anthropic variants) would need additional event types.
 - **Parallel tool execution**: tool calls within an iteration run serially. The provider can emit multiple tool calls per iteration, but we execute them one at a time. Parallelism would be straightforward but isn't worth the complexity until the tool list contains slow IO-bound calls.
 - **Streaming-aware compact**: compact fires only between turns. Inside an iteration, even if the history grows past the threshold, we don't interrupt — the model will get its full response or hit the iteration cap.
 - **Per-turn cost tracking**: no accounting. Each turn calls the provider 1 to `MaxIterations` times; we don't tally tokens or expose usage.
+- **Re-feed native CoT on subsequent iterations**: `Message.ReasoningContent` is persisted for transparency but is not added to `ToProviderHistory`. Only `Message.Content` (the visible text channel, which contains any ReAct "Thought" prelude) is re-fed. Mirrors the providers' own behavior — they treat their `reasoning_content` as ephemeral by design.

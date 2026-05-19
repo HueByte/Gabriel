@@ -21,11 +21,12 @@ public class ConversationRepository : IConversationRepository
             .Include(c => c.Messages.OrderBy(m => m.CreatedAt))
             .FirstOrDefaultAsync(c => c.Id == id && c.UserId == userId, ct);
 
-    public async Task<IReadOnlyList<Conversation>> ListAsync(Guid userId, CancellationToken ct = default)
-        => await _ctx.Conversations
-            .Where(c => c.UserId == userId)
-            .OrderByDescending(c => c.UpdatedAt)
-            .ToListAsync(ct);
+    public async Task<IReadOnlyList<Conversation>> ListAsync(Guid userId, Guid? projectId, CancellationToken ct = default)
+    {
+        var q = _ctx.Conversations.Where(c => c.UserId == userId);
+        if (projectId is { } pid) q = q.Where(c => c.ProjectId == pid);
+        return await q.OrderByDescending(c => c.UpdatedAt).ToListAsync(ct);
+    }
 
     public async Task AddAsync(Conversation conversation, CancellationToken ct = default)
         => await _ctx.Conversations.AddAsync(conversation, ct);

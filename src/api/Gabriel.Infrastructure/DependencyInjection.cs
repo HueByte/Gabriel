@@ -1,9 +1,11 @@
 using Gabriel.Core.Repositories;
+using Gabriel.Core.Services;
 using Gabriel.Engine.Providers;
 using Gabriel.Engine.Tools.Docs;
 using Gabriel.Engine.Tools.Web;
 using Gabriel.Infrastructure.Persistence;
 using Gabriel.Infrastructure.Persistence.Repositories;
+using Gabriel.Infrastructure.Projects;
 using Gabriel.Infrastructure.Providers;
 using Gabriel.Infrastructure.Tools.Docs;
 using Gabriel.Infrastructure.Tools.Web;
@@ -26,6 +28,12 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IConversationRepository, ConversationRepository>();
+        services.AddScoped<IProjectRepository, ProjectRepository>();
+
+        // Project file storage (Phase 8). Options bound from Projects:Files,
+        // disk-backed implementation persists under {Root}/{ProjectId:N}.
+        services.Configure<ProjectFilesOptions>(config.GetSection(ProjectFilesOptions.SectionName));
+        services.AddScoped<IProjectFileService, DiskProjectFileService>();
 
         AddChatProvider(services, config);
         AddWebSearch(services, config);

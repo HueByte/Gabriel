@@ -14,9 +14,10 @@ import { refreshSession, signalSessionExpired } from './authRefresh';
 
 export type AgentEvent =
   | { type: 'textDelta'; delta: string }
+  | { type: 'reasoningDelta'; delta: string }
   | { type: 'toolCall'; messageId: string; toolCallId: string; name: string; argumentsJson: string }
   | { type: 'toolResult'; messageId: string; toolCallId: string; content: string }
-  | { type: 'assistantMessage'; messageId: string; content: string }
+  | { type: 'assistantMessage'; messageId: string; content: string; reasoningContent?: string | null }
   | { type: 'error'; message: string }
   | { type: 'done' };
 

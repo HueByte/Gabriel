@@ -178,6 +178,63 @@ button {
   background: var(--accent-dim);
 }
 
+/* Project picker — sits between the sidebar head and the New-chat button. */
+.project-picker {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.project-picker-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.project-picker-label svg { width: 14px; height: 14px; }
+.project-picker-select {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  padding: 0.15rem 0.25rem;
+  cursor: pointer;
+  outline: none;
+  /* Allow long project names to truncate rather than blow the grid out. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-picker-select:disabled {
+  color: var(--text-dim);
+  cursor: progress;
+}
+.project-picker-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.project-picker-new:hover {
+  color: var(--text);
+  background: var(--accent-dim);
+}
+.project-picker-new svg { width: 14px; height: 14px; }
+
 .new-chat {
   display: flex;
   align-items: center;
@@ -301,13 +358,17 @@ button {
   min-width: 0;
 }
 
-.conv-actions {
+/* Per-row 3-dot menu trigger. Hidden by default; revealed on row hover or
+   while its menu is open (so it doesn't visually pop out from under the
+   cursor when the menu opens and the mouse drifts off the row). */
+.conv-menu-wrap {
   display: none;
-  gap: 2px;
+  position: relative;
   padding-right: 0.35rem;
   flex: 0 0 auto;
 }
-.conv-row:hover .conv-actions {
+.conv-row:hover .conv-menu-wrap,
+.conv-row.menu-open .conv-menu-wrap {
   display: flex;
 }
 
@@ -331,6 +392,61 @@ button {
 .conv-action:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
+}
+.conv-row.menu-open .conv-action {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Floating menu — position: fixed (coordinates set inline from the trigger's
+   bounding rect) so it escapes .sidebar-body's overflow clipping. Without
+   this, menus on the last few rows of long conversation lists get cut off. */
+.conv-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 168px;
+  background: rgba(22, 22, 24, 0.98);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: fade-in 0.12s ease-out;
+}
+
+.conv-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.83rem;
+  letter-spacing: -0.005em;
+  transition: color 0.12s, background 0.12s;
+}
+.conv-menu-item svg {
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+.conv-menu-item:hover {
+  color: var(--text);
+  background: var(--accent-dim);
+}
+.conv-menu-item.danger {
+  color: #d68b8b;
+}
+.conv-menu-item.danger:hover {
+  background: rgba(255, 80, 80, 0.1);
+  color: #ffb4b4;
 }
 
 /* ---------- Main column ---------- */
@@ -648,8 +764,19 @@ button {
   }
 }
 
-.tool-call,
-.tool-result {
+/* ---------- ReAct step grouping (thought / action / observation) ----------
+   Each step entry carries `.react-step` so a soft left rule visually ties
+   consecutive Thought→Action→Observation lines together as one reasoning
+   unit. The line breaks naturally across the .messages-content gap when a
+   user/assistant text bubble interrupts — so steps from the SAME iteration
+   read as a group, and the final answer stands apart. */
+.react-step {
+  border-left: 2px solid color-mix(in srgb, var(--palette-accent, var(--accent)) 28%, var(--border));
+  padding-left: 10px;
+}
+
+/* Action — single-line "tool(args)" — same visual footprint as before. */
+.tool-call {
   align-self: flex-start;
   display: flex;
   align-items: center;
@@ -670,17 +797,84 @@ button {
   color: var(--text);
 }
 
-.tool-result pre {
-  margin: 0;
+/* Tool result — collapsed by default, click to expand. Uses native <details>
+   so it's keyboard / a11y friendly out of the box. */
+.tool-result {
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  padding: 4px 0;
+}
+
+.tool-result > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+  border-radius: 6px;
+  user-select: none;
+}
+/* Hide default disclosure triangle across engines. */
+.tool-result > summary::-webkit-details-marker { display: none; }
+.tool-result > summary::marker { content: ''; }
+
+/* Custom caret — rotates 90° when the details is open. */
+.tool-result > summary::before {
+  content: '▸';
+  color: var(--text-faint);
+  font-size: 10px;
+  width: 10px;
+  flex: 0 0 auto;
+  transition: transform 120ms ease;
+}
+.tool-result[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.tool-result-preview {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.tool-result-lines {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex: 0 0 auto;
+  letter-spacing: 0.02em;
+}
+
+/* Expanded content — cap at ~30 lines (`lh` unit = one line-height each) and
+   scroll internally so a giant tool dump doesn't push the rest of the chat
+   off-screen. */
+.tool-result > pre {
+  margin: 6px 0 0 18px; /* indent under the caret + badge */
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 6px 10px;
   white-space: pre-wrap;
   word-break: break-word;
+  max-height: 30lh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.tool-result > pre::-webkit-scrollbar { width: 6px; }
+.tool-result > pre::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
 }
 
 .tool-badge {
@@ -698,6 +892,107 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   flex: 0 0 auto;
+}
+
+/* ReAct step badge variants. Each step type gets a distinct tint so the
+   Thought → Action → Observation rhythm is scannable. All three resolve from
+   the active palette so they stay coherent with the avatar's colors. */
+.thought-badge {
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 12%, transparent);
+  color: var(--text-dim);
+}
+.action-badge {
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 22%, transparent);
+  color: var(--palette-accent, var(--accent));
+}
+.observation-badge {
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 16%, transparent);
+  color: color-mix(in srgb, var(--palette-accent, var(--accent)) 80%, var(--text));
+}
+/* Reasoning — the dedicated reasoning_content stream channel. Visually
+   similar to .thought-badge but a hair more saturated so the user can tell
+   "real" chain-of-thought from pre-tool reasoning at a glance. */
+.reasoning-badge {
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 14%, transparent);
+  color: color-mix(in srgb, var(--palette-accent, var(--accent)) 70%, var(--text-dim));
+}
+
+/* Thought + Reasoning share identical disclosure visuals — both are
+   collapsed prose blocks. `.reasoning` matches `.thought` exactly so the two
+   sit next to each other coherently when a turn produces both. */
+.thought,
+.reasoning {
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  padding: 4px 0;
+}
+.thought > summary,
+.reasoning > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+  border-radius: 6px;
+  user-select: none;
+}
+.thought > summary::-webkit-details-marker,
+.reasoning > summary::-webkit-details-marker { display: none; }
+.thought > summary::marker,
+.reasoning > summary::marker { content: ''; }
+.thought > summary::before,
+.reasoning > summary::before {
+  content: '▸';
+  color: var(--text-faint);
+  font-size: 10px;
+  width: 10px;
+  flex: 0 0 auto;
+  transition: transform 120ms ease;
+}
+.thought[open] > summary::before,
+.reasoning[open] > summary::before {
+  transform: rotate(90deg);
+}
+.thought-preview {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.thought-lines {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex: 0 0 auto;
+  letter-spacing: 0.02em;
+}
+.thought-body {
+  margin: 6px 0 0 18px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--palette-accent, var(--accent)) 5%, var(--surface));
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-style: italic;
+  max-height: 30lh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.thought-body::-webkit-scrollbar { width: 6px; }
+.thought-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
 }
 
 /* ---------- Galactic typewriter ---------- */
@@ -1141,6 +1436,139 @@ button {
 }
 .md-hex-text {
   letter-spacing: 0.01em;
+}
+
+/* ---------- Diagnostics page (8×8 frame grid) ---------- */
+
+.diagnostics {
+  width: 100%;
+  max-width: 920px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 8px 24px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  animation: fade-in-up 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.diagnostics::-webkit-scrollbar {
+  width: 8px;
+}
+.diagnostics::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.diagnostics-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.diagnostics-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.diagnostics-back svg {
+  font-size: 14px;
+}
+.diagnostics-back:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: var(--accent-dim);
+}
+
+.diagnostics-title {
+  margin: 0;
+  flex: 1 1 auto;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.diagnostics-meta {
+  display: flex;
+  gap: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.diagnostics-loading {
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+  padding: 48px 0;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 10px;
+}
+
+.diagnostics-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.diagnostics-frame:hover {
+  border-color: color-mix(in srgb, var(--palette-accent, var(--accent)) 60%, var(--border));
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+.diagnostics-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #000;
+  border-radius: 3px;
+}
+
+.diagnostics-frame-label {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 720px) {
+  .diagnostics-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+@media (max-width: 420px) {
+  .diagnostics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* ---------- Thinking pulse (post-submit, pre-stream) ---------- */

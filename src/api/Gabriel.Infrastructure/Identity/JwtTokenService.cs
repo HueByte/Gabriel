@@ -13,6 +13,12 @@ namespace Gabriel.Infrastructure.Identity;
 
 public class JwtTokenService : IJwtTokenService
 {
+    // How long after a refresh token is rotated we still tolerate reuse of the
+    // old token without firing theft detection. Absorbs multi-tab races and
+    // in-flight requests. Long enough to swallow normal browser-scale timing,
+    // short enough that a leaked token replayed by an attacker still trips.
+    private static readonly TimeSpan RotationGracePeriod = TimeSpan.FromSeconds(60);
+
     private readonly JwtOptions _options;
     private readonly IRefreshTokenStore _refreshStore;
     private readonly IUnitOfWork _uow;
@@ -56,15 +62,35 @@ public class JwtTokenService : IJwtTokenService
 
         if (existing.IsRevoked)
         {
-            // Reuse of a token that was already rotated — strong theft signal.
-            // Burn the world for this user; they re-authenticate.
+            // Reuse of a token that was already rotated — STRONG theft signal,
+            // but only when the reuse happens well AFTER the rotation. Several
+            // legitimate races look identical at the server:
+            //   - Multiple tabs racing on /refresh with the same cookie value
+            //   - In-flight requests during refresh briefly carrying the old cookie
+            //   - Browser-internal retries / redirects
+            // A grace window after rotation absorbs these: if the OLD token
+            // appears within RotationGracePeriod, we still reject this specific
+            // reuse (return 401) but we DON'T burn the whole session. Real
+            // theft — a leaked token replayed minutes later — still trips the
+            // alarm.
             if (existing.ReplacedByTokenId is not null)
             {
-                _logger.LogWarning(
-                    "Refresh-token reuse detected for user {UserId} (token {TokenId} was replaced by {Replacement}); revoking all sessions.",
-                    existing.UserId, existing.Id, existing.ReplacedByTokenId);
-                await _refreshStore.RevokeAllForUserAsync(existing.UserId, ct);
-                await _uow.SaveChangesAsync(ct);
+                var revokedAt = existing.RevokedAt ?? DateTimeOffset.UtcNow;
+                var sinceRevoke = DateTimeOffset.UtcNow - revokedAt;
+                if (sinceRevoke > RotationGracePeriod)
+                {
+                    _logger.LogWarning(
+                        "Refresh-token reuse detected for user {UserId} (token {TokenId} replaced by {Replacement}, {Seconds}s after rotation); revoking all sessions.",
+                        existing.UserId, existing.Id, existing.ReplacedByTokenId, (int)sinceRevoke.TotalSeconds);
+                    await _refreshStore.RevokeAllForUserAsync(existing.UserId, ct);
+                    await _uow.SaveChangesAsync(ct);
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "Refresh-token reuse within grace window ({Seconds}s) for user {UserId} — rejecting this attempt but keeping other sessions alive.",
+                        (int)sinceRevoke.TotalSeconds, existing.UserId);
+                }
             }
             throw new UnauthorizedAccessException("Refresh token has been revoked.");
         }

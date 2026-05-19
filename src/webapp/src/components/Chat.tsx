@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { HiOutlineArrowUp } from 'react-icons/hi2';
 import {
+  ApiError,
   ConversationsService,
   type ConversationResponse,
   type MessageResponse,
@@ -13,10 +14,25 @@ import { StreamingText } from './StreamingText';
 import { ThinkingPulse } from './ThinkingPulse';
 
 // Chat entries are heterogeneous — text bubbles (user/assistant), individual
-// tool calls, and tool results — so we model them as a discriminated union
-// instead of trying to cram everything into a single message shape.
+// tool calls, tool results, and the model's "thoughts" (reasoning text that
+// preceded a tool call) — so we model them as a discriminated union instead
+// of trying to cram everything into a single message shape.
+//
+// The ReAct flow visualizes as:
+//   User Query ➔ [ Thought ➔ Action(toolCall) ➔ Observation(toolResult) ]* ➔ Final Answer
+//
+// Detecting a thought is purely structural: assistant content that lives on a
+// Message which ALSO carries tool calls is — by construction of the backend
+// loop — the reasoning text the model emitted before requesting the tool.
 type ChatEntry =
   | { kind: 'text'; id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean }
+  | { kind: 'thought'; id: string; content: string; streaming?: boolean }
+  // `reasoning` carries the dedicated reasoning_content stream (Grok 4,
+  // DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking). Rendered the
+  // same way as a `thought` — collapsed by default — but kept distinct because
+  // a single turn can produce both: pre-tool reasoning text *and* a separate
+  // chain-of-thought stream.
+  | { kind: 'reasoning'; id: string; content: string; streaming?: boolean }
   | { kind: 'toolCall'; id: string; toolCallId: string; name: string; argumentsJson: string }
   | { kind: 'toolResult'; id: string; toolCallId: string; content: string };
 
@@ -26,7 +42,23 @@ function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
     if (m.role === 'user') {
       if (m.content) entries.push({ kind: 'text', id: m.id, role: 'user', content: m.content });
     } else if (m.role === 'assistant') {
-      if (m.content) entries.push({ kind: 'text', id: m.id, role: 'assistant', content: m.content });
+      // Reasoning stream (reasoning_content) renders first if the provider
+      // captured one for this turn — it precedes both the model's regular
+      // content and any tool calls.
+      if (m.reasoningContent) {
+        entries.push({ kind: 'reasoning', id: `${m.id}-reasoning`, content: m.reasoningContent });
+      }
+      // Assistant content + tool calls on the same message ⇒ that content is
+      // the model's reasoning ("Thought"). Without tool calls, it's the final
+      // answer (or an intermediate text-only iteration).
+      const hasToolCalls = !!m.toolCalls && m.toolCalls.length > 0;
+      if (m.content) {
+        if (hasToolCalls) {
+          entries.push({ kind: 'thought', id: m.id, content: m.content });
+        } else {
+          entries.push({ kind: 'text', id: m.id, role: 'assistant', content: m.content });
+        }
+      }
       if (m.toolCalls) {
         for (const tc of m.toolCalls) {
           entries.push(toolCallEntry(m.id, tc));
@@ -66,6 +98,10 @@ interface ChatProps {
   // loaded — lets the parent pick up things like the avatar seed without doing
   // its own duplicate fetch.
   onConversationLoaded?: (conv: ConversationResponse) => void;
+  // Fired when the initial history fetch returns 404 — the conversation was
+  // deleted out from under us (e.g. on another tab). The parent typically
+  // navigates away from this stale URL.
+  onConversationMissing?: () => void;
 }
 
 // Composer cap (~5 lines at 14.5px / 1.5 line-height + padding). Beyond this
@@ -78,7 +114,7 @@ const MAX_COMPOSER_HEIGHT = 140;
 // slop above the true bottom.
 const PIN_SLOP_PX = 80;
 
-export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, onBusyChange, onConversationLoaded }: ChatProps) {
+export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, onBusyChange, onConversationLoaded, onConversationMissing }: ChatProps) {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -105,7 +141,14 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
         onConversationLoaded?.(conv);
       })
       .catch((e: unknown) => {
-        if (!cancelled) notifyError(e);
+        if (cancelled) return;
+        // 404 = the conversation no longer exists. Let the parent decide
+        // what to do (typically: clear the stored id and redirect).
+        if (e instanceof ApiError && e.status === 404) {
+          onConversationMissing?.();
+          return;
+        }
+        notifyError(e);
       });
     return () => {
       cancelled = true;
@@ -275,6 +318,15 @@ function hasActiveAssistantStream(entries: ChatEntry[]): boolean {
   return !!(last && last.kind === 'text' && last.role === 'assistant' && last.streaming);
 }
 
+// Array.prototype.findLastIndex exists but lacks the type narrowing we want;
+// a tiny helper keeps the stream handlers tidy without leaking `any`.
+function lastIndexWhere<T>(arr: readonly T[], pred: (e: T) => boolean): number {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (pred(arr[i])) return i;
+  }
+  return -1;
+}
+
 function renderEntry(e: ChatEntry) {
   switch (e.kind) {
     case 'text': {
@@ -297,19 +349,86 @@ function renderEntry(e: ChatEntry) {
     }
     case 'toolCall':
       return (
-        <div key={e.id} className="tool-call">
-          <span className="tool-badge">tool</span>
+        <div key={e.id} className="react-step tool-call">
+          <span className="tool-badge action-badge">action</span>
           <code>{e.name}({prettyArgs(e.argumentsJson)})</code>
         </div>
       );
     case 'toolResult':
-      return (
-        <div key={e.id} className="tool-result">
-          <span className="tool-badge">→</span>
-          <pre>{e.content}</pre>
-        </div>
-      );
+      return <ToolResult key={e.id} content={e.content} />;
+    case 'thought':
+      return <Thought key={e.id} content={e.content} />;
+    case 'reasoning':
+      return <Reasoning key={e.id} content={e.content} streaming={e.streaming} />;
   }
+}
+
+// Dedicated reasoning-stream panel. Distinct badge ("thinking") so the user
+// can tell a true chain-of-thought stream from `thought` (pre-tool reasoning
+// text emitted on the regular content channel). Same collapsed disclosure
+// pattern so long monologues don't dominate the chat.
+function Reasoning({ content, streaming }: { content: string; streaming?: boolean }) {
+  const lines = content.length > 0 ? content.split('\n') : [''];
+  const firstLine = lines[0];
+  const extraLines = lines.length - 1;
+  const preview = firstLine.length > 0 ? firstLine : (streaming ? '(thinking…)' : '(no reasoning)');
+  return (
+    <details className="react-step reasoning" open={streaming}>
+      <summary>
+        <span className="tool-badge reasoning-badge">thinking</span>
+        <span className="thought-preview">{preview}</span>
+        {extraLines > 0 && (
+          <span className="thought-lines">+{extraLines} {extraLines === 1 ? 'line' : 'lines'}</span>
+        )}
+      </summary>
+      <div className="thought-body">{content}</div>
+    </details>
+  );
+}
+
+// Reasoning text the model emitted before requesting a tool. Same disclosure
+// pattern as ToolResult — collapsed by default so the chat doesn't fill up
+// with chain-of-thought monologues, expandable when the user wants to peek.
+function Thought({ content }: { content: string }) {
+  const lines = content.length > 0 ? content.split('\n') : [''];
+  const firstLine = lines[0];
+  const extraLines = lines.length - 1;
+  const preview = firstLine.length > 0 ? firstLine : '(thinking…)';
+  return (
+    <details className="react-step thought">
+      <summary>
+        <span className="tool-badge thought-badge">thought</span>
+        <span className="thought-preview">{preview}</span>
+        {extraLines > 0 && (
+          <span className="thought-lines">+{extraLines} {extraLines === 1 ? 'line' : 'lines'}</span>
+        )}
+      </summary>
+      <div className="thought-body">{content}</div>
+    </details>
+  );
+}
+
+// Tool outputs can be huge (file listings, search results). Render collapsed
+// by default with a one-line preview + line-count hint; expand reveals the
+// full content capped at 30 lines with internal scroll (styles.css). Uses
+// the native <details>/<summary> pattern for accessibility + zero JS state.
+function ToolResult({ content }: { content: string }) {
+  const lines = content.length > 0 ? content.split('\n') : [''];
+  const firstLine = lines[0];
+  const extraLines = lines.length - 1;
+  const preview = firstLine.length > 0 ? firstLine : '(empty result)';
+  return (
+    <details className="react-step tool-result">
+      <summary>
+        <span className="tool-badge observation-badge">observation</span>
+        <span className="tool-result-preview">{preview}</span>
+        {extraLines > 0 && (
+          <span className="tool-result-lines">+{extraLines} {extraLines === 1 ? 'line' : 'lines'}</span>
+        )}
+      </summary>
+      <pre>{content}</pre>
+    </details>
+  );
 }
 
 function prettyArgs(json: string): string {
@@ -349,22 +468,65 @@ function applyAgentEvent(
       });
       break;
 
+    case 'reasoningDelta':
+      // Reasoning tokens arrive interleaved with (or strictly before) regular
+      // content tokens. Keep a single streaming `reasoning` entry per turn —
+      // it sits ahead of the streaming text bubble so the UI reads top-down:
+      // thinking → answer.
+      setEntries(prev => {
+        // Find the most recent streaming reasoning entry; reasoning arrives
+        // before content, so it'll typically be at the tail. If we already
+        // started a streaming text bubble, the reasoning still wraps around it.
+        const idx = lastIndexWhere(prev, e => e.kind === 'reasoning' && !!e.streaming);
+        if (idx >= 0) {
+          const existing = prev[idx] as Extract<ChatEntry, { kind: 'reasoning' }>;
+          const updated: ChatEntry = { ...existing, content: existing.content + evt.delta };
+          return [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
+        }
+        return [
+          ...prev,
+          {
+            kind: 'reasoning',
+            id: `streaming-reasoning-${crypto.randomUUID()}`,
+            content: evt.delta,
+            streaming: true,
+          },
+        ];
+      });
+      break;
+
     case 'toolCall':
       setEntries(prev => {
-        // Finalize the current streaming bubble (the iteration that asked for tools).
-        // Keep its id stable so the StreamingText component instance survives
-        // the streaming → !streaming transition and can finish typing.
-        const finalized = prev.map((e, i) => {
-          if (i === prev.length - 1 && e.kind === 'text' && e.role === 'assistant' && e.streaming) {
-            return { ...e, streaming: false };
-          }
-          return e;
-        });
-        return [...finalized, toolCallEntry(evt.messageId, {
-          id: evt.toolCallId,
-          name: evt.name,
-          argumentsJson: evt.argumentsJson,
-        })];
+        // Freeze any in-flight streaming reasoning — the model is moving on
+        // from thinking to executing tools, so the reasoning panel should
+        // collapse to its done state.
+        const frozenReasoning = prev.map<ChatEntry>(e =>
+          e.kind === 'reasoning' && e.streaming ? { ...e, streaming: false } : e,
+        );
+        // The trailing streaming assistant bubble is the model's reasoning that
+        // preceded this tool call — reclassify it as a `thought` so the UI
+        // renders it as a collapsed ReAct step alongside the action/observation.
+        // Empty buffers are dropped (some providers emit no reasoning before
+        // calling a tool). Keep its id stable so any in-flight StreamingText
+        // doesn't remount.
+        const last = frozenReasoning[frozenReasoning.length - 1];
+        const head = (last && last.kind === 'text' && last.role === 'assistant' && last.streaming)
+          ? frozenReasoning.slice(0, -1)
+          : frozenReasoning;
+        const thoughtFromStreaming: ChatEntry[] = (last && last.kind === 'text' && last.role === 'assistant' && last.streaming)
+          ? (last.content.trim().length > 0
+              ? [{ kind: 'thought', id: last.id, content: last.content }]
+              : [])
+          : [];
+        return [
+          ...head,
+          ...thoughtFromStreaming,
+          toolCallEntry(evt.messageId, {
+            id: evt.toolCallId,
+            name: evt.name,
+            argumentsJson: evt.argumentsJson,
+          }),
+        ];
       });
       break;
 
@@ -377,16 +539,39 @@ function applyAgentEvent(
 
     case 'assistantMessage':
       setEntries(prev => {
-        const last = prev[prev.length - 1];
+        // First: reconcile any streaming reasoning entry against the canonical
+        // reasoningContent the server persisted. If we never streamed one but
+        // the server has reasoning (e.g. provider buffered all reasoning before
+        // text), inject it now so reloads-vs-live-view stay consistent.
+        let next = prev.map<ChatEntry>(e =>
+          e.kind === 'reasoning' && e.streaming
+            ? { ...e, streaming: false, content: evt.reasoningContent ?? e.content }
+            : e,
+        );
+        const hasStreamedReasoning = next.some(e => e.kind === 'reasoning');
+        if (!hasStreamedReasoning && evt.reasoningContent) {
+          // Insert before the final assistant text bubble (if any), else append.
+          const tail = next[next.length - 1];
+          const insertEntry: ChatEntry = {
+            kind: 'reasoning',
+            id: `${evt.messageId}-reasoning`,
+            content: evt.reasoningContent,
+          };
+          next = tail?.kind === 'text' && tail.role === 'assistant'
+            ? [...next.slice(0, -1), insertEntry, tail]
+            : [...next, insertEntry];
+        }
+
+        const last = next[next.length - 1];
         if (last?.kind === 'text' && last.role === 'assistant' && last.streaming) {
           // Keep id stable so the in-flight StreamingText keeps typing.
           return [
-            ...prev.slice(0, -1),
+            ...next.slice(0, -1),
             { ...last, content: evt.content, streaming: false },
           ];
         }
         return [
-          ...prev,
+          ...next,
           { kind: 'text', id: evt.messageId, role: 'assistant', content: evt.content },
         ];
       });
@@ -400,9 +585,11 @@ function applyAgentEvent(
 
     case 'done':
       // Loop finished — just make sure no entry is still marked streaming.
-      setEntries(prev => prev.map(e =>
-        e.kind === 'text' && e.streaming ? { ...e, streaming: false } : e,
-      ));
+      setEntries(prev => prev.map(e => {
+        if (e.kind === 'text' && e.streaming) return { ...e, streaming: false };
+        if (e.kind === 'reasoning' && e.streaming) return { ...e, streaming: false };
+        return e;
+      }));
       break;
   }
 }

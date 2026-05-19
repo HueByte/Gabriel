@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { useAuth } from './AuthContext';
-import { useRoute } from './useRoute';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
 
-export function LoginPage() {
-  const { login } = useAuth();
-  const { navigate } = useRoute();
+export function RegisterPage() {
+  const { register } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -16,10 +16,10 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await login(email, password);
-      // AuthContext.user becomes set → AuthGate swaps to the app.
+      await register(email, password);
+      navigate('/', { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Login failed.');
+      setError(e instanceof Error ? e.message : 'Registration failed.');
     } finally {
       setBusy(false);
     }
@@ -28,7 +28,7 @@ export function LoginPage() {
   return (
     <div className="auth-screen">
       <form className="auth-card" onSubmit={onSubmit}>
-        <h1 className="auth-title">Sign in</h1>
+        <h1 className="auth-title">Create account</h1>
         <label className="auth-field">
           <span>Email</span>
           <input
@@ -44,21 +44,22 @@ export function LoginPage() {
           <span>Password</span>
           <input
             type="password"
-            autoComplete="current-password"
+            autoComplete="new-password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             disabled={busy}
             required
+            minLength={6}
           />
         </label>
         {error && <div className="auth-error">{error}</div>}
         <button type="submit" className="auth-submit" disabled={busy || !email || !password}>
-          {busy ? 'Signing in…' : 'Sign in'}
+          {busy ? 'Creating…' : 'Create account'}
         </button>
         <div className="auth-switch">
-          No account?{' '}
-          <button type="button" className="auth-link" onClick={() => navigate('/register')}>
-            Create one
+          Already have an account?{' '}
+          <button type="button" className="auth-link" onClick={() => navigate('/login')}>
+            Sign in
           </button>
         </div>
       </form>

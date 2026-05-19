@@ -90,6 +90,11 @@ public class GrokChatProvider : IChatProvider
             var choice = chunk?.Choices?.FirstOrDefault();
             if (choice is null) continue;
 
+            if (!string.IsNullOrEmpty(choice.Delta?.ReasoningContent))
+            {
+                yield return new ReasoningDeltaEvent(choice.Delta.ReasoningContent);
+            }
+
             if (!string.IsNullOrEmpty(choice.Delta?.Content))
             {
                 yield return new TextDeltaEvent(choice.Delta.Content);
@@ -228,8 +233,13 @@ public class GrokChatProvider : IChatProvider
         [property: JsonPropertyName("delta")] StreamDelta? Delta,
         [property: JsonPropertyName("finish_reason")] string? FinishReason);
 
+    // `reasoning_content` is xAI/Grok 4's parallel stream channel for the
+    // model's chain-of-thought (same shape used by DeepSeek-R1 and others).
+    // Treated separately from `content` so the UI can render a "thinking"
+    // panel without polluting the final assistant message body.
     private sealed record StreamDelta(
         [property: JsonPropertyName("content")] string? Content,
+        [property: JsonPropertyName("reasoning_content")] string? ReasoningContent,
         [property: JsonPropertyName("tool_calls")] List<StreamToolCallDelta>? ToolCalls);
 
     private sealed record StreamToolCallDelta(

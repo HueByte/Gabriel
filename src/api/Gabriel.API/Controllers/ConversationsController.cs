@@ -38,9 +38,13 @@ public class ConversationsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<ConversationResponse>>> List(CancellationToken ct)
+    public async Task<ActionResult<IReadOnlyList<ConversationResponse>>> List(
+        [FromQuery] Guid? projectId,
+        CancellationToken ct)
     {
-        var convs = await _chat.ListConversationsAsync(ct);
+        // projectId is optional: omit it for the "all my conversations" view,
+        // pass it to scope to one project.
+        var convs = await _chat.ListConversationsAsync(projectId, ct);
         return Ok(convs.Select(c => c.ToResponse(includeMessages: false)).ToList());
     }
 
@@ -56,7 +60,7 @@ public class ConversationsController : ControllerBase
         [FromBody] CreateConversationRequest request,
         CancellationToken ct)
     {
-        var conv = await _chat.CreateConversationAsync(request.Title, ct);
+        var conv = await _chat.CreateConversationAsync(request.ProjectId, request.Title, ct);
         return CreatedAtAction(nameof(Get), new { id = conv.Id }, conv.ToResponse(includeMessages: true));
     }
 

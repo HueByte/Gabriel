@@ -8,30 +8,52 @@ namespace Gabriel.Core.Services;
 public class ChatService : IChatService
 {
     private readonly IConversationRepository _conversations;
+    private readonly IProjectService _projects;
+    private readonly IProjectRepository _projectRepo;
     private readonly IUnitOfWork _uow;
     private readonly ICurrentUser _currentUser;
 
     public ChatService(
         IConversationRepository conversations,
+        IProjectService projects,
+        IProjectRepository projectRepo,
         IUnitOfWork uow,
         ICurrentUser currentUser)
     {
         _conversations = conversations;
+        _projects = projects;
+        _projectRepo = projectRepo;
         _uow = uow;
         _currentUser = currentUser;
     }
 
-    public async Task<Conversation> CreateConversationAsync(string? title, CancellationToken ct = default)
+    public async Task<Conversation> CreateConversationAsync(Guid? projectId, string? title, CancellationToken ct = default)
     {
         var userId = RequireUserId();
-        var conversation = Conversation.Create(userId, title);
+
+        // Resolve projectId. If the caller supplied one, verify it's the user's
+        // (so they can't drop a conversation into someone else's project). If
+        // not supplied, drop into the user's Default project (auto-created).
+        Guid resolvedProjectId;
+        if (projectId is { } pid)
+        {
+            var project = await _projectRepo.GetByIdAsync(pid, userId, ct)
+                ?? throw new NotFoundException(nameof(Entities.Project), pid);
+            resolvedProjectId = project.Id;
+        }
+        else
+        {
+            resolvedProjectId = await _projects.EnsureDefaultProjectIdAsync(ct);
+        }
+
+        var conversation = Conversation.Create(userId, resolvedProjectId, title);
         await _conversations.AddAsync(conversation, ct);
         await _uow.SaveChangesAsync(ct);
         return conversation;
     }
 
-    public Task<IReadOnlyList<Conversation>> ListConversationsAsync(CancellationToken ct = default)
-        => _conversations.ListAsync(RequireUserId(), ct);
+    public Task<IReadOnlyList<Conversation>> ListConversationsAsync(Guid? projectId, CancellationToken ct = default)
+        => _conversations.ListAsync(RequireUserId(), projectId, ct);
 
     public async Task<Conversation> GetConversationAsync(Guid id, CancellationToken ct = default)
     {

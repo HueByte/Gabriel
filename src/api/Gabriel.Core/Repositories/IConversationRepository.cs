@@ -9,7 +9,10 @@ public interface IConversationRepository
     // to filter; the repo refuses to return cross-tenant rows.
     Task<Conversation?> GetByIdAsync(Guid id, Guid userId, CancellationToken ct = default);
     Task<Conversation?> GetByIdWithMessagesAsync(Guid id, Guid userId, CancellationToken ct = default);
-    Task<IReadOnlyList<Conversation>> ListAsync(Guid userId, CancellationToken ct = default);
+
+    // List the user's conversations. `projectId == null` means "all projects".
+    // A specific projectId filters to that project.
+    Task<IReadOnlyList<Conversation>> ListAsync(Guid userId, Guid? projectId, CancellationToken ct = default);
 
     // Writes don't take userId — the ownership lives on the entity itself and
     // EF tracks it. Caller is expected to have already loaded the entity through

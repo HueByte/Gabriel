@@ -14,6 +14,17 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    <!--
+      Serilog stack — replaces the default Microsoft.Extensions.Logging providers.
+      `Serilog.AspNetCore` brings the host hookup + request logging middleware;
+      `Serilog.Settings.Configuration` lets us drive everything from appsettings.
+      Console sink ships with Serilog itself; File + Thread enricher are pulled
+      in explicitly so the names in appsettings.Serilog.WriteTo can resolve.
+    -->
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
   </ItemGroup>
 
   <ItemGroup>

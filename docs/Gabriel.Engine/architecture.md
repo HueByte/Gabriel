@@ -39,7 +39,7 @@ The arrow rule is **dependencies point inward**. Core has zero project reference
 | `IChatService` / `ChatService`   | **Core**    | CRUD over conversations. Not LLM-flavored, so it lives with the domain it manipulates. |
 | `IChatProvider`, `ITool`, `IToolRegistry`, `IAgentService`, `ITokenEstimator`, `Personality/*` | **Engine** | Agent / LLM orchestration. The application logic that turns "user said X" into "model said Y, after a few tool calls". |
 | `GrokChatProvider`, `MockChatProvider`, `AppDbContext`, EF configurations, `JwtTokenService`, Identity stores | **Infrastructure** | Concrete implementations: HTTP calls, EF Core, ASP.NET Core Identity, JWT minting. Swappable without touching Engine or Core. |
-| Controllers, middleware, `Program.cs`, OpenAPI gen, exception handling | **API**     | HTTP boundary. Wires everything via DI and serves the SSE / REST surface. |
+| Controllers, middleware, `Program.cs`, OpenAPI gen, exception handling, Serilog host + sinks | **API** | HTTP boundary. Wires everything via DI and serves the SSE / REST surface. Serilog config (Console + rolling daily file, `Microsoft.*`/`System.*` pinned to Warning) lives in `appsettings.json`; the host registers it via `AddSerilog` + `UseSerilogRequestLogging`. |
 
 ## What the rule rejects
 
@@ -56,7 +56,7 @@ Gabriel.Engine/
 │
 ├── Providers/                   — LLM transport contract
 │   ├── IChatProvider.cs                    streaming abstraction
-│   ├── ChatProviderEvent.cs                TextDeltaEvent / ToolCallReadyEvent / FinishEvent
+│   ├── ChatProviderEvent.cs                TextDeltaEvent / ReasoningDeltaEvent / ToolCallReadyEvent / FinishEvent
 │   ├── ChatProviderMessage.cs              wire DTO mirroring OpenAI/xAI message shape
 │   ├── ChatProviderToolCall.cs             {id, name, argumentsJson}
 │   └── ToolDescriptor.cs                   what the agent advertises to the model
@@ -69,8 +69,8 @@ Gabriel.Engine/
 │
 ├── Services/                    — agent runtime
 │   ├── IAgentService.cs                    RunAsync + RegenerateAsync
-│   ├── AgentService.cs                     ReAct loop + rolling compact + history filtering
-│   ├── AgentEvent.cs                       polymorphic SSE wire events (textDelta / toolCall / ...)
+│   ├── AgentService.cs                     ReAct loop + rolling compact + history filtering + structured logging
+│   ├── AgentEvent.cs                       polymorphic SSE wire events (textDelta / reasoningDelta / toolCall / ...)
 │   ├── AgentOptions.cs                     MaxIterations, CompactThreshold, CompactKeepLast
 │   ├── ITokenEstimator.cs                  abstraction
 │   └── NaiveTokenEstimator.cs              ⌈chars / 4⌉ baseline

@@ -12,6 +12,12 @@ public class Conversation
     // landed; pre-auth dev data was wiped on migration.
     public Guid UserId { get; private set; }
 
+    // Project containment (Phase 8). Nullable on the entity to keep the
+    // migration backwards-compatible: existing conversations get assigned to
+    // each user's lazy-created "Default" project on first interaction. New
+    // conversations always have a non-null ProjectId.
+    public Guid? ProjectId { get; private set; }
+
     public string Title { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; private set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; private set; } = DateTimeOffset.UtcNow;
@@ -39,17 +45,30 @@ public class Conversation
     // EF Core requires a parameterless constructor.
     private Conversation() { }
 
-    public static Conversation Create(Guid userId, string? title = null)
+    public static Conversation Create(Guid userId, Guid projectId, string? title = null)
     {
         if (userId == Guid.Empty)
             throw new ArgumentException("UserId is required.", nameof(userId));
+        if (projectId == Guid.Empty)
+            throw new ArgumentException("ProjectId is required.", nameof(projectId));
 
         return new Conversation
         {
             UserId = userId,
+            ProjectId = projectId,
             Title = string.IsNullOrWhiteSpace(title) ? "New conversation" : title.Trim(),
             AvatarSeed = GenerateAvatarSeed(),
         };
+    }
+
+    // Used by the lazy backfill when a Default project is created for a user
+    // who has pre-existing (project-less) conversations.
+    public void AssignToProject(Guid projectId)
+    {
+        if (projectId == Guid.Empty)
+            throw new ArgumentException("ProjectId is required.", nameof(projectId));
+        ProjectId = projectId;
+        UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     public void RerollAvatar()
@@ -75,10 +94,18 @@ public class Conversation
     }
 
     public Message AppendUserMessage(string content) => AppendMessage(MessageRole.User, content);
-    public Message AppendAssistantText(string content, Guid? variantGroupId = null)
-        => AppendMessage(MessageRole.Assistant, content, variantGroupId: variantGroupId);
-    public Message AppendAssistantToolCalls(string toolCallsJson, string? content = null, Guid? variantGroupId = null)
-        => AppendMessage(MessageRole.Assistant, content, toolCallsJson: toolCallsJson, variantGroupId: variantGroupId);
+    public Message AppendAssistantText(string content, Guid? variantGroupId = null, string? reasoningContent = null)
+    {
+        var msg = AppendMessage(MessageRole.Assistant, content, variantGroupId: variantGroupId);
+        if (!string.IsNullOrEmpty(reasoningContent)) msg.SetReasoningContent(reasoningContent);
+        return msg;
+    }
+    public Message AppendAssistantToolCalls(string toolCallsJson, string? content = null, Guid? variantGroupId = null, string? reasoningContent = null)
+    {
+        var msg = AppendMessage(MessageRole.Assistant, content, toolCallsJson: toolCallsJson, variantGroupId: variantGroupId);
+        if (!string.IsNullOrEmpty(reasoningContent)) msg.SetReasoningContent(reasoningContent);
+        return msg;
+    }
     public Message AppendToolResult(string toolCallId, string content, Guid? variantGroupId = null)
         => AppendMessage(MessageRole.Tool, content, toolCallId: toolCallId, variantGroupId: variantGroupId);
 

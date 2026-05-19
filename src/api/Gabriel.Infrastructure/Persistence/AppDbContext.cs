@@ -15,6 +15,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<ProjectFile> ProjectFiles => Set<ProjectFile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

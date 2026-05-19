@@ -16,6 +16,13 @@ public class Message
     // JSON array exactly as it goes on the wire so we can replay it verbatim.
     public string? ToolCallsJson { get; private set; }
 
+    // Optional model "thinking" stream captured alongside this assistant turn.
+    // Populated by providers that expose a reasoning channel (Grok 4
+    // reasoning_content, DeepSeek-R1, OpenAI o-series, Anthropic extended-
+    // thinking). Stored separately from Content so the persisted answer body
+    // stays clean while the UI can still render a thinking panel on reload.
+    public string? ReasoningContent { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; } = DateTimeOffset.UtcNow;
 
     // Variant grouping for regenerated assistant messages. All siblings of a
@@ -72,4 +79,12 @@ public class Message
 
     internal void MarkInactiveVariant() => IsActiveVariant = false;
     internal void MarkActiveVariant() => IsActiveVariant = true;
+
+    // Reasoning is captured by the agent loop alongside the assistant's content
+    // for the same turn — it isn't part of the role-payload validation, so
+    // we expose a dedicated setter rather than threading it through Create().
+    internal void SetReasoningContent(string? reasoning)
+    {
+        ReasoningContent = string.IsNullOrEmpty(reasoning) ? null : reasoning;
+    }
 }

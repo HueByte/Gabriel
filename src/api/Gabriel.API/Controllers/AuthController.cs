@@ -30,17 +30,20 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser> _signIn;
     private readonly IJwtTokenService _jwt;
     private readonly ICurrentUser _currentUser;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn,
         IJwtTokenService jwt,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        ILogger<AuthController> logger)
     {
         _users = users;
         _signIn = signIn;
         _jwt = jwt;
         _currentUser = currentUser;
+        _logger = logger;
     }
 
     [HttpPost("register")]
@@ -91,18 +94,58 @@ public class AuthController : ControllerBase
     [HttpPost("refresh")]
     public async Task<ActionResult<JwtResponse>> Refresh([FromBody] RefreshTokenRequest? bodyRequest, CancellationToken ct)
     {
-        // Webapp sends nothing in the body and relies on the refresh cookie; external clients
-        // send the refresh token in the body. Prefer the cookie since it's authoritative for
-        // the active browser session.
+        // Webapp sends nothing meaningful in the body and relies on the refresh
+        // cookie; external clients send the refresh token in the body. Prefer
+        // the cookie since it's authoritative for the active browser session.
         var refresh = AuthCookies.ReadRefresh(Request) ?? bodyRequest?.RefreshToken;
+        var hasCookie = !string.IsNullOrEmpty(AuthCookies.ReadRefresh(Request));
+
         if (string.IsNullOrWhiteSpace(refresh))
         {
-            throw new UnauthorizedAccessException("Refresh token is required.");
+            // Nothing to refresh from. Clear any stale cookies in the same
+            // response so the browser stops re-sending dead tokens on every
+            // subsequent request.
+            _logger.LogInformation("Refresh attempted with no token (cookie={HasCookie})", hasCookie);
+            AuthCookies.Clear(Response);
+            return BuildUnauthorized("Refresh token is required.");
         }
 
-        var pair = await _jwt.RefreshAsync(refresh, ct);
-        AuthCookies.Set(Response, pair);
-        return Ok(ToResponse(pair));
+        try
+        {
+            var pair = await _jwt.RefreshAsync(refresh, ct);
+            AuthCookies.Set(Response, pair);
+            _logger.LogInformation("Refresh succeeded (cookie={HasCookie})", hasCookie);
+            return Ok(ToResponse(pair));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // CRITICAL: we return Unauthorized() inline rather than re-throwing
+            // because ASP.NET's UseExceptionHandler calls Response.Clear() on
+            // throw, which wipes any Set-Cookie headers we'd want to attach.
+            // Clearing cookies here means the browser immediately stops sending
+            // dead tokens — the webapp's signal-expired flow can then redirect
+            // to login cleanly.
+            _logger.LogInformation("Refresh failed: {Reason}", ex.Message);
+            AuthCookies.Clear(Response);
+            return BuildUnauthorized(ex.Message);
+        }
+    }
+
+    // Build a ProblemDetails 401 response that survives alongside our explicit
+    // Response.Cookies edits — the global exception handler can't help us here
+    // because it would Response.Clear() first.
+    private ActionResult BuildUnauthorized(string detail)
+    {
+        return new ObjectResult(new ProblemDetails
+        {
+            Status = StatusCodes.Status401Unauthorized,
+            Title = "Unauthorized",
+            Detail = detail,
+            Instance = HttpContext.Request.Path,
+        })
+        {
+            StatusCode = StatusCodes.Status401Unauthorized,
+        };
     }
 
     [HttpPost("logout")]
