@@ -36,7 +36,11 @@ public class GrokChatProvider : IChatProvider
 
     public string Name => "grok";
 
-    public int ContextWindowTokens => _options.ContextWindowTokens;
+    // Falls back to 0 if no model is marked active — the agent's token-budget
+    // accounting will then short-circuit and we let the provider's own context
+    // overflow be the ground truth. The options validator below already rejects
+    // that case at startup, so this is defensive only.
+    public int ContextWindowTokens => _options.GetActiveModel()?.ContextWindowTokens ?? 0;
 
     public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
         IReadOnlyList<ChatProviderMessage> history,
@@ -132,9 +136,14 @@ public class GrokChatProvider : IChatProvider
 
     private JsonObject BuildRequestBody(IReadOnlyList<ChatProviderMessage> history, IReadOnlyList<ToolDescriptor> tools)
     {
+        // Same fallback story as ContextWindowTokens above: the options validator
+        // rejects "no active model" at startup, so by the time we reach this
+        // hot path the null branch can never run.
+        var activeModelName = _options.GetActiveModel()?.Name ?? string.Empty;
+
         var body = new JsonObject
         {
-            ["model"] = _options.Model,
+            ["model"] = activeModelName,
             ["stream"] = true,
             ["messages"] = BuildMessages(history),
         };

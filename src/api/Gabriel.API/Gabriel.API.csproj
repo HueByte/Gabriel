@@ -23,6 +23,12 @@
     -->
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <!--
+      Sinks.Map is wrapped around the File sink so we can vary the filename
+      per LogEvent (keyed off the LogDate property). Without it the file sink's
+      hardcoded yyyyMMdd format is the only option for daily filenames.
+    -->
+    <PackageReference Include="Serilog.Sinks.Map" Version="2.0.0" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
     <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
   </ItemGroup>
@@ -40,7 +46,11 @@
       3. npx openapi               — generates the typed TS client (axios)
     SKIP_DB_INIT prevents the swagger CLI's brief host instantiation from touching the database.
   -->
-  <Target Name="OpenAPI" AfterTargets="Build">
+  <!--
+    Pass /p:SkipOpenAPI=true (the Dockerfile does) to skip this target when
+    the webapp source isn't part of the build context.
+  -->
+  <Target Name="OpenAPI" AfterTargets="Build" Condition="'$(SkipOpenAPI)' != 'true'">
     <PropertyGroup>
       <WebappDir>$(MSBuildThisFileDirectory)..\..\webapp</WebappDir>
       <SwaggerOutput>$(WebappDir)\src\api\swagger.json</SwaggerOutput>

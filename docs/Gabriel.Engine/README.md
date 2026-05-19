@@ -68,9 +68,6 @@ Six things to know that aren't obvious from the diagram:
   },
   "Personality": {
     "Name": "Gabriel",
-    "MaxResponseMultiplier": 2.5,
-    "MaxResponseTokenCap": 300,
-    "DetailResponseTokenCap": 2000,
     "MinThinkingDelayMs": 400,
     "MaxThinkingDelayMs": 1100,
     "MinCharsPerSecond": 55,

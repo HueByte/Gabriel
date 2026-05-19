@@ -95,7 +95,7 @@ make me | give me | show me | help me with
 
 **`PleaseSuffixRegex`** - `\w+\s+(please|pls)\s*\??\s*$` - catches `"bubble sort please"` / `"quicksort pls"` style implicit requests.
 
-When `UserAskedForDetail` flips true, the system prompt builder swaps the length guidance from chat-mode to task-mode (see below) and the post-processor raises the length cap.
+When `UserAskedForDetail` flips true, the system prompt builder swaps the length guidance from chat-mode to task-mode (see below).
 
 ### Other signals
 
@@ -207,29 +207,9 @@ Runs at save time on the **full** accumulated raw response. Pure function: `(raw
 
 What it deliberately does NOT strip: markdown. Discord-style inline emphasis (`**bold**`, `*italic*`, fenced code, blockquotes) is part of the persona's allowed style - the post-processor's only job here is residual AI-speak.
 
-### Length cap
+### Length
 
-Calculate the cap:
-
-$$
-C = \begin{cases}
-C_{\text{detail}} & \text{if } state.UserAskedForDetail \\
-\min(L \cdot M, C_{\max}) & \text{otherwise}
-\end{cases}
-$$
-
-where:
-
-- $L$ = `state.LastUserTokenCount`
-- $M$ = `PersonalityOptions.MaxResponseMultiplier` (default `2.5`)
-- $C_{\max}$ = `PersonalityOptions.MaxResponseTokenCap` (default `300`)
-- $C_{\text{detail}}$ = `PersonalityOptions.DetailResponseTokenCap` (default `2000`)
-
-Floor: $C \geq 30$. Even very short user messages allow a minimum reply.
-
-If $T_{\text{response}} > C$, truncate at the last sentence boundary (`. ! ?`) within the last ~80 chars of the budget. If no boundary found, hard-cut and append `…`. The 4-chars-per-token approximation used here matches the rest of the engine.
-
-The cap is a **safety net** - the persona prompt is the primary defense. In practice it's rarely triggered because the model already respects the prompt's guidance most of the time.
+There is no length cap. Earlier versions of the post-processor truncated the response at a sentence boundary when it exceeded a state-derived token budget, but that truncation only applied to the *persisted* form - the live SSE stream had already shipped the full raw text to the client. The result was that long replies looked complete during the session but came back "cut off" after a reload from the DB. The cap was removed; the persona prompt is now the only length gate.
 
 ## Configuration
 
@@ -239,9 +219,6 @@ All knobs live in `PersonalityOptions` (section `Personality` in config):
 {
   "Personality": {
     "Name": "Gabriel",                  // persona name in the prompt + few-shot
-    "MaxResponseMultiplier": 2.5,
-    "MaxResponseTokenCap": 300,
-    "DetailResponseTokenCap": 2000,
     "MinThinkingDelayMs": 400,          // SSE typing-tempo simulation
     "MaxThinkingDelayMs": 1100,
     "MinCharsPerSecond": 55,

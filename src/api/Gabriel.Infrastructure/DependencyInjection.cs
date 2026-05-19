@@ -1,3 +1,4 @@
+using Gabriel.Core.Configuration;
 using Gabriel.Core.Repositories;
 using Gabriel.Core.Services;
 using Gabriel.Engine.Providers;
@@ -150,8 +151,7 @@ public static class DependencyInjection
                 // IOptions<GrokOptions>.Value is read (i.e. when the first
                 // HttpClient is created), producing a clear OptionsValidationException
                 // instead of an ad-hoc throw inside the HttpClient factory.
-                services.AddOptions<GrokOptions>()
-                    .Bind(config.GetSection(GrokOptions.SectionName))
+                services.ConfigureSection<GrokOptions>(config)
                     .Validate(
                         o => !string.IsNullOrWhiteSpace(o.ApiKey),
                         "Providers:Grok:ApiKey is required. Set via user-secrets or env var PROVIDERS__GROK__APIKEY.")
@@ -160,7 +160,15 @@ public static class DependencyInjection
                         "Providers:Grok:BaseUrl must be a valid absolute URL ending with '/'.")
                     .Validate(
                         o => o.TimeoutSeconds > 0,
-                        "Providers:Grok:TimeoutSeconds must be greater than zero.");
+                        "Providers:Grok:TimeoutSeconds must be greater than zero.")
+                    .Validate(
+                        o => o.Models.Count(m => m.IsActive) == 1,
+                        "Providers:Grok:Models must contain exactly one entry with IsActive=true.")
+                    .Validate(
+                        o => o.GetActiveModel() is { } m
+                             && !string.IsNullOrWhiteSpace(m.Name)
+                             && m.ContextWindowTokens > 0,
+                        "Providers:Grok:Models active entry must have a non-empty Name and ContextWindowTokens > 0.");
 
                 // DelegatingHandler resolved per HttpClient creation. Transient is
                 // the required lifetime for handlers registered via AddHttpMessageHandler.

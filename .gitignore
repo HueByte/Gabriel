@@ -417,6 +417,9 @@ FodyWeavers.xsd
 
 appsettings.json
 appsettings.*.json
+# Keep the committed template so a fresh checkout has a config reference.
+!appsettings.example.json
+!**/appsettings.example.json
 .dev/**
 .claude/
 claude.md
@@ -457,3 +460,12 @@ src/webapp/src/api/generated/
 CLAUDE.md
 .dev/
 **/appsettings.**
+# Re-allow the committed example so the gitignore above doesn't swallow it.
+!**/appsettings.example.json
+!appsettings.example.json
+
+# Environment files — only the example template is checked in.
+.env
+.env.local
+.env.*.local
+!.env.example

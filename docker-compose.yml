@@ -1,0 +1,62 @@
+# Gabriel — local / single-box compose stack.
+#
+# Two services:
+#   - api     : .NET 10 backend, exposes 8080 inside the network
+#   - webapp  : nginx serving the Vite SPA + reverse-proxying /api/ to the api
+#
+# Persistent state lives in named volumes so the SQLite DB, uploaded project
+# files, and the daily rolling log files survive `docker compose down`.
+#
+# Run:
+#   cp .env.example .env
+#   # edit .env, fill in REPLACE_ME values
+#   docker compose up --build
+
+services:
+  api:
+    build:
+      context: ./src/api
+      dockerfile: Gabriel.API/Dockerfile
+    image: gabriel-api:latest
+    container_name: gabriel-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Override a few env vars the container needs regardless of .env content.
+    environment:
+      ASPNETCORE_URLS: ${ASPNETCORE_URLS:-http://+:8080}
+    volumes:
+      - gabriel-data:/app/data
+      - gabriel-logs:/app/logs
+      - gabriel-projects:/app/projects-data
+    expose:
+      - "8080"
+    # Optional: expose the API directly on the host too, useful for hitting
+    # Swagger or curl-ing the API while bypassing nginx.
+    ports:
+      - "${API_PORT:-6040}:8080"
+    networks:
+      - gabriel-net
+
+  webapp:
+    build:
+      context: ./src/webapp
+      dockerfile: Dockerfile
+    image: gabriel-webapp:latest
+    container_name: gabriel-webapp
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-6080}:80"
+    networks:
+      - gabriel-net
+
+networks:
+  gabriel-net:
+    driver: bridge
+
+volumes:
+  gabriel-data:
+  gabriel-logs:
+  gabriel-projects:

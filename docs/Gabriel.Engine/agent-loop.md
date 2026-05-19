@@ -175,12 +175,16 @@ Result and arguments are flattened to a single line and truncated to 240 charact
 A deliberate split:
 
 - **Streaming wire**: the model's raw output flows through `AgentTextDelta` events untouched. The user sees what the model said in real time.
-- **Database**: only the **cleaned** version (after `IResponsePostProcessor.Clean`) is persisted to `Messages.Content`.
-- **`AgentAssistantMessage.Content`**: carries the **raw** text (matches the deltas the client already received) so the live client view doesn't visibly swap content at end-of-stream.
-
-Trade-off: a page reload shows the cleaned version; the live session shows the raw version. Accepted - the alternative ("stream raw, swap to clean at end") would visibly rewrite the bubble after streaming completes, which feels worse.
+- **Database**: the cleaned version (after `IResponsePostProcessor.Clean`) is persisted to `Messages.Content`. The cleaner only strips residual AI-ism openers and closers - it does not truncate - so a reload of the conversation surfaces effectively the same text the client rendered live.
+- **`AgentAssistantMessage.Content`**: carries the raw text (matches the deltas the client already received) so the live bubble doesn't visibly swap at end-of-stream.
 
 Fall-back: if the cleaner strips everything to empty (would-be reject by `Message.Create`), persistence falls back to the raw text.
+
+## Empty-Stop retry
+
+The provider occasionally completes a stream with `finish_reason = "stop"` and no text, no reasoning, and no tool calls - a fully successful HTTP 200 transport carrying nothing. The HTTP resilience pipeline can't catch this case (it only sees a clean 200), so the agent loop retries the same iteration up to `AgentService.EmptyStopMaxRetries` times (default `2`, i.e. three total attempts) with a linear backoff of `EmptyStopRetryDelayMs * attempt` (default 500 ms × N).
+
+Retry only fires when the attempt produced literally nothing the caller can act on. Any text delta or any tool call commits the attempt - retrying past that point would either duplicate streamed content or replay tool calls. The user message is still saved at the very top of the turn; only the assistant response is retried.
 
 ## History assembly
 

@@ -1228,25 +1228,93 @@ button {
   justify-content: center;
   height: 100%;
   padding: 24px;
+  background:
+    radial-gradient(ellipse at top, var(--accent-soft), transparent 60%),
+    radial-gradient(ellipse at bottom right, rgba(80, 120, 255, 0.06), transparent 55%);
 }
 
 .auth-card {
   width: 100%;
-  max-width: 360px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 28px;
+  gap: 16px;
+  padding: 32px 28px 28px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  animation: fade-in-up 0.4s ease-out both;
+}
+
+.auth-avatar {
+  position: relative;
+  align-self: center;
+  display: inline-flex;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 30% 25%, var(--accent-soft), transparent 65%),
+    var(--surface-2);
+}
+.auth-avatar canvas {
+  display: block;
+  border-radius: 10px;
+  image-rendering: pixelated;
+}
+
+.auth-avatar-reroll {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: rgba(10, 10, 10, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    transform 0.3s ease;
+}
+.auth-avatar-reroll:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: rotate(60deg);
+}
+.auth-avatar-reroll:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.auth-heading {
+  text-align: center;
+  margin: 2px 0 4px;
 }
 
 .auth-title {
-  margin: 0 0 4px;
-  font-size: 22px;
+  margin: 0;
+  font-size: 24px;
   font-weight: 500;
   letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.auth-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
 }
 
 .auth-field {
@@ -1256,51 +1324,147 @@ button {
 }
 .auth-field > span {
   font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   color: var(--text-dim);
 }
-.auth-field input {
+
+.auth-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: var(--bg);
-  color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 10px;
+  padding: 0 12px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
+}
+.auth-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.auth-input > svg {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 16px;
+  transition: color 0.15s;
+}
+.auth-input:focus-within > svg {
+  color: var(--accent);
+}
+.auth-input input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  outline: none;
+  padding: 11px 0;
   font: inherit;
   font-size: 14px;
-  outline: none;
-  transition: border-color 0.15s;
 }
-.auth-field input:focus {
-  border-color: var(--accent);
+.auth-input input::placeholder {
+  color: var(--text-faint);
+}
+
+.auth-input-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: color 0.15s;
+}
+.auth-input-toggle:hover {
+  color: var(--text);
 }
 
 .auth-submit {
-  background: var(--text);
-  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  background: var(--accent);
+  color: #fff;
   border: none;
-  border-radius: 8px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 12px 14px;
   font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: opacity 0.15s;
+  box-shadow: 0 6px 18px rgba(214, 59, 143, 0.25);
+  transition:
+    background 0.15s,
+    transform 0.1s,
+    box-shadow 0.15s,
+    opacity 0.15s;
+}
+.auth-submit svg {
+  font-size: 16px;
+  transition: transform 0.2s;
+}
+.auth-submit:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, #fff);
+  box-shadow: 0 10px 24px rgba(214, 59, 143, 0.32);
+}
+.auth-submit:hover:not(:disabled) svg:not(.auth-submit-spin) {
+  transform: translateX(2px);
+}
+.auth-submit:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 4px 12px rgba(214, 59, 143, 0.22);
 }
 .auth-submit:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+.auth-submit-spin {
+  animation: auth-spin 1s linear infinite;
+}
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .auth-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: rgba(255, 80, 80, 0.08);
   color: #ffb4b4;
-  padding: 8px 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 80, 80, 0.18);
   border-radius: 8px;
   font-size: 13px;
 }
+.auth-error svg {
+  flex: 0 0 auto;
+  font-size: 16px;
+}
 
 .auth-switch {
-  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
   font-size: 13px;
   color: var(--text-dim);
-  text-align: center;
 }
 
 .auth-link {
@@ -1309,8 +1473,31 @@ button {
   color: var(--accent);
   cursor: pointer;
   font: inherit;
+  font-weight: 500;
   padding: 0;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.auth-link:hover {
+  color: color-mix(in srgb, var(--accent) 80%, #fff);
   text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-card {
+    animation: none;
+  }
+  .auth-avatar-reroll,
+  .auth-submit,
+  .auth-submit svg {
+    transition: none;
+  }
+  .auth-avatar-reroll:hover:not(:disabled) {
+    transform: none;
+  }
+  .auth-submit-spin {
+    animation: none;
+  }
 }
 
 /* ---------- Errors ---------- */

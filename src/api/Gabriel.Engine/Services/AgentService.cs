@@ -16,6 +16,15 @@ namespace Gabriel.Engine.Services;
 
 public class AgentService : IAgentService
 {
+    // Bounded retries for the "provider finished Stop with empty text" hiccup.
+    // The HTTP resilience pipeline can't catch this - the response itself was a
+    // successful 200 stream - so retry has to live in the agent loop. Two extra
+    // attempts (= three total) is enough to ride through transient blanks
+    // without noticeably slowing down a real failure path. Linear backoff:
+    // attempt N waits N * EmptyStopRetryDelayMs.
+    private const int EmptyStopMaxRetries = 2;
+    private const int EmptyStopRetryDelayMs = 500;
+
     private readonly IConversationRepository _conversations;
     private readonly IProjectRepository _projects;
     private readonly IChatProvider _provider;
@@ -172,33 +181,66 @@ public class AgentService : IAgentService
 
         for (var iter = 0; iter < _options.MaxIterations; iter++)
         {
-            var history = ToProviderHistory(conversation, projectSystemPrompt);
             var textBuffer = new StringBuilder();
             var reasoningBuffer = new StringBuilder();
             var pendingCalls = new List<ChatProviderToolCall>();
             FinishReason? finish = null;
 
-            await foreach (var evt in _provider.StreamAsync(history, toolDescriptors, ct))
+            // Provider hiccups land here: finish=Stop with no text, no tool
+            // calls, and (usually) no reasoning either. Retry the same history
+            // a small bounded number of times before surfacing the error - the
+            // HTTP resilience handler can't catch this because the response was
+            // a successful 200 stream that just happened to be empty.
+            for (var emptyRetry = 0; emptyRetry <= EmptyStopMaxRetries; emptyRetry++)
             {
-                switch (evt)
+                if (emptyRetry > 0)
                 {
-                    case TextDeltaEvent td:
-                        textBuffer.Append(td.Delta);
-                        yield return new AgentTextDelta(td.Delta);
-                        break;
+                    textBuffer.Clear();
+                    reasoningBuffer.Clear();
+                    pendingCalls.Clear();
+                    finish = null;
+                    await Task.Delay(EmptyStopRetryDelayMs * emptyRetry, ct);
+                }
 
-                    case ReasoningDeltaEvent rd:
-                        reasoningBuffer.Append(rd.Delta);
-                        yield return new AgentReasoningDelta(rd.Delta);
-                        break;
+                var history = ToProviderHistory(conversation, projectSystemPrompt);
+                await foreach (var evt in _provider.StreamAsync(history, toolDescriptors, ct))
+                {
+                    switch (evt)
+                    {
+                        case TextDeltaEvent td:
+                            textBuffer.Append(td.Delta);
+                            yield return new AgentTextDelta(td.Delta);
+                            break;
 
-                    case ToolCallReadyEvent tc:
-                        pendingCalls.Add(new ChatProviderToolCall(tc.Id, tc.Name, tc.ArgumentsJson));
-                        break;
+                        case ReasoningDeltaEvent rd:
+                            reasoningBuffer.Append(rd.Delta);
+                            yield return new AgentReasoningDelta(rd.Delta);
+                            break;
 
-                    case FinishEvent fe:
-                        finish = fe.Reason;
-                        break;
+                        case ToolCallReadyEvent tc:
+                            pendingCalls.Add(new ChatProviderToolCall(tc.Id, tc.Name, tc.ArgumentsJson));
+                            break;
+
+                        case FinishEvent fe:
+                            finish = fe.Reason;
+                            break;
+                    }
+                }
+
+                // Only retry when the attempt produced literally nothing the
+                // caller can act on. Partial output (any text delta, any tool
+                // call) commits this attempt - retrying would either duplicate
+                // streamed content or replay tool calls.
+                var emptyStop = finish == FinishReason.Stop
+                    && textBuffer.Length == 0
+                    && pendingCalls.Count == 0;
+                if (!emptyStop) break;
+
+                if (emptyRetry < EmptyStopMaxRetries)
+                {
+                    _logger.LogWarning(
+                        "Iter {Iter}: empty Stop from provider, retrying ({Retry}/{Max}) | conv={ConversationId}",
+                        iter, emptyRetry + 1, EmptyStopMaxRetries, conversation.Id);
                 }
             }
 
@@ -239,18 +281,23 @@ public class AgentService : IAgentService
                 var rawText = textBuffer.ToString();
                 if (string.IsNullOrWhiteSpace(rawText))
                 {
+                    // Exhausted retries above and still got nothing - surface
+                    // the failure to the client. No assistant message is
+                    // persisted (rule: only finished messages reach the DB).
                     _logger.LogWarning(
-                        "Iter {Iter}: provider finished Stop with empty text | conv={ConversationId}",
-                        iter, conversation.Id);
+                        "Iter {Iter}: provider finished Stop with empty text after {Max} retries | conv={ConversationId}",
+                        iter, EmptyStopMaxRetries, conversation.Id);
                     yield return new AgentError("Provider returned an empty response.");
                     yield return new AgentDone();
                     yield break;
                 }
-                // Save the cleaned version to the DB so reloads show the persona-
-                // safe form. Emit the RAW text in AgentAssistantMessage so the
-                // live client view (which reconciles against this) doesn't visibly
-                // swap mid-stream. Fall back to raw if the cleaner stripped it to
-                // empty - Message.Create rejects empty assistant content.
+                // Persist the raw streamed text so a reload of the conversation
+                // shows exactly what the client rendered live. The post-processor
+                // still runs to scrub residual AI-ism openers/closers; its length
+                // cap was removed because it could truncate the persisted message
+                // to less than what the user actually saw on screen. Fall back to
+                // raw if the cleaner stripped it to empty - Message.Create rejects
+                // empty assistant content.
                 var cleaned = _postProcessor.Clean(rawText, conversation.GetState());
                 var toPersist = string.IsNullOrWhiteSpace(cleaned) ? rawText : cleaned;
                 var reasoningForFinal = reasoningBuffer.Length > 0 ? reasoningBuffer.ToString() : null;

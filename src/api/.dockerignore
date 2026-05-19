@@ -1,0 +1,28 @@
+**/bin/
+**/obj/
+**/out/
+
+# Local-only artifacts that should never leak into the image.
+**/*.user
+**/*.suo
+**/.vs/
+**/.idea/
+
+# SQLite working files (recreated inside the container from migrations).
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Rolling logs and per-project uploads — these live on host-mounted volumes.
+**/logs/
+**/projects-data/
+
+# Local appsettings overrides — supply config via env vars / .env instead.
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/appsettings.example.json
+
+# Webapp tree isn't part of the API build context anyway, but guard against
+# accidental nesting.
+**/node_modules/
+**/dist/
