@@ -1,3 +1,6 @@
+using System.Text.Json;
+using Gabriel.Core.Personality;
+
 namespace Gabriel.Core.Entities;
 
 public class Conversation
@@ -24,6 +27,11 @@ public class Conversation
     // so the provider context stays bounded.
     public string? Summary { get; private set; }
     public Guid? SummarizedThroughMessageId { get; private set; }
+
+    // Serialized ConversationState — turn count, mood, length tracking, user-style
+    // flags. Read via GetState(), written via SetState(). JSON column instead of a
+    // separate table because the shape evolves and we never query its fields.
+    public string? StateJson { get; private set; }
 
     private readonly List<Message> _messages = new();
     public IReadOnlyList<Message> Messages => _messages.AsReadOnly();
@@ -53,20 +61,86 @@ public class Conversation
     // 1..2^32-1 — positive, fits JS Number safely, matches the client RNG's expected range.
     private static long GenerateAvatarSeed() => Random.Shared.NextInt64(1L, 1L << 32);
 
-    public Message AppendMessage(MessageRole role, string? content, string? toolCallId = null, string? toolCallsJson = null)
+    public Message AppendMessage(
+        MessageRole role,
+        string? content,
+        string? toolCallId = null,
+        string? toolCallsJson = null,
+        Guid? variantGroupId = null)
     {
-        var message = Message.Create(Id, role, content, toolCallId, toolCallsJson);
+        var message = Message.Create(Id, role, content, toolCallId, toolCallsJson, variantGroupId);
         _messages.Add(message);
         UpdatedAt = DateTimeOffset.UtcNow;
         return message;
     }
 
     public Message AppendUserMessage(string content) => AppendMessage(MessageRole.User, content);
-    public Message AppendAssistantText(string content) => AppendMessage(MessageRole.Assistant, content);
-    public Message AppendAssistantToolCalls(string toolCallsJson, string? content = null)
-        => AppendMessage(MessageRole.Assistant, content, toolCallsJson: toolCallsJson);
-    public Message AppendToolResult(string toolCallId, string content)
-        => AppendMessage(MessageRole.Tool, content, toolCallId: toolCallId);
+    public Message AppendAssistantText(string content, Guid? variantGroupId = null)
+        => AppendMessage(MessageRole.Assistant, content, variantGroupId: variantGroupId);
+    public Message AppendAssistantToolCalls(string toolCallsJson, string? content = null, Guid? variantGroupId = null)
+        => AppendMessage(MessageRole.Assistant, content, toolCallsJson: toolCallsJson, variantGroupId: variantGroupId);
+    public Message AppendToolResult(string toolCallId, string content, Guid? variantGroupId = null)
+        => AppendMessage(MessageRole.Tool, content, toolCallId: toolCallId, variantGroupId: variantGroupId);
+
+    // Removes the given message and every message after it (by CreatedAt). For
+    // assistant messages with regen siblings, we anchor on the earliest message
+    // in the variant group so the whole turn is wiped (otherwise an inactive
+    // sibling would be orphaned with no active partner).
+    //
+    // Returns the removed messages so the repository can detach them from the
+    // change tracker.
+    public IReadOnlyList<Message> TruncateFrom(Guid messageId)
+    {
+        var target = _messages.FirstOrDefault(m => m.Id == messageId)
+            ?? throw new ArgumentException("Message not found in conversation.", nameof(messageId));
+
+        // Anchor on the earliest sibling in the same variant group.
+        var anchor = _messages
+            .Where(m => m.VariantGroupId == target.VariantGroupId)
+            .OrderBy(m => m.CreatedAt)
+            .First();
+
+        var toRemove = _messages.Where(m => m.CreatedAt >= anchor.CreatedAt).ToList();
+        foreach (var m in toRemove) _messages.Remove(m);
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return toRemove;
+    }
+
+    // Marks every assistant message in the variant group inactive — used by
+    // regenerate to deactivate the prior reply before streaming the new variant.
+    // The tool aftermath of the inactive variants is already excluded from
+    // provider history by tool_call_id matching (see AgentService.ToProviderHistory).
+    public void DeactivateVariantGroup(Guid variantGroupId)
+    {
+        var changed = false;
+        foreach (var m in _messages.Where(m => m.VariantGroupId == variantGroupId && m.IsActiveVariant))
+        {
+            m.MarkInactiveVariant();
+            changed = true;
+        }
+        if (changed) UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    // Switches which variant in a group is active. The target's siblings get
+    // flipped off, the target gets flipped on. No-op if already the active one.
+    public void SetActiveVariant(Guid messageId)
+    {
+        var target = _messages.FirstOrDefault(m => m.Id == messageId)
+            ?? throw new ArgumentException("Message not found in conversation.", nameof(messageId));
+
+        var changed = false;
+        foreach (var m in _messages.Where(m => m.VariantGroupId == target.VariantGroupId))
+        {
+            var shouldBeActive = m.Id == target.Id;
+            if (m.IsActiveVariant != shouldBeActive)
+            {
+                if (shouldBeActive) m.MarkActiveVariant();
+                else m.MarkInactiveVariant();
+                changed = true;
+            }
+        }
+        if (changed) UpdatedAt = DateTimeOffset.UtcNow;
+    }
 
     public void Rename(string title)
     {
@@ -82,6 +156,15 @@ public class Conversation
             throw new ArgumentException("Summary cannot be empty.", nameof(summary));
         Summary = summary;
         SummarizedThroughMessageId = throughMessageId;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public ConversationState? GetState()
+        => string.IsNullOrEmpty(StateJson) ? null : JsonSerializer.Deserialize<ConversationState>(StateJson);
+
+    public void SetState(ConversationState state)
+    {
+        StateJson = JsonSerializer.Serialize(state);
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

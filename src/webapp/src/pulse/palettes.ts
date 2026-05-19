@@ -3,6 +3,7 @@
 // of a palette ("mono", "void").
 
 import type { Rand } from './rng';
+import { mulberry32 } from './rng';
 
 export type RGB = readonly [number, number, number];
 
@@ -51,4 +52,26 @@ export function sampleGradient(stops: readonly RGB[], t: number): RGB {
     Math.round(a[1] + (b[1] - a[1]) * k),
     Math.round(a[2] + (b[2] - a[2]) * k),
   ];
+}
+
+// Deterministic palette for a given avatar seed. Mirrors the consumption order
+// inside Avatar.tsx (palette first, then pattern) so the avatar and any
+// UI tinted from the seed agree on the same palette.
+export function paletteForSeed(seed: number, name?: string): Palette {
+  return pickPalette(mulberry32(seed), name);
+}
+
+export function rgbToCss([r, g, b]: RGB, alpha = 1): string {
+  return alpha >= 1 ? `rgb(${r} ${g} ${b})` : `rgb(${r} ${g} ${b} / ${alpha})`;
+}
+
+// Pick the brightest stop of a palette as a single "accent" color. Used where
+// a gradient isn't appropriate (e.g. solid glow color, link tint).
+export function paletteAccent(palette: Palette): RGB {
+  return palette.stops[palette.stops.length - 1];
+}
+
+export function paletteGradientCss(palette: Palette): string {
+  const stops = palette.stops.map((s, i) => `${rgbToCss(s)} ${(i / Math.max(1, palette.stops.length - 1)) * 100}%`);
+  return `linear-gradient(90deg, ${stops.join(', ')})`;
 }

@@ -1,6 +1,6 @@
-using Gabriel.Core.Providers;
+using Gabriel.Engine.Providers;
 
-namespace Gabriel.Core.Tools;
+namespace Gabriel.Engine.Tools;
 
 public class ToolRegistry : IToolRegistry
 {

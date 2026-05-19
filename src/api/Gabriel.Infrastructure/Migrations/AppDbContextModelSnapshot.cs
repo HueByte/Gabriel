@@ -29,6 +29,9 @@ namespace Gabriel.Infrastructure.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("StateJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("SummarizedThroughMessageId")
                         .HasColumnType("TEXT");
 
@@ -68,6 +71,9 @@ namespace Gabriel.Infrastructure.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsActiveVariant")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Role")
                         .HasColumnType("INTEGER");
 
@@ -78,9 +84,14 @@ namespace Gabriel.Infrastructure.Migrations
                     b.Property<string>("ToolCallsJson")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("VariantGroupId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.HasIndex("ConversationId", "VariantGroupId");
 
                     b.ToTable("Messages", (string)null);
                 });

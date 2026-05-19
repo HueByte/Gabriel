@@ -3,6 +3,7 @@ using Gabriel.API.Identity;
 using Gabriel.API.Middleware;
 using Gabriel.Core;
 using Gabriel.Core.Identity;
+using Gabriel.Engine;
 using Gabriel.Infrastructure;
 using Gabriel.Infrastructure.Identity;
 using Gabriel.Infrastructure.Persistence;
@@ -49,7 +50,8 @@ builder.Services.AddCors(opts =>
         .AllowCredentials());
 });
 
-builder.Services.AddCoreServices(builder.Configuration);
+builder.Services.AddCoreServices();
+builder.Services.AddEngineServices(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // Identity + JWT — three auth schemes wired here; see IdentityServiceCollectionExtensions.

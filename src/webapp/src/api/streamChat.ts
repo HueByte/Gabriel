@@ -3,6 +3,14 @@
 // The generated openapi-typescript-codegen client can't model SSE, so this is
 // hand-written. Native EventSource is also out (it only supports GET and can't
 // send a body), so we use fetch + a manual ReadableStream parser.
+//
+// 401 handling: when the SSE pre-stream response is 401 (access JWT expired),
+// call the shared refreshSession() and retry the SSE POST once. If refresh
+// fails or the retry is still 401, signal session-expired so AuthContext can
+// log the user out cleanly — the in-flight chat send is then a thrown error
+// the caller toasts.
+
+import { refreshSession, signalSessionExpired } from './authRefresh';
 
 export type AgentEvent =
   | { type: 'textDelta'; delta: string }
@@ -16,20 +24,37 @@ export interface StreamChatOptions {
   signal?: AbortSignal;
 }
 
-export async function* streamChat(
-  conversationId: string,
-  content: string,
-  opts: StreamChatOptions = {},
-): AsyncGenerator<AgentEvent> {
-  const response = await fetch(
+function doFetch(conversationId: string, content: string, signal?: AbortSignal): Promise<Response> {
+  return fetch(
     `/api/conversations/${encodeURIComponent(conversationId)}/messages/stream`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ content }),
-      signal: opts.signal,
+      signal,
     },
   );
+}
+
+export async function* streamChat(
+  conversationId: string,
+  content: string,
+  opts: StreamChatOptions = {},
+): AsyncGenerator<AgentEvent> {
+  let response = await doFetch(conversationId, content, opts.signal);
+
+  // Pre-stream 401 — try one refresh, then retry. If still unauthorized, tell
+  // the rest of the app the session is dead and surface a clean error.
+  if (response.status === 401) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      response = await doFetch(conversationId, content, opts.signal);
+    }
+    if (response.status === 401) {
+      signalSessionExpired();
+      throw new Error('Session expired. Please sign in again.');
+    }
+  }
 
   if (!response.ok) {
     // 4xx/5xx surfaced before any streaming started — body is ProblemDetails JSON.

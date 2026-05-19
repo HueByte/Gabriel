@@ -1,4 +1,4 @@
-namespace Gabriel.Core.Tools;
+namespace Gabriel.Engine.Tools;
 
 // A tool the agent can call. Implementations declare a JSON schema for their
 // arguments and return a string observation (or error) for the agent to read.

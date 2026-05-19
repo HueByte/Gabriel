@@ -72,6 +72,38 @@ public class ChatService : IChatService
         await _uow.SaveChangesAsync(ct);
     }
 
+    public async Task<Conversation> DeleteMessageAsync(Guid conversationId, Guid messageId, CancellationToken ct = default)
+    {
+        var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, RequireUserId(), ct)
+            ?? throw new NotFoundException(nameof(Conversation), conversationId);
+
+        if (conversation.Messages.All(m => m.Id != messageId))
+            throw new NotFoundException(nameof(Message), messageId);
+
+        // Conversation.TruncateFrom returns the removed messages so we can hand
+        // them to the repository for explicit EF removal — orphan-removal alone
+        // is fragile, this is the safe path.
+        var removed = conversation.TruncateFrom(messageId);
+        _conversations.RemoveMessages(removed);
+        _conversations.Update(conversation);
+        await _uow.SaveChangesAsync(ct);
+        return conversation;
+    }
+
+    public async Task<Conversation> SetActiveVariantAsync(Guid conversationId, Guid messageId, CancellationToken ct = default)
+    {
+        var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, RequireUserId(), ct)
+            ?? throw new NotFoundException(nameof(Conversation), conversationId);
+
+        if (conversation.Messages.All(m => m.Id != messageId))
+            throw new NotFoundException(nameof(Message), messageId);
+
+        conversation.SetActiveVariant(messageId);
+        _conversations.Update(conversation);
+        await _uow.SaveChangesAsync(ct);
+        return conversation;
+    }
+
     // Belt-and-suspenders: controllers already carry [Authorize], so this should
     // never throw in practice. The check guarantees we never accidentally execute
     // a service call as "no user" if someone forgets the attribute.

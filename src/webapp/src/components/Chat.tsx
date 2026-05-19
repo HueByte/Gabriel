@@ -10,6 +10,7 @@ import { toast } from 'react-toastify';
 import { streamChat } from '../api/streamChat';
 import { notifyError } from '../lib/notify';
 import { StreamingText } from './StreamingText';
+import { ThinkingPulse } from './ThinkingPulse';
 
 // Chat entries are heterogeneous — text bubbles (user/assistant), individual
 // tool calls, and tool results — so we model them as a discriminated union
@@ -51,6 +52,9 @@ function toolCallEntry(messageId: string, tc: MessageToolCall): ChatEntry {
 
 interface ChatProps {
   conversationId: string;
+  /** Avatar seed — drives the thinking-pulse pattern/palette so it visually
+   *  matches the big avatar above. */
+  avatarSeed: number;
   onMessageSent?: () => void;
   onBusyChange?: (busy: boolean) => void;
   // Fired once per conversation switch as soon as the conversation metadata is
@@ -69,7 +73,7 @@ const MAX_COMPOSER_HEIGHT = 140;
 // slop above the true bottom.
 const PIN_SLOP_PX = 80;
 
-export function Chat({ conversationId, onMessageSent, onBusyChange, onConversationLoaded }: ChatProps) {
+export function Chat({ conversationId, avatarSeed, onMessageSent, onBusyChange, onConversationLoaded }: ChatProps) {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -159,6 +163,20 @@ export function Chat({ conversationId, onMessageSent, onBusyChange, onConversati
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
 
+  // Restore textarea focus after a send completes. The `disabled={busy}` attr
+  // blurs the textarea when the stream starts; without this the user has to
+  // click back into the input to send the next message. We watch for the
+  // busy→idle transition specifically so we don't steal focus on mount or on
+  // every unrelated re-render. `preventScroll` avoids jumping the page if the
+  // chat is somehow scrolled away from the composer.
+  const prevBusyRef = useRef(false);
+  useEffect(() => {
+    if (prevBusyRef.current && !busy) {
+      textareaRef.current?.focus({ preventScroll: true });
+    }
+    prevBusyRef.current = busy;
+  }, [busy]);
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -214,6 +232,15 @@ export function Chat({ conversationId, onMessageSent, onBusyChange, onConversati
             <div className="empty">Say hi to get started.</div>
           )}
           {entries.map(renderEntry)}
+          {/* Thinking indicator — shows once the user has submitted and before
+              the first delta arrives. The condition checks that no assistant
+              bubble is currently streaming, which means tokens haven't started
+              flowing yet. Once a delta lands the streaming bubble takes over. */}
+          {busy && !hasActiveAssistantStream(entries) && (
+            <div className="thinking-pulse" aria-label="Thinking">
+              <ThinkingPulse seed={avatarSeed} />
+            </div>
+          )}
           {/* Stick-to-bottom sentinel — IntersectionObserver above watches it. */}
           <div ref={bottomSentinelRef} className="messages-bottom" aria-hidden="true" />
         </div>
@@ -236,6 +263,11 @@ export function Chat({ conversationId, onMessageSent, onBusyChange, onConversati
       </form>
     </div>
   );
+}
+
+function hasActiveAssistantStream(entries: ChatEntry[]): boolean {
+  const last = entries[entries.length - 1];
+  return !!(last && last.kind === 'text' && last.role === 'assistant' && last.streaming);
 }
 
 function renderEntry(e: ChatEntry) {

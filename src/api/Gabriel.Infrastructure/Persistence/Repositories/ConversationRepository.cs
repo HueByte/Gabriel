@@ -33,6 +33,9 @@ public class ConversationRepository : IConversationRepository
     public void AddMessage(Message message)
         => _ctx.Set<Message>().Add(message);
 
+    public void RemoveMessages(IEnumerable<Message> messages)
+        => _ctx.Set<Message>().RemoveRange(messages);
+
     public void Update(Conversation conversation)
         => _ctx.Conversations.Update(conversation);
 

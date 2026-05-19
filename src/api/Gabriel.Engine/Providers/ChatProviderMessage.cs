@@ -1,6 +1,6 @@
 using Gabriel.Core.Entities;
 
-namespace Gabriel.Core.Providers;
+namespace Gabriel.Engine.Providers;
 
 // Transport DTO for the IChatProvider boundary. Decoupled from the Message
 // entity so providers don't depend on persistence concerns.

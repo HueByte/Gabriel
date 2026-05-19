@@ -18,6 +18,14 @@ public class Message
 
     public DateTimeOffset CreatedAt { get; private set; } = DateTimeOffset.UtcNow;
 
+    // Variant grouping for regenerated assistant messages. All siblings of a
+    // single regenerate-able turn share one VariantGroupId. For user / system /
+    // tool messages — and for assistant messages with no regenerations yet —
+    // VariantGroupId equals the message's own Id (each message is its own
+    // singleton group). Exactly one message per group has IsActiveVariant = true.
+    public Guid VariantGroupId { get; private set; }
+    public bool IsActiveVariant { get; private set; } = true;
+
     private Message() { }
 
     internal static Message Create(
@@ -25,7 +33,8 @@ public class Message
         MessageRole role,
         string? content,
         string? toolCallId = null,
-        string? toolCallsJson = null)
+        string? toolCallsJson = null,
+        Guid? variantGroupId = null)
     {
         // Per-role payload validation.
         switch (role)
@@ -47,13 +56,20 @@ public class Message
                 break;
         }
 
+        var id = Guid.NewGuid();
         return new Message
         {
+            Id = id,
             ConversationId = conversationId,
             Role = role,
             Content = content,
             ToolCallId = toolCallId,
             ToolCallsJson = toolCallsJson,
+            VariantGroupId = variantGroupId ?? id,
+            IsActiveVariant = true,
         };
     }
+
+    internal void MarkInactiveVariant() => IsActiveVariant = false;
+    internal void MarkActiveVariant() => IsActiveVariant = true;
 }

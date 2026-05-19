@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Gabriel.Core.Entities;
-using Gabriel.Core.Providers;
+using Gabriel.Engine.Providers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -133,6 +133,9 @@ public class GrokChatProvider : IChatProvider
             ["stream"] = true,
             ["messages"] = BuildMessages(history),
         };
+
+        if (_options.Temperature.HasValue) body["temperature"] = _options.Temperature.Value;
+        if (_options.TopP.HasValue) body["top_p"] = _options.TopP.Value;
 
         if (tools.Count > 0)
         {

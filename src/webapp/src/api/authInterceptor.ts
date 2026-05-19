@@ -1,33 +1,20 @@
 import axios from 'axios';
+import { refreshSession, signalSessionExpired } from './authRefresh';
 
 // Axios interceptor for the generated openapi-typescript-codegen client.
 // On 401 it tries /api/auth/refresh once (cookies travel automatically because
 // the API is same-origin via the Vite proxy) and retries the original call.
-// Concurrent 401s queue on a single refresh attempt so we don't fire N parallel
-// refreshes.
+// Concurrent 401s queue on a single refresh attempt — see authRefresh.ts.
+//
+// SSE (streamChat) intentionally bypasses this interceptor since it uses raw
+// fetch — but it shares the same refreshSession() so a single refresh promise
+// covers both transports.
 
 const AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/refresh', '/api/auth/logout'];
 
-// Dispatched when the refresh attempt fails — AuthContext listens and clears state.
-export const SESSION_EXPIRED_EVENT = 'gabriel:session-expired';
-
-let refreshing: Promise<boolean> | null = null;
-
-async function tryRefresh(): Promise<boolean> {
-  try {
-    const res = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      // Empty body — webapp sends the refresh token via cookie. Server falls back
-      // to body for external clients but ignores it for us.
-      body: '{}',
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+// Re-exported so existing imports keep working. New code should pull this from
+// './authRefresh' directly.
+export { SESSION_EXPIRED_EVENT } from './authRefresh';
 
 export function installAuthInterceptor() {
   axios.interceptors.response.use(
@@ -46,12 +33,10 @@ export function installAuthInterceptor() {
 
       original._retried = true;
 
-      // Coalesce concurrent 401s onto a single refresh request.
-      refreshing ??= tryRefresh().finally(() => { refreshing = null; });
-      const ok = await refreshing;
+      const ok = await refreshSession();
 
       if (!ok) {
-        window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+        signalSessionExpired();
         return Promise.reject(error);
       }
 

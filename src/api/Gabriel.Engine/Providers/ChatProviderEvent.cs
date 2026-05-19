@@ -1,4 +1,4 @@
-namespace Gabriel.Core.Providers;
+namespace Gabriel.Engine.Providers;
 
 // Streaming events emitted by IChatProvider.StreamAsync. The provider buffers
 // partial tool-call deltas internally and only emits ToolCallReady once a call

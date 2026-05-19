@@ -1,4 +1,4 @@
-namespace Gabriel.Core.Providers;
+namespace Gabriel.Engine.Providers;
 
 // A single tool invocation requested by the assistant. ArgumentsJson is the
 // raw JSON string the model emitted — validation against the tool's parameter

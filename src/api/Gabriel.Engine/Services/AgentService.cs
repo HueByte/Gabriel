@@ -4,13 +4,15 @@ using System.Text.Json;
 using Gabriel.Core.Entities;
 using Gabriel.Core.Exceptions;
 using Gabriel.Core.Identity;
-using Gabriel.Core.Providers;
+using Gabriel.Core.Personality;
 using Gabriel.Core.Repositories;
-using Gabriel.Core.Tools;
+using Gabriel.Engine.Personality;
+using Gabriel.Engine.Providers;
+using Gabriel.Engine.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Gabriel.Core.Services;
+namespace Gabriel.Engine.Services;
 
 public class AgentService : IAgentService
 {
@@ -20,6 +22,9 @@ public class AgentService : IAgentService
     private readonly IUnitOfWork _uow;
     private readonly ITokenEstimator _tokens;
     private readonly ICurrentUser _currentUser;
+    private readonly IConversationStateUpdater _stateUpdater;
+    private readonly ISystemPromptBuilder _promptBuilder;
+    private readonly IResponsePostProcessor _postProcessor;
     private readonly AgentOptions _options;
     private readonly ILogger<AgentService> _logger;
 
@@ -30,6 +35,9 @@ public class AgentService : IAgentService
         IUnitOfWork uow,
         ITokenEstimator tokens,
         ICurrentUser currentUser,
+        IConversationStateUpdater stateUpdater,
+        ISystemPromptBuilder promptBuilder,
+        IResponsePostProcessor postProcessor,
         IOptions<AgentOptions> options,
         ILogger<AgentService> logger)
     {
@@ -39,6 +47,9 @@ public class AgentService : IAgentService
         _uow = uow;
         _tokens = tokens;
         _currentUser = currentUser;
+        _stateUpdater = stateUpdater;
+        _promptBuilder = promptBuilder;
+        _postProcessor = postProcessor;
         _options = options.Value;
         _logger = logger;
     }
@@ -60,20 +71,63 @@ public class AgentService : IAgentService
             ?? throw new NotFoundException(nameof(Conversation), conversationId);
 
         // Persist the user message before starting the stream so the timeline is
-        // consistent even if the client disconnects mid-loop.
+        // consistent even if the client disconnects mid-loop. State is updated in
+        // the same save — the new state feeds the per-turn system prompt and the
+        // post-processor when the reply lands.
         var userMessage = conversation.AppendUserMessage(userInput);
         _conversations.AddMessage(userMessage);
+        var newState = _stateUpdater.Update(conversation.GetState(), userInput);
+        conversation.SetState(newState);
+        _conversations.Update(conversation);
         await _uow.SaveChangesAsync(ct);
 
         // Compact here (between turns), never mid-iteration — cutting between an
         // assistant's tool_calls and its tool results would orphan them.
         await MaybeCompactAsync(conversation, ct);
 
-        return RunStreamAsync(conversation, ct);
+        return RunStreamAsync(conversation, variantGroupIdOverride: null, ct);
+    }
+
+    public async Task<IAsyncEnumerable<AgentEvent>> RegenerateAsync(
+        Guid conversationId,
+        Guid assistantMessageId,
+        CancellationToken ct = default)
+    {
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException("Authenticated user required.");
+
+        var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
+            ?? throw new NotFoundException(nameof(Conversation), conversationId);
+
+        var target = conversation.Messages.FirstOrDefault(m => m.Id == assistantMessageId)
+            ?? throw new NotFoundException(nameof(Message), assistantMessageId);
+
+        if (target.Role != MessageRole.Assistant)
+            throw new DomainException("Can only regenerate assistant messages.");
+
+        if (!target.IsActiveVariant)
+            throw new DomainException("Cannot regenerate an inactive variant — switch to it first.");
+
+        // Deactivate the chosen variant group so the next history assembly sees
+        // the old reply (and any sibling tool messages tagged with this group)
+        // as inactive. The new turn re-uses the same group id so the picker UI
+        // can navigate between the alternatives.
+        var variantGroupId = target.VariantGroupId;
+        conversation.DeactivateVariantGroup(variantGroupId);
+        _conversations.Update(conversation);
+        await _uow.SaveChangesAsync(ct);
+
+        // No new user message + no state update — state was set when the user
+        // originally sent this turn, and we're regenerating against that same
+        // state. Compact between turns as usual.
+        await MaybeCompactAsync(conversation, ct);
+
+        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, ct);
     }
 
     private async IAsyncEnumerable<AgentEvent> RunStreamAsync(
         Conversation conversation,
+        Guid? variantGroupIdOverride,
         [EnumeratorCancellation] CancellationToken ct)
     {
         var toolDescriptors = _tools.AsDescriptors();
@@ -110,7 +164,7 @@ public class AgentService : IAgentService
                 // OpenAI/xAI allow assistant messages to carry both text and tool_calls;
                 // preserve any leading reasoning text we accumulated.
                 var leadingText = textBuffer.Length > 0 ? textBuffer.ToString() : null;
-                var assistantMessage = conversation.AppendAssistantToolCalls(toolCallsJson, leadingText);
+                var assistantMessage = conversation.AppendAssistantToolCalls(toolCallsJson, leadingText, variantGroupIdOverride);
                 _conversations.AddMessage(assistantMessage);
                 await _uow.SaveChangesAsync(ct);
 
@@ -120,7 +174,7 @@ public class AgentService : IAgentService
 
                     var observation = await ExecuteToolSafelyAsync(call, ct);
 
-                    var toolMessage = conversation.AppendToolResult(call.Id, observation);
+                    var toolMessage = conversation.AppendToolResult(call.Id, observation, variantGroupIdOverride);
                     _conversations.AddMessage(toolMessage);
                     await _uow.SaveChangesAsync(ct);
 
@@ -133,17 +187,24 @@ public class AgentService : IAgentService
 
             if (finish == FinishReason.Stop)
             {
-                var text = textBuffer.ToString();
-                if (string.IsNullOrWhiteSpace(text))
+                var rawText = textBuffer.ToString();
+                if (string.IsNullOrWhiteSpace(rawText))
                 {
                     yield return new AgentError("Provider returned an empty response.");
                     yield return new AgentDone();
                     yield break;
                 }
-                var assistantMessage = conversation.AppendAssistantText(text);
+                // Save the cleaned version to the DB so reloads show the persona-
+                // safe form. Emit the RAW text in AgentAssistantMessage so the
+                // live client view (which reconciles against this) doesn't visibly
+                // swap mid-stream. Fall back to raw if the cleaner stripped it to
+                // empty — Message.Create rejects empty assistant content.
+                var cleaned = _postProcessor.Clean(rawText, conversation.GetState());
+                var toPersist = string.IsNullOrWhiteSpace(cleaned) ? rawText : cleaned;
+                var assistantMessage = conversation.AppendAssistantText(toPersist, variantGroupIdOverride);
                 _conversations.AddMessage(assistantMessage);
                 await _uow.SaveChangesAsync(ct);
-                yield return new AgentAssistantMessage(assistantMessage.Id, text);
+                yield return new AgentAssistantMessage(assistantMessage.Id, rawText);
                 yield return new AgentDone();
                 yield break;
             }
@@ -156,7 +217,8 @@ public class AgentService : IAgentService
 
         // Hit the iteration cap without the model giving a final answer.
         var giveup = conversation.AppendAssistantText(
-            $"(stopped after {_options.MaxIterations} tool iterations without a final answer)");
+            $"(stopped after {_options.MaxIterations} tool iterations without a final answer)",
+            variantGroupIdOverride);
         _conversations.AddMessage(giveup);
         await _uow.SaveChangesAsync(ct);
         yield return new AgentAssistantMessage(giveup.Id, giveup.Content!);
@@ -317,8 +379,12 @@ public class AgentService : IAgentService
     // --- History assembly --------------------------------------------------------
 
     // Builds the message list sent to the provider:
-    //   1. (Optional) system message containing the rolling summary
-    //   2. All messages strictly after SummarizedThroughMessageId (or all messages if no summary yet)
+    //   1. Persona system message (static persona + per-turn dynamic guidance)
+    //   2. (Optional) system message containing the rolling summary
+    //   3. All messages strictly after SummarizedThroughMessageId — filtered to
+    //      active variants. Tool messages are additionally required to point at
+    //      an active assistant's tool_call.id, so orphaned tool aftermath from
+    //      a deactivated regen turn never reaches the provider.
     private IReadOnlyList<ChatProviderMessage> ToProviderHistory(Conversation conv)
     {
         var messages = conv.Messages.ToList();
@@ -329,7 +395,31 @@ public class AgentService : IAgentService
             if (cutIdx >= 0) startIdx = cutIdx + 1;
         }
 
-        var result = new List<ChatProviderMessage>(messages.Count - startIdx + 1);
+        // Collect tool_call.ids referenced by active assistant messages so we
+        // can keep their tool results (and drop everyone else's).
+        var activeToolCallIds = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = startIdx; i < messages.Count; i++)
+        {
+            var m = messages[i];
+            if (m.Role != MessageRole.Assistant || !m.IsActiveVariant) continue;
+            if (string.IsNullOrEmpty(m.ToolCallsJson)) continue;
+
+            using var doc = JsonDocument.Parse(m.ToolCallsJson);
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var id = el.GetProperty("id").GetString();
+                if (id is not null) activeToolCallIds.Add(id);
+            }
+        }
+
+        var result = new List<ChatProviderMessage>(messages.Count - startIdx + 2);
+
+        // Persona prompt always goes first — it's the "who you are" header. State
+        // may be null on the very first call before the updater has run; the
+        // builder handles null gracefully.
+        result.Add(new ChatProviderMessage(
+            MessageRole.System,
+            _promptBuilder.Build(conv.GetState())));
 
         if (!string.IsNullOrEmpty(conv.Summary))
         {
@@ -341,6 +431,20 @@ public class AgentService : IAgentService
         for (var i = startIdx; i < messages.Count; i++)
         {
             var m = messages[i];
+
+            // Filter inactive variants. Tool messages are kept iff their parent
+            // assistant's tool_call.id is still in the active set — this catches
+            // legacy tool messages that were created before variant grouping
+            // covered the tool aftermath.
+            if (m.Role == MessageRole.Tool)
+            {
+                if (m.ToolCallId is null || !activeToolCallIds.Contains(m.ToolCallId)) continue;
+            }
+            else if (!m.IsActiveVariant)
+            {
+                continue;
+            }
+
             List<ChatProviderToolCall>? toolCalls = null;
             if (!string.IsNullOrEmpty(m.ToolCallsJson))
             {

@@ -1,4 +1,4 @@
-namespace Gabriel.Core.Providers;
+namespace Gabriel.Engine.Providers;
 
 // Streaming abstraction over LLM providers (mock, Grok/xAI, OpenAI, etc).
 // Providers yield a sequence of events (text deltas, completed tool calls, finish)

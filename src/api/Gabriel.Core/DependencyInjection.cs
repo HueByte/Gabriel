@@ -1,25 +1,15 @@
 using Gabriel.Core.Services;
-using Gabriel.Core.Tools;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Gabriel.Core;
 
+// Domain wiring only. The agent stack (LLM providers, tools, personality, ReAct
+// loop) lives in Gabriel.Engine and is registered via AddEngineServices.
 public static class DependencyInjection
 {
-    public static IServiceCollection AddCoreServices(this IServiceCollection services, IConfiguration config)
+    public static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
-        services.Configure<AgentOptions>(config.GetSection(AgentOptions.SectionName));
-
         services.AddScoped<IChatService, ChatService>();
-        services.AddScoped<IAgentService, AgentService>();
-        services.AddScoped<IToolRegistry, ToolRegistry>();
-        services.AddSingleton<ITokenEstimator, NaiveTokenEstimator>();
-
-        // Tool registrations. Each ITool added here is automatically discovered
-        // by ToolRegistry via the IEnumerable<ITool> constructor injection.
-        services.AddScoped<ITool, GetCurrentTimeTool>();
-
         return services;
     }
 }

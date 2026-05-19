@@ -16,6 +16,12 @@ public interface IConversationRepository
     // a user-scoped read.
     Task AddAsync(Conversation conversation, CancellationToken ct = default);
     void AddMessage(Message message);
+
+    // Explicit message removal so EF's change tracker definitely marks the rows
+    // for deletion — orphan-removal from the navigation alone is fragile across
+    // EF versions / configurations.
+    void RemoveMessages(IEnumerable<Message> messages);
+
     void Update(Conversation conversation);
     void Remove(Conversation conversation);
 }

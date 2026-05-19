@@ -4,7 +4,7 @@ import {
   AuthService,
   type MeResponse,
 } from '../api/generated';
-import { SESSION_EXPIRED_EVENT } from '../api/authInterceptor';
+import { SESSION_EXPIRED_EVENT } from '../api/authRefresh';
 
 export interface AuthState {
   // undefined  → still resolving the initial /me call (avoid flicker)
@@ -52,13 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refreshMe();
   }, [refreshMe]);
 
-  // Interceptor fires this when a 401 → refresh attempt fails.
-  useEffect(() => {
-    const handler = () => setUser(null);
-    window.addEventListener(SESSION_EXPIRED_EVENT, handler);
-    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handler);
-  }, []);
-
   const login = useCallback(async (email: string, password: string) => {
     try {
       await AuthService.postApiAuthLogin({ requestBody: { email, password } });
@@ -87,6 +80,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
   }, []);
+
+  // Interceptor (axios) or SSE client fires this when a 401 → refresh attempt
+  // fails. Run the full logout flow so the server-side refresh family is
+  // revoked and the browser cookies are cleared — matches the manual sign-out
+  // path. The logout endpoint is anonymous and idempotent, so a stale or
+  // missing refresh cookie is fine.
+  useEffect(() => {
+    const handler = () => { void logout(); };
+    window.addEventListener(SESSION_EXPIRED_EVENT, handler);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handler);
+  }, [logout]);
 
   return (
     <AuthContext.Provider value={{ user, login, register, logout }}>

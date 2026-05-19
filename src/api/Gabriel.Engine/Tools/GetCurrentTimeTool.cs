@@ -1,4 +1,4 @@
-namespace Gabriel.Core.Tools;
+namespace Gabriel.Engine.Tools;
 
 // Trivial starter tool — proves the ReAct loop works end-to-end without any
 // external dependencies.

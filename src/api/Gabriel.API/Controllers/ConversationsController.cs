@@ -1,10 +1,15 @@
 using System.Text.Json;
 using Gabriel.API.Contracts.Conversations;
 using Gabriel.API.Contracts.Messages;
+using Gabriel.API.Contracts.Sequence;
 using Gabriel.API.Mapping;
 using Gabriel.Core.Services;
+using Gabriel.Engine.Personality;
+using Gabriel.Engine.Sequence;
+using Gabriel.Engine.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Gabriel.API.Controllers;
 
@@ -17,11 +22,19 @@ public class ConversationsController : ControllerBase
 
     private readonly IChatService _chat;
     private readonly IAgentService _agent;
+    private readonly IGabrielSequenceService _sequence;
+    private readonly PersonalityOptions _personality;
 
-    public ConversationsController(IChatService chat, IAgentService agent)
+    public ConversationsController(
+        IChatService chat,
+        IAgentService agent,
+        IGabrielSequenceService sequence,
+        IOptions<PersonalityOptions> personality)
     {
         _chat = chat;
         _agent = agent;
+        _sequence = sequence;
+        _personality = personality.Value;
     }
 
     [HttpGet]
@@ -64,6 +77,17 @@ public class ConversationsController : ControllerBase
         return Ok(conv.ToResponse(includeMessages: false));
     }
 
+    // Gabriel Sequence — the 64-frame, 16×16 RGB representation of this
+    // conversation's personality. Generated server-side from AvatarSeed +
+    // ConversationState; not persisted. Cheap to call as often as the client
+    // wants a fresh Live State (e.g. once per turn).
+    [HttpGet("{id:guid}/sequence")]
+    public async Task<ActionResult<GabrielSequenceResponse>> GetSequence(Guid id, CancellationToken ct)
+    {
+        var sequence = await _sequence.GetForConversationAsync(id, ct);
+        return Ok(sequence.ToResponse());
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
@@ -71,10 +95,100 @@ public class ConversationsController : ControllerBase
         return NoContent();
     }
 
+    // Delete the message AND every message that came after it. Anchors on the
+    // earliest sibling in the variant group so a regenerated turn's tail (its
+    // tool aftermath + every variant) goes cleanly. Returns the conversation
+    // (without messages) so the client can sync UpdatedAt.
+    [HttpDelete("{id:guid}/messages/{messageId:guid}")]
+    public async Task<ActionResult<ConversationResponse>> DeleteMessage(
+        Guid id,
+        Guid messageId,
+        CancellationToken ct)
+    {
+        var conv = await _chat.DeleteMessageAsync(id, messageId, ct);
+        return Ok(conv.ToResponse(includeMessages: false));
+    }
+
+    // Switches which variant is active within a variant group. The chosen
+    // message becomes active; its siblings become inactive. The client picks
+    // which sibling to surface via the variant picker UI.
+    [HttpPatch("{id:guid}/messages/{messageId:guid}/active")]
+    public async Task<ActionResult<ConversationResponse>> SetActiveVariant(
+        Guid id,
+        Guid messageId,
+        CancellationToken ct)
+    {
+        var conv = await _chat.SetActiveVariantAsync(id, messageId, ct);
+        return Ok(conv.ToResponse(includeMessages: true));
+    }
+
+    // Regenerate the assistant message at messageId. Same SSE wire format as
+    // /messages/stream so the client can reuse its streaming consumer. The new
+    // reply shares the original's variantGroupId so the picker UI can navigate
+    // between the alternatives.
+    [HttpPost("{id:guid}/messages/{messageId:guid}/regenerate")]
+    public async Task RegenerateMessage(Guid id, Guid messageId, CancellationToken ct)
+    {
+        var stream = await _agent.RegenerateAsync(id, messageId, ct);
+
+        Response.Headers["Content-Type"] = "text/event-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        var rng = Random.Shared;
+        var thinkingDelayMs = rng.Next(_personality.MinThinkingDelayMs, _personality.MaxThinkingDelayMs + 1);
+        var cps = rng.Next(_personality.MinCharsPerSecond, _personality.MaxCharsPerSecond + 1);
+        var msPerChar = 1000.0 / cps;
+        var firstDeltaSent = false;
+        var charsForwarded = 0;
+        var streamStartTicks = 0L;
+
+        try
+        {
+            await foreach (var evt in stream.WithCancellation(ct))
+            {
+                if (evt is AgentTextDelta td)
+                {
+                    if (!firstDeltaSent)
+                    {
+                        await Task.Delay(thinkingDelayMs, ct);
+                        streamStartTicks = Environment.TickCount64;
+                        firstDeltaSent = true;
+                    }
+                    else
+                    {
+                        var elapsedMs = Environment.TickCount64 - streamStartTicks;
+                        var targetMs = (long)(charsForwarded * msPerChar);
+                        var waitMs = targetMs - elapsedMs;
+                        if (waitMs > 0) await Task.Delay((int)waitMs, ct);
+                    }
+                    charsForwarded += td.Delta.Length;
+                }
+
+                var json = JsonSerializer.Serialize<AgentEvent>(evt, SseJsonOpts);
+                await Response.WriteAsync($"data: {json}\n\n", ct);
+                await Response.Body.FlushAsync(ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            var fallback = JsonSerializer.Serialize<AgentEvent>(new AgentError(ex.Message), SseJsonOpts);
+            await Response.WriteAsync($"data: {fallback}\n\n", ct);
+            await Response.Body.FlushAsync(ct);
+        }
+    }
+
     // SSE endpoint — yields AgentEvent JSON frames (textDelta, toolCall, toolResult,
     // assistantMessage, done, error). Each frame is a single `data: ...\n\n` line.
     // Pre-flight validation (empty input, missing conversation) throws before any
     // bytes are written so 4xx/ProblemDetails responses still work.
+    //
+    // Typing-tempo simulation lives here (Personality phase 1): a fixed "thinking"
+    // delay before the first textDelta and a per-character throttle on subsequent
+    // ones, so the wire pace looks like a human typing instead of bursty provider
+    // chunks. Other event types (toolCall / toolResult / assistantMessage / done /
+    // error) bypass the throttle.
     [HttpPost("{id:guid}/messages/stream")]
     public async Task StreamMessage(
         Guid id,
@@ -90,10 +204,39 @@ public class ConversationsController : ControllerBase
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no"; // bypass reverse-proxy buffering
 
+        var rng = Random.Shared;
+        var thinkingDelayMs = rng.Next(_personality.MinThinkingDelayMs, _personality.MaxThinkingDelayMs + 1);
+        var cps = rng.Next(_personality.MinCharsPerSecond, _personality.MaxCharsPerSecond + 1);
+        var msPerChar = 1000.0 / cps;
+        var firstDeltaSent = false;
+        var charsForwarded = 0;
+        var streamStartTicks = 0L;
+
         try
         {
             await foreach (var evt in stream.WithCancellation(ct))
             {
+                if (evt is AgentTextDelta td)
+                {
+                    if (!firstDeltaSent)
+                    {
+                        // "Thinking" pause before the first character lands.
+                        await Task.Delay(thinkingDelayMs, ct);
+                        streamStartTicks = Environment.TickCount64;
+                        firstDeltaSent = true;
+                    }
+                    else
+                    {
+                        // Throttle to cps: target time = chars * msPerChar from stream
+                        // start. Sleep if we're ahead, ship immediately if behind.
+                        var elapsedMs = Environment.TickCount64 - streamStartTicks;
+                        var targetMs = (long)(charsForwarded * msPerChar);
+                        var waitMs = targetMs - elapsedMs;
+                        if (waitMs > 0) await Task.Delay((int)waitMs, ct);
+                    }
+                    charsForwarded += td.Delta.Length;
+                }
+
                 var json = JsonSerializer.Serialize<AgentEvent>(evt, SseJsonOpts);
                 await Response.WriteAsync($"data: {json}\n\n", ct);
                 await Response.Body.FlushAsync(ct);

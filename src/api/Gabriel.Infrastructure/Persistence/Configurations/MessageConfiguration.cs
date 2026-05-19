@@ -17,6 +17,15 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(m => m.ToolCallsJson);                  // nullable: set only on Assistant-with-tool-calls
         builder.Property(m => m.CreatedAt).IsRequired();
 
+        // Variant grouping — same value for all regen siblings; equals Id for singletons.
+        builder.Property(m => m.VariantGroupId).IsRequired();
+        builder.Property(m => m.IsActiveVariant).IsRequired();
+
         builder.HasIndex(m => new { m.ConversationId, m.CreatedAt });
+
+        // Used by SetActiveVariant + provider-history filtering when there are
+        // many variants on a turn. Indexed on the conversation too because
+        // VariantGroupId is otherwise globally arbitrary.
+        builder.HasIndex(m => new { m.ConversationId, m.VariantGroupId });
     }
 }

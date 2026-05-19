@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Markdown, toGalactic, GAL_OPEN, GAL_CLOSE } from './Markdown';
 
 // Reveal cadence — chars per second.
 //   actualRate = min(MAX_RATE, BASE_RATE + backlog * SPEEDUP_PER_BACKLOG_CHAR)
@@ -12,22 +13,6 @@ const MAX_RATE = 200;
 // translation catches up. Keeps the alien-script crest visible regardless
 // of message length.
 const GALACTIC_LEAD = 25;
-
-// A–Z → Tifinagh glyphs. Non-letters pass through untouched.
-const GAL_MAP: Record<string, string> = {
-  A: 'ⴰ', B: 'ⴱ', C: 'ⵛ', D: 'ⴷ', E: 'ⴻ', F: 'ⴼ', G: 'ⴳ',
-  H: 'ⵀ', I: 'ⵉ', J: 'ⵊ', K: 'ⴽ', L: 'ⵍ', M: 'ⵎ', N: 'ⵏ',
-  O: 'ⵄ', P: 'ⵒ', Q: 'ⵇ', R: 'ⵔ', S: 'ⵙ', T: 'ⵟ', U: 'ⵓ',
-  V: 'ⵠ', W: 'ⵡ', X: 'ⵅ', Y: 'ⵢ', Z: 'ⵣ',
-};
-function toGalactic(s: string): string {
-  let out = '';
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    out += GAL_MAP[ch.toUpperCase()] ?? ch;
-  }
-  return out;
-}
 
 interface Props {
   text: string;
@@ -47,9 +32,11 @@ interface Props {
  *           (galactic mode). Once `gal` reaches the end of the known text,
  *           `en` is allowed to catch up.
  *
- * Driven by `requestAnimationFrame` + time-based scheduling, so it paces to
- * wall-clock rather than to `setInterval`'s drift. One char per reveal moment
- * (no chunked bursts) → no visible jumps.
+ * The revealed text is rendered through markdown so formatting (links, lists,
+ * code, hr, hex swatches) snaps in as chars cross. The galactic trail is
+ * appended as a sentinel-wrapped slice; remarkInlineEnrichments lifts it into
+ * a styled span inside the markdown AST so it flows inline at the end of the
+ * last paragraph rather than dangling after block elements.
  */
 export function StreamingText({ text, animate, caret = false, galactic = false }: Props) {
   const prefersReduced = typeof window !== 'undefined'
@@ -67,18 +54,9 @@ export function StreamingText({ text, animate, caret = false, galactic = false }
   galacticRef.current = galactic;
 
   // Scheduled time (performance.now() domain) for the next char to appear.
-  // 0 means "not initialized" — first tick sets it to `now`.
   const nextRevealRef = useRef(0);
   const rafRef = useRef<number | null>(null);
-  // Trivial counter so React re-renders when cursors advance.
   const [, bump] = useState(0);
-
-  // Cache the full galactic translation. Recomputes only when `text` changes,
-  // not every frame. Cheap even for 1k-char text; just no reason to redo it.
-  const galacticFull = useMemo(
-    () => (galactic ? toGalactic(text) : ''),
-    [text, galactic],
-  );
 
   useEffect(() => {
     targetRef.current = text;
@@ -90,24 +68,18 @@ export function StreamingText({ text, animate, caret = false, galactic = false }
       return;
     }
 
-    // Guard against text shrinking under the cursors.
     if (cursorsRef.current.gal > text.length) cursorsRef.current.gal = text.length;
     if (cursorsRef.current.en > text.length) cursorsRef.current.en = text.length;
 
-    // If the rAF loop is idle but there's now work to do, restart it.
     const { gal, en } = cursorsRef.current;
     const needsWork = gal < text.length || en < text.length;
     if (rafRef.current == null && needsWork) {
-      // Reset the schedule — start fresh at the next frame.
       nextRevealRef.current = 0;
       rafRef.current = requestAnimationFrame(tick);
     }
-    // Note: we intentionally don't cancel/restart when text changes mid-run.
-    // The running loop reads targetRef each frame and picks up new text.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, animating]);
 
-  // Cleanup on unmount.
   useEffect(() => () => {
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
@@ -115,21 +87,15 @@ export function StreamingText({ text, animate, caret = false, galactic = false }
     }
   }, []);
 
-  // The rAF tick. Defined after the effects so it can close over the refs
-  // without dependency-warning gymnastics. Stable closure across renders.
   function tick(now: number) {
     const c = cursorsRef.current;
     const target = targetRef.current;
     const isGalactic = galacticRef.current;
 
-    // First tick: anchor the schedule to wall-clock so we don't burst-advance.
     if (nextRevealRef.current === 0) nextRevealRef.current = now;
 
     let advanced = false;
 
-    // Reveal as many chars as the wall-clock schedule allows. At base rate
-    // (~45ms/char) this is usually 0–1 chars/frame; at high backlog the loop
-    // may emit several chars per frame, but always one-per-scheduled-moment.
     while (
       now >= nextRevealRef.current
       && (c.gal < target.length || c.en < target.length)
@@ -147,7 +113,6 @@ export function StreamingText({ text, animate, caret = false, galactic = false }
       advanced = true;
     }
 
-    // Single re-render per frame regardless of how many chars advanced.
     if (advanced) bump(n => n + 1);
 
     if (c.gal < target.length || c.en < target.length) {
@@ -159,17 +124,20 @@ export function StreamingText({ text, animate, caret = false, galactic = false }
 
   const { gal, en } = cursorsRef.current;
   const englishPart = text.slice(0, en);
-  const galacticPart = galactic
-    ? galacticFull.slice(en, gal)
-    : text.slice(en, gal);
+  const trailRaw = text.slice(en, gal);
+  const trail = galactic ? toGalactic(trailRaw) : trailRaw;
   const stillTyping = animating && (gal < text.length || en < text.length);
+
+  // Build markdown source: english prefix + sentinel-wrapped trail (so the
+  // remark plugin pulls the trail into the AST as a styled span inside the
+  // last inline context).
+  const markdownSource = trail.length > 0
+    ? `${englishPart}${GAL_OPEN}${trail}${GAL_CLOSE}`
+    : englishPart;
 
   return (
     <>
-      {englishPart}
-      {galacticPart.length > 0 && (
-        <span className={galactic ? 'gtw-galactic' : undefined}>{galacticPart}</span>
-      )}
+      <Markdown text={markdownSource} />
       {caret && stillTyping && <span className="caret" aria-hidden="true">▍</span>}
     </>
   );

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Gabriel.Core.Services;
+namespace Gabriel.Engine.Services;
 
 // Events yielded by AgentService.RunAsync — also the SSE wire format. Polymorphic
 // JSON discriminator is "type", so clients switch on that string.

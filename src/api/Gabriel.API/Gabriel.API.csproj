@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Gabriel.Core\Gabriel.Core.csproj" />
+    <ProjectReference Include="..\Gabriel.Engine\Gabriel.Engine.csproj" />
     <ProjectReference Include="..\Gabriel.Infrastructure\Gabriel.Infrastructure.csproj" />
   </ItemGroup>
 

@@ -23,4 +23,10 @@ public class GrokOptions
     // Approximate context window for the active model. grok-4 is 256k; older models
     // are smaller. Override per-deployment if you change the Model field.
     public int ContextWindowTokens { get; set; } = 256_000;
+
+    // Sampling controls. 0.8-0.9 hits a nice spot for the natural-DM persona —
+    // 1.0 reads as slightly too random, below 0.7 starts feeling robotic. top_p
+    // 0.9 keeps the tail constrained without choking variance.
+    public double? Temperature { get; set; } = 0.85;
+    public double? TopP { get; set; } = 0.9;
 }

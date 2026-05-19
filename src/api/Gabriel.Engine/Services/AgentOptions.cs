@@ -1,4 +1,4 @@
-namespace Gabriel.Core.Services;
+namespace Gabriel.Engine.Services;
 
 public class AgentOptions
 {

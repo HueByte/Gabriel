@@ -1,6 +1,6 @@
 using Gabriel.Core.Entities;
 
-namespace Gabriel.Core.Services;
+namespace Gabriel.Engine.Services;
 
 // Approximate token count for context-window budgeting. Behind an interface so
 // the naive char-based impl can be swapped for a real BPE tokenizer later

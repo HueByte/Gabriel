@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HiOutlineArrowPath } from 'react-icons/hi2';
 import { Avatar } from './components/Avatar';
 import { Chat } from './components/Chat';
@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { DefaultLayout } from './layouts/DefaultLayout';
 import { ConversationsService, type ConversationResponse } from './api/generated';
 import { notifyError } from './lib/notify';
+import { paletteForSeed, paletteAccent, paletteGradientCss, rgbToCss } from './pulse/palettes';
 
 const SIDEBAR_STORAGE_KEY = 'gabriel.sidebar.collapsed';
 const ACTIVE_CONVERSATION_KEY = 'gabriel.activeConversationId';
@@ -136,30 +137,47 @@ export function App() {
     />
   );
 
+  // Derive the avatar palette from the seed so the UI (galactic trail color,
+  // thinking glow, link accents) stays in lockstep with the avatar visuals.
+  // The avatar internally re-derives the same palette via the same seed/RNG
+  // order, so they always agree.
+  const palette = useMemo(() => paletteForSeed(avatarSeed), [avatarSeed]);
+  const paletteVars = useMemo(
+    () => ({
+      ['--palette-accent' as string]: rgbToCss(paletteAccent(palette)),
+      ['--palette-accent-soft' as string]: rgbToCss(paletteAccent(palette), 0.22),
+      ['--palette-gradient' as string]: paletteGradientCss(palette),
+    }) as React.CSSProperties,
+    [palette],
+  );
+
   return (
     <DefaultLayout sidebar={sidebar}>
-      <div className={`avatar-wrap${thinking ? ' thinking' : ''}`}>
-        <Avatar seed={avatarSeed} />
-        <button
-          type="button"
-          className="reroll"
-          onClick={() => void rerollAvatar()}
-          disabled={!conversationId}
-          aria-label="Reroll avatar"
-          title="Reroll avatar"
-        >
-          <HiOutlineArrowPath aria-hidden="true" />
-        </button>
-      </div>
+      <div style={paletteVars} className="palette-scope">
+        <div className={`avatar-wrap${thinking ? ' thinking' : ''}`}>
+          <Avatar seed={avatarSeed} />
+          <button
+            type="button"
+            className="reroll"
+            onClick={() => void rerollAvatar()}
+            disabled={!conversationId}
+            aria-label="Reroll avatar"
+            title="Reroll avatar"
+          >
+            <HiOutlineArrowPath aria-hidden="true" />
+          </button>
+        </div>
 
-      {conversationId && (
-        <Chat
-          conversationId={conversationId}
-          onMessageSent={bumpSidebar}
-          onBusyChange={setThinking}
-          onConversationLoaded={handleConversationLoaded}
-        />
-      )}
+        {conversationId && (
+          <Chat
+            conversationId={conversationId}
+            avatarSeed={avatarSeed}
+            onMessageSent={bumpSidebar}
+            onBusyChange={setThinking}
+            onConversationLoaded={handleConversationLoaded}
+          />
+        )}
+      </div>
     </DefaultLayout>
   );
 }

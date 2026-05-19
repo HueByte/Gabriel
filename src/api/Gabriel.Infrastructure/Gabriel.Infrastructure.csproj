@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Gabriel.Core\Gabriel.Core.csproj" />
+    <ProjectReference Include="..\Gabriel.Engine\Gabriel.Engine.csproj" />
   </ItemGroup>
 
 </Project>

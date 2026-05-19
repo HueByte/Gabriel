@@ -1,5 +1,5 @@
-using Gabriel.Core.Providers;
 using Gabriel.Core.Repositories;
+using Gabriel.Engine.Providers;
 using Gabriel.Infrastructure.Persistence;
 using Gabriel.Infrastructure.Persistence.Repositories;
 using Gabriel.Infrastructure.Providers;

@@ -23,6 +23,10 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.Property(c => c.Summary);
         builder.Property(c => c.SummarizedThroughMessageId);
 
+        // Conversation behavioral state (ConversationState serialized to JSON).
+        // Nullable — populated lazily on the first user turn.
+        builder.Property(c => c.StateJson);
+
         // Map the private _messages backing field so callers can only mutate via the aggregate.
         var messagesNav = builder.Metadata.FindNavigation(nameof(Conversation.Messages))!;
         messagesNav.SetPropertyAccessMode(PropertyAccessMode.Field);

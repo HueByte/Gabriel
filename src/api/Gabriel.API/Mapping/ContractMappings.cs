@@ -1,29 +1,97 @@
 using System.Text.Json;
 using Gabriel.API.Contracts.Conversations;
 using Gabriel.API.Contracts.Messages;
+using Gabriel.API.Contracts.Sequence;
 using Gabriel.Core.Entities;
+using Gabriel.Engine.Sequence;
 
 namespace Gabriel.API.Mapping;
 
 internal static class ContractMappings
 {
-    public static MessageResponse ToResponse(this Message m)
-        => new(
-            m.Id,
-            m.Role.ToString().ToLowerInvariant(),
-            m.Content,
-            m.CreatedAt,
-            m.ToolCallId,
-            ParseToolCalls(m.ToolCallsJson));
-
     public static ConversationResponse ToResponse(this Conversation c, bool includeMessages)
-        => new(
-            c.Id,
-            c.Title,
-            c.AvatarSeed,
-            c.CreatedAt,
-            c.UpdatedAt,
-            includeMessages ? c.Messages.Select(ToResponse).ToList() : null);
+    {
+        if (!includeMessages)
+        {
+            return new ConversationResponse(c.Id, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, null);
+        }
+
+        var allMessages = c.Messages;
+
+        // Tool messages: keep only those whose tool_call.id is referenced by an
+        // active assistant. Matches the agent's history-assembly filter so the
+        // UI sees the same conversation the model does.
+        var activeToolCallIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var m in allMessages)
+        {
+            if (m.Role != MessageRole.Assistant || !m.IsActiveVariant) continue;
+            if (string.IsNullOrEmpty(m.ToolCallsJson)) continue;
+
+            using var doc = JsonDocument.Parse(m.ToolCallsJson);
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                var id = el.GetProperty("id").GetString();
+                if (id is not null) activeToolCallIds.Add(id);
+            }
+        }
+
+        // Precompute sibling lists per variant group so the variant picker has
+        // everything it needs without hitting the API again. Sort by CreatedAt
+        // so the index is stable across reloads.
+        var groupSiblings = allMessages
+            .GroupBy(m => m.VariantGroupId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(m => m.CreatedAt).Select(m => m.Id).ToList());
+
+        var messages = new List<MessageResponse>();
+        foreach (var m in allMessages)
+        {
+            if (m.Role == MessageRole.Tool)
+            {
+                if (m.ToolCallId is null || !activeToolCallIds.Contains(m.ToolCallId)) continue;
+            }
+            else if (!m.IsActiveVariant)
+            {
+                continue;
+            }
+
+            var siblings = groupSiblings[m.VariantGroupId];
+            messages.Add(new MessageResponse(
+                m.Id,
+                m.Role.ToString().ToLowerInvariant(),
+                m.Content,
+                m.CreatedAt,
+                m.VariantGroupId,
+                siblings.IndexOf(m.Id),
+                siblings.Count,
+                siblings,
+                m.ToolCallId,
+                ParseToolCalls(m.ToolCallsJson)));
+        }
+
+        return new ConversationResponse(c.Id, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, messages);
+    }
+
+    public static GabrielSequenceResponse ToResponse(this GabrielSequence sequence)
+    {
+        var palette = sequence.Palette.Colors
+            .Select(c => new[] { (int)c.R, (int)c.G, (int)c.B })
+            .ToList();
+
+        var frames = sequence.Frames
+            .Select(f => f.Pixels.Select(b => (int)b).ToArray())
+            .ToList();
+
+        return new GabrielSequenceResponse(
+            sequence.Version,
+            palette,
+            frames,
+            new SequenceMetadataResponse(
+                sequence.Metadata.Seed,
+                sequence.Metadata.GeneratedAt,
+                sequence.Metadata.StateSummary));
+    }
 
     // Re-parses the stored wire-format tool_calls JSON into the API DTO shape.
     private static IReadOnlyList<MessageToolCall>? ParseToolCalls(string? json)

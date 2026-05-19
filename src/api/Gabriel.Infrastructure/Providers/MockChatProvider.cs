@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using Gabriel.Core.Entities;
-using Gabriel.Core.Providers;
+using Gabriel.Engine.Providers;
 
 namespace Gabriel.Infrastructure.Providers;
 

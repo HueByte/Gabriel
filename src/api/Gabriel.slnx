@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Gabriel.API/Gabriel.API.csproj" />
   <Project Path="Gabriel.Core/Gabriel.Core.csproj" />
+  <Project Path="Gabriel.Engine/Gabriel.Engine.csproj" />
   <Project Path="Gabriel.Infrastructure/Gabriel.Infrastructure.csproj" />
 </Solution>
