@@ -36,12 +36,23 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
         _logger = logger;
     }
 
+    // The two DDG search endpoints live on separate subdomains:
+    //   https://html.duckduckgo.com/html/   - rich HTML output (the primary)
+    //   https://lite.duckduckgo.com/lite/   - minimal HTML output (the fallback)
+    // Using absolute URLs here so the request unambiguously hits the right
+    // host regardless of what BaseAddress the named HttpClient was configured
+    // with. (Older versions of this file pointed both at html.duckduckgo.com,
+    // which silently broke the lite/ fallback - html.duckduckgo.com doesn't
+    // serve the lite layout.)
+    private const string HtmlEndpoint = "https://html.duckduckgo.com/html/";
+    private const string LiteEndpoint = "https://lite.duckduckgo.com/lite/";
+
     public async Task<IReadOnlyList<WebSearchResult>> SearchAsync(string query, int limit, CancellationToken ct)
     {
         var http = _httpFactory.CreateClient(HttpClientName);
 
         // Primary: rich html/ endpoint. Has snippets + redirect-wrapped URLs.
-        var primary = await FetchAsync(http, "html/", query, ct);
+        var primary = await FetchAsync(http, HtmlEndpoint, query, ct);
         if (DetectAnomalyPage(primary))
         {
             _logger.LogWarning(
@@ -58,7 +69,7 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
         }
 
         // Fallback: lite/ endpoint. Simpler markup, less aggressive bot-flagging.
-        var lite = await FetchAsync(http, "lite/", query, ct);
+        var lite = await FetchAsync(http, LiteEndpoint, query, ct);
         if (DetectAnomalyPage(lite))
         {
             _logger.LogWarning(
@@ -77,7 +88,7 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
         return liteParsed;
     }
 
-    private async Task<string> FetchAsync(HttpClient http, string path, string query, CancellationToken ct)
+    private async Task<string> FetchAsync(HttpClient http, string url, string query, CancellationToken ct)
     {
         var form = new FormUrlEncodedContent(new[]
         {
@@ -85,11 +96,11 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
             new KeyValuePair<string, string>("kl", "us-en"),
         });
 
-        using var response = await http.PostAsync(path, form, ct);
+        using var response = await http.PostAsync(url, form, ct);
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("DuckDuckGo {Path} returned {Status}", path, (int)response.StatusCode);
-            throw new HttpRequestException($"DuckDuckGo {path} returned {(int)response.StatusCode}.");
+            _logger.LogWarning("DuckDuckGo {Url} returned {Status}", url, (int)response.StatusCode);
+            throw new HttpRequestException($"DuckDuckGo {url} returned {(int)response.StatusCode}.");
         }
         return await response.Content.ReadAsStringAsync(ct);
     }

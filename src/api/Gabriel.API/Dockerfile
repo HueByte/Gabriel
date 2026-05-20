@@ -40,6 +40,14 @@ RUN mkdir -p /app/data /app/logs /app/projects-data \
 
 COPY --from=build --chown=gabriel:gabriel /app/publish ./
 
+# Bake Gabriel's docs into the image so the docs_list / docs_read tools work
+# without depending on an external host mount or the GitHub-raw fallback.
+# `docs` is a BuildKit named context wired up in docker-compose.yml; passing
+# `--build-context docs=./docs` works for plain `docker build` invocations.
+# LocalDocsLookup's default path "docs/gabriel-self-docs" then resolves
+# directly under WORKDIR=/app with no further config.
+COPY --from=docs --chown=gabriel:gabriel . ./docs
+
 USER gabriel
 
 ENV ASPNETCORE_URLS=http://+:8080 \

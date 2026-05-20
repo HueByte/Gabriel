@@ -35,6 +35,13 @@ public sealed class CompositeDocsLookup : IDocsLookup
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var merged = new List<DocsEntry>();
 
+        // Track the last transient failure so we can surface it if EVERY
+        // source returned empty. Without this, a failing GitHub API call
+        // (rate limit / 5xx / DNS) gets swallowed and the agent just sees
+        // "No Gabriel docs are currently available" with no clue why -
+        // identical to a genuine zero-docs scenario.
+        Exception? lastTransient = null;
+
         foreach (var source in _sources)
         {
             IReadOnlyList<DocsEntry> entries;
@@ -51,6 +58,7 @@ public sealed class CompositeDocsLookup : IDocsLookup
                 // A failing source must not poison the whole list - the user
                 // still benefits from whatever other sources can answer.
                 _logger.LogWarning(ex, "Docs source {Source} failed during ListAsync; skipping it.", source.GetType().Name);
+                lastTransient = ex;
                 continue;
             }
 
@@ -60,6 +68,13 @@ public sealed class CompositeDocsLookup : IDocsLookup
                     merged.Add(e);
             }
         }
+
+        // If at least one source returned entries we hand those back even when
+        // another source failed - partial coverage beats no coverage. But if
+        // every source either returned empty OR threw, and at least one threw,
+        // rethrow so the user-facing tool message includes the actual cause
+        // (rate limit, 5xx, DNS) instead of the generic "no docs" string.
+        if (merged.Count == 0 && lastTransient is not null) throw lastTransient;
 
         return merged;
     }

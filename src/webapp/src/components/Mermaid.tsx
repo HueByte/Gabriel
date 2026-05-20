@@ -89,25 +89,29 @@ export function Mermaid({ source }: MermaidProps) {
   // mermaid.render() returns a complete, sanitized SVG string. We trust it
   // because we initialized mermaid with securityLevel: 'strict', which
   // strips any user-provided HTML before rendering.
+  //
+  // Single root div on purpose: react-markdown's `pre`/`code` overrides
+  // already wrap us in a Fragment to bypass the <pre> tag, and the modal
+  // child is position: fixed so it escapes whatever block we live in.
+  // Returning another Fragment on top of that turned out to confuse the
+  // markdown reconciler in some renders, so we keep one stable root.
   return (
-    <>
-      <div className="md-mermaid">
-        <div
-          className="md-mermaid-svg"
-          dangerouslySetInnerHTML={{ __html: svg }}
-        />
-        <button
-          type="button"
-          className="md-mermaid-maximize"
-          onClick={onMaximize}
-          aria-label="Maximize diagram"
-          title="Maximize"
-        >
-          <MaximizeIcon />
-        </button>
-      </div>
+    <div className="md-mermaid">
+      <div
+        className="md-mermaid-svg"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+      <button
+        type="button"
+        className="md-mermaid-maximize"
+        onClick={onMaximize}
+        aria-label="Maximize diagram"
+        title="Maximize"
+      >
+        <MaximizeIcon />
+      </button>
       {maximized && <MermaidModal svg={svg} source={source} onClose={onClose} />}
-    </>
+    </div>
   );
 }
 

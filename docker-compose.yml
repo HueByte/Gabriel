@@ -17,6 +17,14 @@ services:
     build:
       context: ./src/api
       dockerfile: Gabriel.API/Dockerfile
+      # docs/ is at the repo root, OUTSIDE this service's primary build
+      # context (./src/api). BuildKit's named contexts let the Dockerfile
+      # COPY it in via `COPY --from=docs` without us having to widen the
+      # whole build context (which would drag node_modules, .git, etc. into
+      # the build cache). The resulting image carries docs at /app/docs so
+      # LocalDocsLookup resolves them with no host mount required.
+      additional_contexts:
+        docs: ./docs
     image: gabriel-api:latest
     container_name: gabriel-api
     restart: unless-stopped
@@ -29,6 +37,10 @@ services:
       - gabriel-data:/app/data
       - gabriel-logs:/app/logs
       - gabriel-projects:/app/projects-data
+      # OPTIONAL dev override: overlays the host docs/ on top of the image's
+      # baked-in copy so edits to docs/ on the host are picked up without
+      # rebuilding the image. Safe to remove for production-style deploys.
+      - ./docs:/app/docs:ro
     expose:
       - "8080"
     # Optional: expose the API directly on the host too, useful for hitting
