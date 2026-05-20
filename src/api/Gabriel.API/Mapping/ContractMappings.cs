@@ -38,9 +38,11 @@ internal static class ContractMappings
             ? null
             : (project.IsDefault ? c.AvatarSeed : project.AvatarSeed);
 
+        var modeName = c.Mode?.ToString().ToLowerInvariant();
+
         if (!includeMessages)
         {
-            return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, null, projectIsDefault, effectiveSeed, c.PatternOverride, c.PaletteOverride);
+            return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, null, projectIsDefault, effectiveSeed, c.PatternOverride, c.PaletteOverride, modeName);
         }
 
         var allMessages = c.Messages;
@@ -98,7 +100,7 @@ internal static class ContractMappings
                 m.ReasoningContent));
         }
 
-        return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, messages, projectIsDefault, effectiveSeed, c.PatternOverride, c.PaletteOverride);
+        return new ConversationResponse(c.Id, c.ProjectId, c.Title, c.AvatarSeed, c.CreatedAt, c.UpdatedAt, messages, projectIsDefault, effectiveSeed, c.PatternOverride, c.PaletteOverride, modeName);
     }
 
     public static ContextMetricsResponse ToResponse(this ContextMetrics m)

@@ -21,6 +21,8 @@ import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/us
 import { StreamingText } from './StreamingText';
 import { ThinkingPulse } from './ThinkingPulse';
 import { MemoryQuickSave } from './MemoryQuickSave';
+import { ModeSelector } from './ModeSelector';
+import type { GabrielMode } from '../api/conversationMode';
 
 // Chat entries are heterogeneous - text bubbles (user/assistant), individual
 // tool calls, tool results, and the model's "thoughts" (reasoning text that
@@ -158,6 +160,10 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   // Open-modal state for the "Remember this" button. `seedBody` is the
   // selected message's content, used to pre-fill the body textarea.
   const [rememberDraft, setRememberDraft] = useState<{ seedBody: string } | null>(null);
+  // Per-conversation behaviour bias. Null = default (treated as Chatty by
+  // the backend). Hydrated from ConversationResponse.mode on load; mutated
+  // by the ModeSelector dropdown above the composer.
+  const [mode, setMode] = useState<GabrielMode | null>(null);
   // User preferences: per-kind ReAct visibility. Each toggle independently
   // suppresses one category of scaffolding in the transcript:
   //   - thinking:   `thought` + `reasoning` entries (chain-of-thought)
@@ -198,6 +204,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     messagesRef.current = msgs;
     setEntries(historyToEntries(msgs));
     setProjectId(conv.projectId ?? null);
+    setMode((conv.mode as GabrielMode | null) ?? null);
     onConversationLoaded?.(conv);
   }, [onConversationLoaded]);
 
@@ -504,6 +511,14 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
         </div>
       </div>
       <form className="composer" onSubmit={onSubmit}>
+        <div className="composer-toolbar">
+          <ModeSelector
+            conversationId={conversationId}
+            value={mode}
+            onChanged={setMode}
+            disabled={busy}
+          />
+        </div>
         <div className="composer-shell">
           <textarea
             ref={textareaRef}

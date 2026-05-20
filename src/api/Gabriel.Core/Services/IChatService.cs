@@ -25,6 +25,10 @@ public interface IChatService
     // the API layer before reaching here.
     Task<Conversation> SetSkinAsync(Guid id, string? pattern, string? palette, CancellationToken ct = default);
 
+    // Per-conversation behaviour bias. Pass null to clear back to the default
+    // (treated as Chatty at read time).
+    Task<Conversation> SetModeAsync(Guid id, GabrielMode? mode, CancellationToken ct = default);
+
     Task DeleteConversationAsync(Guid id, CancellationToken ct = default);
 
     // Message-level operations.

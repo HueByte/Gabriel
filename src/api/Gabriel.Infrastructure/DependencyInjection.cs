@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Gabriel.Infrastructure;
@@ -104,12 +105,29 @@ public static class DependencyInjection
         }
     }
 
-    // GitHub-backed docs lookup. Two named HttpClients - one for the JSON API
-    // (api.github.com, used by ListAsync) and one for the raw content host
-    // (raw.githubusercontent.com, used by ReadAsync). Defaults to HueByte/PulsePixel
-    // so the docs tool works out of the box.
+    // Docs lookup wiring. The model-facing IDocsLookup is a CompositeDocsLookup
+    // that fans across two sources, in priority order:
+    //
+    //   1. LocalDocsLookup   - reads `docs/gabriel-self-docs/` on disk. These
+    //                          pages are written specifically for the LLM to
+    //                          consume and are the PRIMARY source of truth.
+    //   2. GitHubDocsLookup  - reads the human-prose docs over GitHub raw.
+    //                          Acts as fallback when a topic isn't covered in
+    //                          the local LLM-native folder.
+    //
+    // The composite handles both ListAsync (union, primary entries first,
+    // dedupe by path) and ReadAsync (try in order, first hit wins). A failing
+    // source never poisons the others.
     private static void AddDocsLookup(IServiceCollection services, IConfiguration config)
     {
+        // Local LLM-native source (primary).
+        services.Configure<LocalDocsOptions>(config.GetSection(LocalDocsOptions.SectionName));
+        services.AddSingleton<LocalDocsLookup>();
+
+        // GitHub source (fallback). Two named HttpClients - one for the JSON
+        // API (api.github.com, used by ListAsync), one for raw content
+        // (raw.githubusercontent.com, used by ReadAsync). Defaults to
+        // HueByte/Gabriel so the fallback works out of the box.
         services.Configure<GitHubDocsOptions>(config.GetSection(GitHubDocsOptions.SectionName));
 
         services.AddHttpClient(GitHubDocsLookup.ApiHttpClientName, (sp, client) =>
@@ -132,7 +150,17 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Add("User-Agent", "Gabriel-Docs-Lookup");
         });
 
-        services.AddSingleton<IDocsLookup, GitHubDocsLookup>();
+        services.AddSingleton<GitHubDocsLookup>();
+
+        // Composite facade. Order of the IEnumerable<IDocsLookup> determines
+        // priority - local first, GitHub second.
+        services.AddSingleton<IDocsLookup>(sp => new CompositeDocsLookup(
+            new IDocsLookup[]
+            {
+                sp.GetRequiredService<LocalDocsLookup>(),
+                sp.GetRequiredService<GitHubDocsLookup>(),
+            },
+            sp.GetRequiredService<ILogger<CompositeDocsLookup>>()));
     }
 
     private static void AddChatProvider(IServiceCollection services, IConfiguration config)
@@ -150,7 +178,7 @@ public static class DependencyInjection
         var grokModelsCount = grokSection.GetSection(nameof(LLMProviderOptions.Models)).GetChildren().Count();
         if (grokSection.Exists() && grokModelsCount > 0)
         {
-            services.ConfigureSection<GrokOptions>(config)
+            var grokBuilder = services.ConfigureSection<GrokOptions>(config)
                 .Validate(
                     o => !string.IsNullOrWhiteSpace(o.ApiKey),
                     $"{GrokOptions.SectionName}:ApiKey is required. Set via env var PROVIDERS__GROK__APIKEY or Infisical.")
@@ -168,8 +196,16 @@ public static class DependencyInjection
                     $"{GrokOptions.SectionName}:Models must contain at most one entry with IsActive=true.")
                 .Validate(
                     o => o.Models.All(m => !string.IsNullOrWhiteSpace(m.Name) && m.ContextWindowTokens > 0),
-                    $"{GrokOptions.SectionName}:Models entries must have a non-empty Name and ContextWindowTokens > 0.")
-                .ValidateOnStart();
+                    $"{GrokOptions.SectionName}:Models entries must have a non-empty Name and ContextWindowTokens > 0.");
+
+            // ValidateOnStart fires at host build, which the swagger codegen
+            // pass also triggers. The codegen process doesn't have secrets
+            // available, so the ApiKey validator would fail it. SKIP_DB_INIT
+            // is the same flag the migration block uses for the same reason.
+            if (Environment.GetEnvironmentVariable("SKIP_DB_INIT") != "true")
+            {
+                grokBuilder.ValidateOnStart();
+            }
 
             // Read TimeoutSeconds once at startup for the resilience pipeline —
             // pipeline-level timeouts can't be tuned per request anyway, so a

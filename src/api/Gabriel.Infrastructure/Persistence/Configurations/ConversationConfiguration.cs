@@ -35,6 +35,11 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         // Nullable - populated lazily on the first user turn.
         builder.Property(c => c.StateJson);
 
+        // Per-conversation behaviour bias (GabrielMode). Nullable; null is
+        // treated as Chatty (the default) at read time. Stored as the enum
+        // int so adding modes is a Core enum-only edit.
+        builder.Property(c => c.Mode);
+
         // Map the private _messages backing field so callers can only mutate via the aggregate.
         var messagesNav = builder.Metadata.FindNavigation(nameof(Conversation.Messages))!;
         messagesNav.SetPropertyAccessMode(PropertyAccessMode.Field);

@@ -25,5 +25,8 @@ public record ConversationResponse(
     // back to the client so a future "convert chat into project" flow can
     // carry the skin forward.
     string? PatternOverride = null,
-    string? PaletteOverride = null
+    string? PaletteOverride = null,
+    // Per-conversation behaviour bias (chatty/elaborative/concise/tutor/critic).
+    // Null = use the default (chatty). Sent as lowercased enum name.
+    string? Mode = null
 );

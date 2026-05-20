@@ -47,6 +47,12 @@ public class Conversation
     // separate table because the shape evolves and we never query its fields.
     public string? StateJson { get; private set; }
 
+    // Per-conversation behaviour bias. Null = use the default (Chatty).
+    // Stored nullable so the column can be added without backfilling and so
+    // a future "use the user's default mode" preference can layer onto the
+    // same column without conflicting with an explicit-Chatty pick.
+    public GabrielMode? Mode { get; private set; }
+
     private readonly List<Message> _messages = new();
     public IReadOnlyList<Message> Messages => _messages.AsReadOnly();
 
@@ -215,6 +221,13 @@ public class Conversation
     public void SetState(ConversationState state)
     {
         StateJson = JsonSerializer.Serialize(state);
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    // Pass null to clear back to the default (treated as Chatty at read time).
+    public void SetMode(GabrielMode? mode)
+    {
+        Mode = mode;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

@@ -96,6 +96,17 @@ public class ChatService : IChatService
         return conversation;
     }
 
+    public async Task<Conversation> SetModeAsync(Guid id, GabrielMode? mode, CancellationToken ct = default)
+    {
+        var conversation = await _conversations.GetByIdAsync(id, RequireUserId(), ct)
+            ?? throw new NotFoundException(nameof(Conversation), id);
+
+        conversation.SetMode(mode);
+        _conversations.Update(conversation);
+        await _uow.SaveChangesAsync(ct);
+        return conversation;
+    }
+
     public async Task DeleteConversationAsync(Guid id, CancellationToken ct = default)
     {
         var conversation = await _conversations.GetByIdAsync(id, RequireUserId(), ct)

@@ -4,6 +4,7 @@ using Gabriel.API.Contracts.Messages;
 using Gabriel.API.Contracts.Sequence;
 using Gabriel.API.Mapping;
 using Gabriel.Core.Configuration;
+using Gabriel.Core.Entities;
 using Gabriel.Core.Services;
 using Gabriel.Engine.Personality;
 using Gabriel.Engine.Sequence;
@@ -120,6 +121,34 @@ public class ConversationsController : ControllerBase
             SequenceCatalog.NormalizePattern(request.Pattern),
             SequenceCatalog.NormalizePalette(request.Palette),
             ct);
+        var project = await LoadProjectAsync(conv.ProjectId, ct);
+        return Ok(conv.ToResponse(includeMessages: false, project: project));
+    }
+
+    // Per-conversation behaviour bias. Body carries the lowercased enum name
+    // (chatty / elaborative / concise / tutor / critic) or null to clear back
+    // to the default. Takes effect on the next streamed turn.
+    [HttpPut("{id:guid}/mode")]
+    public async Task<ActionResult<ConversationResponse>> SetMode(
+        Guid id,
+        [FromBody] SetConversationModeRequest request,
+        CancellationToken ct)
+    {
+        GabrielMode? mode = null;
+        if (!string.IsNullOrWhiteSpace(request.Mode))
+        {
+            if (!Enum.TryParse<GabrielMode>(request.Mode, ignoreCase: true, out var parsed))
+            {
+                return BadRequest(new
+                {
+                    detail = $"Unknown mode '{request.Mode}'. " +
+                             "Expected one of: chatty, elaborative, concise, tutor, critic.",
+                });
+            }
+            mode = parsed;
+        }
+
+        var conv = await _chat.SetModeAsync(id, mode, ct);
         var project = await LoadProjectAsync(conv.ProjectId, ct);
         return Ok(conv.ToResponse(includeMessages: false, project: project));
     }

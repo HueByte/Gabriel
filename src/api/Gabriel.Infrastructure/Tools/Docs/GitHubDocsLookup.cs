@@ -81,7 +81,7 @@ public sealed class GitHubDocsLookup : IDocsLookup
                     if (!path.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) continue;
 
                     var rel = path[prefix.Length..];
-                    entries.Add(new DocsEntry(rel, null));
+                    entries.Add(new DocsEntry(rel, null, DocsSources.GitHub));
                 }
             }
 
@@ -114,7 +114,7 @@ public sealed class GitHubDocsLookup : IDocsLookup
 
         var content = await response.Content.ReadAsStringAsync(ct);
         var canonicalUrl = $"https://github.com/{_options.Owner}/{_options.Repo}/blob/{_options.Branch}/{_options.DocsPath}/{path}";
-        return new DocsContent(path, content, canonicalUrl);
+        return new DocsContent(path, content, canonicalUrl, DocsSources.GitHub);
     }
 
     private static void ValidatePath(string path)

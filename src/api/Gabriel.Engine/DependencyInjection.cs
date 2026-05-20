@@ -1,5 +1,6 @@
 using Gabriel.Core.Configuration;
 using Gabriel.Engine.Personality;
+using Gabriel.Engine.Personality.Prompts;
 using Gabriel.Engine.Sequence;
 using Gabriel.Engine.Services;
 using Gabriel.Engine.Tools;
@@ -33,7 +34,10 @@ public static class DependencyInjection
         // once per turn; project-scoped tools read from it.
         services.AddScoped<IToolExecutionContext, ToolExecutionContext>();
 
-        // Personality stack - all three are pure / config-driven, so singleton.
+        // Personality stack - all four are pure / config-driven, so singleton.
+        // The prompt registry holds every named persona fragment; the system
+        // prompt builder pulls from it on every turn.
+        services.AddSingleton<IPromptRegistry, PromptRegistry>();
         services.AddSingleton<IConversationStateUpdater, HeuristicConversationStateUpdater>();
         services.AddSingleton<ISystemPromptBuilder, GabrielSystemPromptBuilder>();
         services.AddSingleton<IResponsePostProcessor, ResponsePostProcessor>();

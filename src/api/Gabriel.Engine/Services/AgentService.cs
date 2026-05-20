@@ -250,7 +250,7 @@ public class AgentService : IAgentService
     {
         var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
         var memoryBlock = await LoadMemoryBlockAsync(conversation.ProjectId, ct);
-        var personaPrompt = _promptBuilder.Build(conversation.GetState());
+        var personaPrompt = _promptBuilder.Build(conversation.GetState(), conversation.Mode);
         var tools = _tools.AsDescriptors();
         return new TurnPrompts(personaPrompt, projectPrompt, memoryBlock, tools);
     }

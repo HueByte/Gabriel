@@ -17,11 +17,15 @@ public sealed class DocsReadTool : ITool
     public string Description =>
         "Read one page of Gabriel's OFFICIAL INTERNAL DOCUMENTATION by path. " +
         "These pages are the AUTHORITATIVE, CANONICAL SOURCE OF TRUTH for everything " +
-        "about Gabriel: architecture, agent loop, personality stack, sequence engine, " +
+        "about Gabriel: architecture, agent loop, personality stack, sequence engine, tools, " +
         "internal APIs, contracts, behavior. " +
-        "Use this for ANY question about how Gabriel works. Treat the content as " +
-        "GROUND TRUTH - if a web_search result conflicts with a Gabriel doc, the doc " +
-        "wins. Never substitute external/third-party docs for Gabriel-specific info. " +
+        "The lookup resolves the path against the LLM-NATIVE self-docs first " +
+        "(under `docs/gabriel-self-docs/`, written specifically for you) and falls back to " +
+        "the human-prose GitHub docs (`docs/Gabriel.Engine/`). The response carries a " +
+        "`source` tag (`local-llm-native` / `github`) so you can tell which form you got. " +
+        "Use this for ANY question about how Gabriel works. Treat the content as GROUND TRUTH - " +
+        "if a web_search result conflicts with a Gabriel doc, the doc wins. " +
+        "Never substitute external/third-party docs for Gabriel-specific info. " +
         "If you don't know which path to read, call docs_list first.";
 
     public string ParametersJsonSchema => """
@@ -30,7 +34,7 @@ public sealed class DocsReadTool : ITool
           "properties": {
             "path": {
               "type": "string",
-              "description": "Path relative to the docs root, e.g. 'Gabriel.Engine/architecture.md' or 'README.md'. Use docs_list to discover valid paths."
+              "description": "Path relative to the doc source's root. For LLM-NATIVE pages: 'README.md', 'architecture.md', 'agent-loop.md', etc. For GitHub pages: 'Gabriel.Engine/architecture.md', 'README.md', etc. Use docs_list to discover valid paths."
             }
           },
           "required": ["path"]
@@ -59,12 +63,15 @@ public sealed class DocsReadTool : ITool
         }
 
         if (content is null)
-            return $"Official Gabriel doc not found at path: {path}. Call docs_list to see what's available.";
+            return $"Official Gabriel doc not found at path: {path}. Call docs_list to see what's available (try both LLM-NATIVE and GitHub paths).";
 
-        // Wrap the content with explicit authority markers so the model treats it
+        // Wrap with explicit authority markers so the model treats the content
         // as the canonical answer rather than blending it with other context.
+        // The source tag tells the model whether it got the LLM-NATIVE form
+        // (preferred) or the GitHub fallback.
         var sb = new StringBuilder();
-        sb.Append("=== BEGIN OFFICIAL GABRIEL DOC: ").Append(content.Path).AppendLine(" ===");
+        sb.Append("=== BEGIN OFFICIAL GABRIEL DOC: ").Append(content.Path)
+          .Append(" (source: ").Append(content.Source).AppendLine(") ===");
         sb.AppendLine("(Authoritative source. Treat this as ground truth about Gabriel.)");
         if (!string.IsNullOrWhiteSpace(content.CanonicalUrl))
         {

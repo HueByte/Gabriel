@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   HiOutlineArrowRightOnRectangle,
   HiOutlineBars3,
@@ -45,6 +45,7 @@ interface MenuState {
 
 export function Sidebar({ refreshKey }: SidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   // Active id comes from the URL - single source of truth, no prop drilling.
   const { conversationId: activeId } = useParams<{ conversationId: string }>();
 
@@ -150,6 +151,25 @@ export function Sidebar({ refreshKey }: SidebarProps) {
   useEffect(() => {
     setMenu(null);
   }, [refreshKey, localRefresh]);
+
+  // Auto-close the sidebar on route change. Catches navigation triggered from
+  // anywhere inside the panel (ProjectPicker → /p/.../settings, AuthContext
+  // logout, confirmDelete → /, future additions) without needing each handler
+  // to remember to close. The existing per-handler toggleCollapsed() calls
+  // stay - they make the close feel instant on same-route clicks (e.g.
+  // clicking the currently-active conversation) where pathname doesn't change
+  // and this effect wouldn't fire.
+  const skipNextCloseRef = useRef(true);
+  useEffect(() => {
+    if (skipNextCloseRef.current) {
+      // Skip the initial mount so a user whose persisted preference is "open"
+      // doesn't see the sidebar slam closed on first paint.
+      skipNextCloseRef.current = false;
+      return;
+    }
+    setCollapsed(true);
+    try { localStorage.setItem(SIDEBAR_STORAGE_KEY, '1'); } catch { /* ignore */ }
+  }, [location.pathname]);
 
   const bumpLocal = () => setLocalRefresh(n => n + 1);
 
