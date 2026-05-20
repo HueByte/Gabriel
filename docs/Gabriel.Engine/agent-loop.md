@@ -143,6 +143,22 @@ When implementing a new `IChatProvider`:
 - The regular text-content channel emits `TextDeltaEvent` as always. The ReAct side is automatically handled by the loop - no provider-level work needed.
 - Never collapse the two into a single channel. The data model and the UI treat them as separate entities by design.
 
+## Provider-agnostic tool calling
+
+Native tool calling (the OpenAI/xAI `tool_calls` protocol Gabriel was built around) is one of two transports the loop supports. The other is **emulation** via `GabrielToolBridge` — for models with no native function-calling, this decorator at the `IChatProvider` boundary injects tool documentation into the system prompt, parses `<tool_call>{...}</tool_call>` markers out of the text stream, and synthesises the same `ToolCallReadyEvent` / `FinishEvent(ToolCalls)` shape the agent loop expects. The bridge handles wire-protocol translation only — actual tool execution still happens server-side in `AgentService.ExecuteToolSafelyAsync` via `ITool.ExecuteAsync`.
+
+Routing is per-model via the `ToolMode` enum on `LLMModel`:
+
+| Mode | Behavior |
+| ---- | -------- |
+| `Native` (default) | Raw provider; tool descriptors ride in the sibling `tools` field of the chat request. |
+| `Emulated` | Raw provider wrapped in `GabrielToolBridge`; tools injected into the system prompt; `<tool_call>` blocks parsed out of the text stream. |
+| `None` | Raw provider, no tools advertised at all. The Tools bucket in the metrics breakdown reads 0. |
+
+`AgentService.RunStreamAsync` checks `selection.ToolMode` after resolving the provider and decides whether to wrap it. The agent loop above doesn't change — the same `switch (evt)` block handles both transports because both emit identical events.
+
+Full design + tradeoffs in [.dev/notes/tool-emulation.md](../../.dev/notes/tool-emulation.md). The headline tradeoff: live token-by-token streaming is preserved on the first attempt of every turn in emulated mode (via a prefix-aware lookahead splitter), but if the parser rejects malformed JSON and a retry runs, the retry's text isn't streamed — only the corrected tool calls land. The retry path is rare in practice.
+
 ## Observability
 
 Every turn emits Info-level structured logs via Serilog (configured in `Gabriel.API/appsettings.json`, sinks to Console + rolling daily file under `logs/`). The intent is that an operator can read the file and reconstruct any turn end-to-end without enabling Debug.

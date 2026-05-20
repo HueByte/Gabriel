@@ -1,3 +1,5 @@
+using Gabriel.Core.Configuration;
+
 namespace Gabriel.Engine.Providers;
 
 // One model the user can pick from in the UI dropdown. Flattened across
@@ -13,4 +15,5 @@ public sealed record AvailableModel(
     decimal OutputPricePerMTokens,
     decimal CacheReadPricePerMTokens,
     decimal CacheWritePricePerMTokens,
-    bool IsDefault);
+    bool IsDefault,
+    ToolMode ToolMode);

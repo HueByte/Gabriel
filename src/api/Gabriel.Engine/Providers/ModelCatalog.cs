@@ -28,7 +28,8 @@ public sealed class ModelCatalog : IModelCatalog
                     OutputPricePerMTokens: model.OutputPricePerMTokens,
                     CacheReadPricePerMTokens: model.CacheReadPricePerMTokens,
                     CacheWritePricePerMTokens: model.CacheWritePricePerMTokens,
-                    IsDefault: model.IsActive);
+                    IsDefault: model.IsActive,
+                    ToolMode: model.ToolMode);
 
                 available.Add(entry);
                 if (model.IsActive && bootstrapDefault is null)
@@ -56,7 +57,8 @@ public sealed class ModelCatalog : IModelCatalog
             bootstrapDefault.Provider,
             bootstrapDefault.Name,
             bootstrapDefault.ContextWindowTokens,
-            bootstrapDefault.CompactThreshold);
+            bootstrapDefault.CompactThreshold,
+            bootstrapDefault.ToolMode);
     }
 
     public IReadOnlyList<AvailableModel> AvailableModels => _models;
@@ -75,7 +77,8 @@ public sealed class ModelCatalog : IModelCatalog
                     match.Provider,
                     match.Name,
                     match.ContextWindowTokens,
-                    match.CompactThreshold);
+                    match.CompactThreshold,
+                    match.ToolMode);
             }
             // Stale preference (model was removed from config) — silently fall
             // back to the default. The user will see the dropdown reflect the

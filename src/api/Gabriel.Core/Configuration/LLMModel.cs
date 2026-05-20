@@ -43,4 +43,12 @@ public class LLMModel
     // reads vs cache writes. Leave 0 for providers that don't support caching.
     public decimal CacheReadPricePerMTokens { get; set; }
     public decimal CacheWritePricePerMTokens { get; set; }
+
+    // How the model handles tool calls. Native is the right default for every
+    // hosted model we currently target (Grok, OpenAI, Anthropic) and matches
+    // pre-existing behaviour for any config not setting this. Emulated wraps
+    // the provider in GabrielToolBridge, which injects tool docs into the
+    // system prompt and parses <tool_call> markers out of the text stream.
+    // None disables tools entirely for models that can't handle them.
+    public ToolMode ToolMode { get; set; } = ToolMode.Native;
 }

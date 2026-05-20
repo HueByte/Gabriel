@@ -10,6 +10,7 @@ using Gabriel.Core.Repositories;
 using Gabriel.Core.Services;
 using Gabriel.Engine.Personality;
 using Gabriel.Engine.Providers;
+using Gabriel.Engine.Providers.ToolBridge;
 using Gabriel.Engine.Tools;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -43,6 +44,11 @@ public class AgentService : IAgentService
     private readonly IResponsePostProcessor _postProcessor;
     private readonly AgentOptions _options;
     private readonly ILogger<AgentService> _logger;
+    // Held for constructing GabrielToolBridge on demand. The bridge is
+    // instantiated per-call (it's stateless across calls) so AgentService
+    // owns the logger; alternative would be a factory service but that's
+    // extra plumbing for a one-liner.
+    private readonly ILogger<GabrielToolBridge> _toolBridgeLogger;
 
     public AgentService(
         IConversationRepository conversations,
@@ -60,7 +66,8 @@ public class AgentService : IAgentService
         ISystemPromptBuilder promptBuilder,
         IResponsePostProcessor postProcessor,
         IOptions<AgentOptions> options,
-        ILogger<AgentService> logger)
+        ILogger<AgentService> logger,
+        ILogger<GabrielToolBridge> toolBridgeLogger)
     {
         _conversations = conversations;
         _projects = projects;
@@ -78,6 +85,7 @@ public class AgentService : IAgentService
         _postProcessor = postProcessor;
         _options = options.Value;
         _logger = logger;
+        _toolBridgeLogger = toolBridgeLogger;
     }
 
     public async Task<IAsyncEnumerable<AgentEvent>> RunAsync(
@@ -119,8 +127,10 @@ public class AgentService : IAgentService
 
         // Load the stable-through-turn prompt pieces (persona / project /
         // memory / tools). These don't change between iterations and feed
-        // both the compact decision and the stream itself.
-        var prompts = await LoadTurnPromptsAsync(conversation, userId, ct);
+        // both the compact decision and the stream itself. Selection is
+        // passed in so ToolMode.None drops the tool descriptors at the
+        // source rather than threading the flag through every consumer.
+        var prompts = await LoadTurnPromptsAsync(conversation, userId, selection, ct);
 
         // Compact here (between turns), never mid-iteration - cutting between an
         // assistant's tool_calls and its tool results would orphan them.
@@ -172,7 +182,7 @@ public class AgentService : IAgentService
         // No new user message + no state update - state was set when the user
         // originally sent this turn, and we're regenerating against that same
         // state. Compact between turns as usual.
-        var prompts = await LoadTurnPromptsAsync(conversation, userId, ct);
+        var prompts = await LoadTurnPromptsAsync(conversation, userId, selection, ct);
         await MaybeCompactAsync(conversation, prompts, selection, ct);
 
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
@@ -246,12 +256,24 @@ public class AgentService : IAgentService
     // descriptors. Loaded once per turn and threaded through MaybeCompactAsync
     // + RunStreamAsync so the compact decision, the stream call, and the UI
     // metrics all see the same numbers.
-    private async Task<TurnPrompts> LoadTurnPromptsAsync(Conversation conversation, Guid userId, CancellationToken ct)
+    //
+    // Selection feeds the tool-descriptor decision: ToolMode.None hands back
+    // an empty list so the metrics breakdown (Tools bucket) reports zero and
+    // the provider call doesn't advertise capabilities the model can't use.
+    // Native and Emulated both get the full descriptor list - the actual
+    // transport differs at the provider boundary, not here.
+    private async Task<TurnPrompts> LoadTurnPromptsAsync(
+        Conversation conversation,
+        Guid userId,
+        ModelSelection selection,
+        CancellationToken ct)
     {
         var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
         var memoryBlock = await LoadMemoryBlockAsync(conversation.ProjectId, ct);
         var personaPrompt = _promptBuilder.Build(conversation.GetState(), conversation.Mode);
-        var tools = _tools.AsDescriptors();
+        IReadOnlyList<ToolDescriptor> tools = selection.ToolMode == ToolMode.None
+            ? Array.Empty<ToolDescriptor>()
+            : _tools.AsDescriptors();
         return new TurnPrompts(personaPrompt, projectPrompt, memoryBlock, tools);
     }
 
@@ -271,7 +293,16 @@ public class AgentService : IAgentService
         ModelSelection selection,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        var provider = _providerRegistry.Resolve(selection.Provider);
+        // ToolMode.Emulated wraps the base provider in GabrielToolBridge,
+        // which injects tool docs into the system prompt and parses
+        // <tool_call> markers out of the text stream. Native and None both
+        // use the raw provider - they just differ in whether tools get
+        // advertised (LoadTurnPromptsAsync already dropped the descriptors
+        // for None, so the call below sees an empty list either way).
+        var rawProvider = _providerRegistry.Resolve(selection.Provider);
+        var provider = selection.ToolMode == ToolMode.Emulated
+            ? new GabrielToolBridge(rawProvider, _toolBridgeLogger)
+            : rawProvider;
 
         for (var iter = 0; iter < _options.MaxIterations; iter++)
         {
@@ -586,7 +617,7 @@ public class AgentService : IAgentService
         var ratio = selection.CompactThreshold ?? _options.CompactThreshold;
         var thresholdTokens = window > 0 ? (int)(window * ratio) : 0;
 
-        var prompts = await LoadTurnPromptsAsync(conversation, userId, ct);
+        var prompts = await LoadTurnPromptsAsync(conversation, userId, selection, ct);
         var context = AgentContext.Build(
             conversation, prompts.PersonaPrompt, prompts.ProjectPrompt, prompts.MemoryBlock, prompts.Tools);
         var breakdown = context.ComputeBreakdown(_tokens);
