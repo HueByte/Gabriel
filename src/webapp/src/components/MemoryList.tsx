@@ -141,23 +141,45 @@ function MemoryRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  // Action buttons live inside <summary>, which by default toggles the
+  // <details> on any click. preventDefault stops that toggle; stopPropagation
+  // belt-and-suspenders the bubbling so React's synthetic event doesn't reach
+  // a parent handler if one ever gets added.
+  const stopToggle = (fn: () => void) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fn();
+  };
+
   return (
-    <div className="memory-row">
-      <div className="memory-row-head">
-        <span className={`memory-type memory-type-${memory.type}`}>{memory.type}</span>
-        <span className="memory-name">{memory.name}</span>
-        <span className="memory-row-actions">
-          <button type="button" className="memory-row-action" onClick={onEdit} aria-label="Edit">
-            <HiOutlinePencilSquare aria-hidden="true" />
-          </button>
-          <button type="button" className="memory-row-action memory-row-danger" onClick={onDelete} aria-label="Delete">
-            <HiOutlineTrash aria-hidden="true" />
-          </button>
+    <details className="memory-row">
+      <summary>
+        <span className="memory-row-head">
+          <span className={`memory-type memory-type-${memory.type}`}>{memory.type}</span>
+          <span className="memory-name">{memory.name}</span>
+          <span className="memory-row-actions">
+            <button
+              type="button"
+              className="memory-row-action"
+              onClick={stopToggle(onEdit)}
+              aria-label="Edit"
+            >
+              <HiOutlinePencilSquare aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="memory-row-action memory-row-danger"
+              onClick={stopToggle(onDelete)}
+              aria-label="Delete"
+            >
+              <HiOutlineTrash aria-hidden="true" />
+            </button>
+          </span>
         </span>
-      </div>
-      <p className="memory-description">{memory.description}</p>
+        <p className="memory-description">{memory.description}</p>
+      </summary>
       <pre className="memory-body">{memory.body}</pre>
-    </div>
+    </details>
   );
 }
 
