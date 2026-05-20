@@ -130,18 +130,7 @@ public static class DependencyInjection
 
                 case "ddg":
                 case "duckduckgo":
-                    services.AddHttpClient(DuckDuckGoWebSearch.HttpClientName, client =>
-                    {
-                        client.BaseAddress = new Uri("https://html.duckduckgo.com/");
-                        client.Timeout = TimeSpan.FromSeconds(15);
-                        // DDG blocks blank/unfamiliar UAs. A normal browser UA
-                        // passes their bot heuristics and gets a real HTML
-                        // response. The implementation also falls back to the
-                        // lite/ endpoint if html/ returns zero results.
-                        client.DefaultRequestHeaders.Add(
-                            "User-Agent",
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-                    });
+                    ConfigureDdgHttpClient(services);
                     services.AddSingleton<DuckDuckGoWebSearch>();
                     registered.Add((typeof(DuckDuckGoWebSearch), "DuckDuckGo"));
                     break;
@@ -157,14 +146,7 @@ public static class DependencyInjection
         // tool keeps working instead of throwing at first call.
         if (registered.Count == 0)
         {
-            services.AddHttpClient(DuckDuckGoWebSearch.HttpClientName, client =>
-            {
-                client.BaseAddress = new Uri("https://html.duckduckgo.com/");
-                client.Timeout = TimeSpan.FromSeconds(15);
-                client.DefaultRequestHeaders.Add(
-                    "User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-            });
+            ConfigureDdgHttpClient(services);
             services.AddSingleton<DuckDuckGoWebSearch>();
             registered.Add((typeof(DuckDuckGoWebSearch), "DuckDuckGo"));
         }
@@ -202,6 +184,48 @@ public static class DependencyInjection
                 return new CompositeWebSearch(instances, logger);
             });
         }
+    }
+
+    // Registers the named HttpClient for DuckDuckGoWebSearch. Pulled out so
+    // the active-providers path and the empty-config fallback share one
+    // source of truth - both want the same bot-resistant header set and
+    // the same automatic gzip/deflate handling (DDG compresses responses
+    // for browsers; without AutomaticDecompression we'd read raw bytes
+    // and the HTML parser would silently fail).
+    private static void ConfigureDdgHttpClient(IServiceCollection services)
+    {
+        services.AddHttpClient(DuckDuckGoWebSearch.HttpClientName, client =>
+        {
+            // Endpoint URLs are absolute in DuckDuckGoWebSearch - the html/
+            // and lite/ subdomains differ, so we can't share one BaseAddress.
+            client.Timeout = TimeSpan.FromSeconds(15);
+            // Full browser-like header set. DDG flags requests that look
+            // synthetic (UA-only) more aggressively than ones carrying the
+            // sticks a real Chrome navigation has - Accept, Accept-Language,
+            // and the Sec-Fetch-* family in particular. Adding these lifts
+            // the request out of the "obvious scraper" bucket. Cookies
+            // aren't required for the html/ + lite/ endpoints.
+            client.DefaultRequestHeaders.Add(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            client.DefaultRequestHeaders.Add(
+                "Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
+            client.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
+            client.DefaultRequestHeaders.Add("DNT", "1");
+            client.DefaultRequestHeaders.Add("Upgrade-Insecure-Requests", "1");
+            client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
+            client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
+            client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
+            client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            // Without this, sending Accept-Encoding (implicit when the server
+            // negotiates it via vary headers) means we receive gzipped bytes
+            // and ReadAsStringAsync hands back gibberish that doesn't parse.
+            AutomaticDecompression = System.Net.DecompressionMethods.All,
+        });
     }
 
     // Docs lookup wiring. The model-facing IDocsLookup is a CompositeDocsLookup

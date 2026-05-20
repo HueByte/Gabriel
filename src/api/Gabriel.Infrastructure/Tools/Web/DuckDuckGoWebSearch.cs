@@ -53,7 +53,8 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
 
         // Primary: rich html/ endpoint. Has snippets + redirect-wrapped URLs.
         var primary = await FetchAsync(http, HtmlEndpoint, query, ct);
-        if (DetectAnomalyPage(primary))
+        var primaryBlocked = DetectAnomalyPage(primary);
+        if (primaryBlocked)
         {
             _logger.LogWarning(
                 "DuckDuckGo html/ returned an anomaly/block page for query '{Query}' (html length {Length}). Falling back to lite/.",
@@ -70,33 +71,52 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
 
         // Fallback: lite/ endpoint. Simpler markup, less aggressive bot-flagging.
         var lite = await FetchAsync(http, LiteEndpoint, query, ct);
-        if (DetectAnomalyPage(lite))
+        var liteBlocked = DetectAnomalyPage(lite);
+        if (liteBlocked)
         {
             _logger.LogWarning(
-                "DuckDuckGo lite/ also returned an anomaly/block page for query '{Query}' (html length {Length}). Surfacing as zero results.",
-                query, lite.Length);
-            return Array.Empty<WebSearchResult>();
-        }
-
-        var liteParsed = ParseLiteEndpoint(lite, limit);
-        if (liteParsed.Count == 0)
-        {
-            _logger.LogInformation(
-                "DuckDuckGo lite/ also returned 0 parseable results for query '{Query}' (html length {Length}). Either DDG genuinely has nothing, or its HTML shape drifted. First 200 chars: {Snippet}",
+                "DuckDuckGo lite/ also returned an anomaly/block page for query '{Query}' (html length {Length}). First 200 chars: {Snippet}",
                 query, lite.Length, FirstChars(lite, 200));
         }
-        return liteParsed;
+        else
+        {
+            var liteParsed = ParseLiteEndpoint(lite, limit);
+            if (liteParsed.Count > 0) return liteParsed;
+            _logger.LogInformation(
+                "DuckDuckGo lite/ returned 0 parseable results for query '{Query}' (html length {Length}). First 200 chars: {Snippet}",
+                query, lite.Length, FirstChars(lite, 200));
+        }
+
+        // Both endpoints exhausted. If at least one came back as an anomaly /
+        // bot-block page, throwing with an actionable hint is more useful to
+        // the agent than a silent empty-results return - the user almost
+        // certainly needs a real API key. CompositeWebSearch swallows this
+        // when other providers are configured, so multi-provider setups still
+        // benefit from the other backends.
+        if (primaryBlocked || liteBlocked)
+        {
+            throw new InvalidOperationException(
+                "DuckDuckGo blocked this request as bot traffic (anomaly/CAPTCHA page returned on both html/ and lite/ endpoints). " +
+                "DDG's free scraping endpoints rate-limit residential/datacenter IPs aggressively. " +
+                "For reliable web search, set Tools__Web__Active=brave (or tavily) and supply the matching API key " +
+                "via Tools__Web__Brave__ApiKey (or Tools__Web__Tavily__ApiKey).");
+        }
+
+        // Both endpoints returned 200 + parseable HTML + zero results. Genuine
+        // empty result for this query - hand back [] like any backend would.
+        return Array.Empty<WebSearchResult>();
     }
 
     private async Task<string> FetchAsync(HttpClient http, string url, string query, CancellationToken ct)
     {
-        var form = new FormUrlEncodedContent(new[]
-        {
-            new KeyValuePair<string, string>("q", query),
-            new KeyValuePair<string, string>("kl", "us-en"),
-        });
+        // GET (with query string) instead of POST (with form body): closer to
+        // a real navigation, and html.duckduckgo.com / lite.duckduckgo.com
+        // both serve the same content for either verb but bot-flag POST
+        // requests more aggressively. Keeps Sec-Fetch-* headers consistent
+        // with "user typed a URL and pressed enter" framing.
+        var fullUrl = $"{url}?q={Uri.EscapeDataString(query)}&kl=us-en";
 
-        using var response = await http.PostAsync(url, form, ct);
+        using var response = await http.GetAsync(fullUrl, ct);
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("DuckDuckGo {Url} returned {Status}", url, (int)response.StatusCode);
@@ -105,13 +125,19 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
         return await response.Content.ReadAsStringAsync(ct);
     }
 
-    // DDG ships a CAPTCHA-style "anomaly" page when it flags traffic; the body
-    // mentions the anomaly modal explicitly. Catch it so we can fall back to a
-    // sibling endpoint instead of treating it as "user query has no results".
+    // DDG (and the Cloudflare layer in front of it) ships a few different
+    // bot-block / CAPTCHA-style pages. We catch the markers from all of them
+    // so the caller can fall back to a sibling endpoint or surface a clear
+    // diagnostic instead of treating the block as "user query has no results".
     private static bool DetectAnomalyPage(string html)
         => html.Contains("anomaly_modal", StringComparison.Ordinal)
         || html.Contains("anomaly-modal", StringComparison.Ordinal)
-        || html.Contains("anomaly.js", StringComparison.Ordinal);
+        || html.Contains("anomaly.js", StringComparison.Ordinal)
+        // Cloudflare "Just a moment..." interstitial.
+        || html.Contains("Just a moment", StringComparison.Ordinal)
+        || html.Contains("cf-mitigated", StringComparison.Ordinal)
+        || html.Contains("cf-browser-verification", StringComparison.Ordinal)
+        || html.Contains("__cf_chl_", StringComparison.Ordinal);
 
     private static string FirstChars(string s, int n)
         => s.Length <= n ? s : s[..n];
