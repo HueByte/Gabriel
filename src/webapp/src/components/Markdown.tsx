@@ -57,6 +57,42 @@ function remarkInlineEnrichments() {
   };
 }
 
+// Flatten ordered lists that are just "N." with no content - those happen
+// when the LLM emits a bare number followed by a period (e.g. "1650."), and
+// CommonMark parses it as <ol start="1650"><li></li></ol>. The marker then
+// renders clipped inside our narrow message bubble (the "1650 looks like 50"
+// bug). Real empty lists never happen organically, so it's safe to lift back
+// to plain text.
+function remarkUnliftEmptyOrderedList() {
+  return (tree: Root) => {
+    visit(tree, 'list', (node, index, parent: Parent | undefined) => {
+      if (!parent || index == null) return;
+      const listNode = node as unknown as {
+        ordered?: boolean;
+        start?: number | null;
+        children: Array<{ type: string; children?: Array<{ type: string; children?: unknown[] }> }>;
+      };
+      if (!listNode.ordered) return;
+      const allEmpty = listNode.children.every((item) => {
+        if (item.type !== 'listItem') return false;
+        const kids = item.children ?? [];
+        if (kids.length === 0) return true;
+        return kids.every(
+          (c) => c.type === 'paragraph' && (c.children ?? []).length === 0,
+        );
+      });
+      if (!allEmpty) return;
+      const start = listNode.start ?? 1;
+      const text = `${start}.`;
+      parent.children.splice(index, 1, {
+        type: 'paragraph',
+        children: [{ type: 'text', value: text }],
+      } as unknown as RootContent);
+      return [SKIP, index + 1];
+    });
+  };
+}
+
 type Inline =
   | { type: 'text'; value: string }
   | { type: 'galactic'; value: string }
@@ -201,7 +237,12 @@ const COMPONENTS_STREAMING = buildComponents(true);
 
 // Plugin arrays hoisted to module scope so react-markdown sees stable
 // identities across renders.
-const REMARK_PLUGINS: PluggableList = [remarkGfm, remarkMath, remarkInlineEnrichments];
+const REMARK_PLUGINS: PluggableList = [
+  remarkGfm,
+  remarkMath,
+  remarkUnliftEmptyOrderedList,
+  remarkInlineEnrichments,
+];
 
 // Precomputed rehype-plugin permutations. We pick from these by inspecting
 // the rendered text - running rehype-highlight on a message with no fenced

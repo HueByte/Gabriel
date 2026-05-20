@@ -321,23 +321,7 @@ button {
   color: var(--text);
   background: var(--active-bg);
 }
-.project-picker-new {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.project-picker-new:hover {
-  color: var(--text);
-  background: var(--accent-dim);
-}
-.project-picker-new svg { width: 14px; height: 14px; }
+.project-picker-new,
 .project-picker-settings {
   display: inline-flex;
   align-items: center;
@@ -350,10 +334,12 @@ button {
   color: var(--text-dim);
   cursor: pointer;
 }
+.project-picker-new:hover,
 .project-picker-settings:hover {
   color: var(--text);
   background: var(--accent-dim);
 }
+.project-picker-new svg,
 .project-picker-settings svg { width: 14px; height: 14px; }
 
 .new-chat {
@@ -705,6 +691,13 @@ button {
   font-size: 10px;
   letter-spacing: 0.02em;
   color: var(--text-faint);
+  /* Smoothly expand the column when the user opens the breakdown
+     (.expanded state below). .main-col centers its children, so growing
+     wider extends evenly on both sides of the avatar. */
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ctx-stats.expanded {
+  width: 280px;
 }
 
 .ctx-stats-bar {
@@ -767,17 +760,9 @@ button {
    16x16 grid + a small legend showing which categories make up the current
    budget. Same idea as the Claude Code console indicator. The collapsed
    strip stays at 200px to match the avatar above; when expanded the column
-   grows to ~280px so the grid + legend sit side-by-side without cramping. */
-/* Smoothly expand the column when the user opens the breakdown. .main-col
-   centers its children so growing wider extends evenly on both sides of
-   the avatar above. The base width: 200px lives in the original .ctx-stats
-   block - this only layers on the transition + expanded state. */
-.ctx-stats {
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.ctx-stats.expanded {
-  width: 280px;
-}
+   grows to ~280px so the grid + legend sit side-by-side without cramping.
+   The `.expanded` width override + width transition both live on the base
+   `.ctx-stats` rule above. */
 
 .ctx-stats-toggle {
   align-self: center;
@@ -1534,19 +1519,8 @@ button {
   display: inline-block;
   margin-left: 1px;
   color: var(--text-dim);
-  animation: gtw-blink 900ms steps(2, end) infinite;
+  animation: caret-blink 900ms steps(2, end) infinite;
   transform: translateY(1px);
-}
-
-@keyframes gtw-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
 }
 
 /* ---------- Sidebar footer (user + logout) ---------- */
@@ -2386,6 +2360,60 @@ button {
   align-items: center;
   padding: 4px 6px;
   animation: fade-in 0.25s ease-out both;
+}
+
+/* ---------- Compacting overlay ----------
+   Shown over .messages (NOT the composer) while a rolling-summary compact is
+   running. .messages-area is the positioning context - it takes over the
+   flex sizing that .messages used to own directly so the overlay can
+   `position: absolute; inset: 0` and cover the scrolling list.            */
+.messages-area {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.compacting-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  background: rgba(10, 10, 12, 0.55);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+  animation: fade-in 0.35s ease-out both;
+  pointer-events: none;
+}
+
+.compacting-canvas {
+  width: 220px;
+  height: 220px;
+  /* Soft halo behind the swirl so the additive-blended particles read against
+     even a bright project palette. */
+  filter: drop-shadow(0 0 24px rgba(214, 59, 143, 0.25));
+}
+
+.compacting-caption {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  text-align: center;
+}
+
+.compacting-sub {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  max-width: 420px;
+  text-align: center;
+  line-height: 1.5;
 }
 
 /* ---------- Settings pages ---------- */

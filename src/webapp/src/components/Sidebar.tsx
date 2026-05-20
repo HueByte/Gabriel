@@ -28,12 +28,6 @@ function loadSidebarCollapsed(): boolean {
   }
 }
 
-interface SidebarProps {
-  /** Bumped by the layout when an external action (e.g. a chat turn
-   *  completing) changes the conversation list's sort order. */
-  refreshKey: number;
-}
-
 // Per-row menu state. We store viewport coordinates so the menu can render with
 // position: fixed and bypass the sidebar-body's overflow clipping (otherwise
 // menus on the last rows would get cut off by the scroll container).
@@ -43,7 +37,7 @@ interface MenuState {
   right: number;
 }
 
-export function Sidebar({ refreshKey }: SidebarProps) {
+export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   // Active id comes from the URL - single source of truth, no prop drilling.
@@ -95,7 +89,7 @@ export function Sidebar({ refreshKey }: SidebarProps) {
         if (!cancelled) notifyError(e, 'Failed to load conversations.');
       });
     return () => { cancelled = true; };
-  }, [refreshKey, localRefresh, activeProjectId]);
+  }, [localRefresh, activeProjectId]);
 
   useEffect(() => {
     if (editingId) editInputRef.current?.select();
@@ -150,7 +144,7 @@ export function Sidebar({ refreshKey }: SidebarProps) {
   }, [open]);
   useEffect(() => {
     setMenu(null);
-  }, [refreshKey, localRefresh]);
+  }, [localRefresh]);
 
   // Auto-close the sidebar on route change. Catches navigation triggered from
   // anywhere inside the panel (ProjectPicker → /p/.../settings, AuthContext
@@ -312,7 +306,6 @@ export function Sidebar({ refreshKey }: SidebarProps) {
           activeProjectId={activeProjectId}
           onActiveProjectChange={setActiveProjectId}
           onActiveProjectMetaChange={setActiveProject}
-          refreshKey={refreshKey}
         />
 
         <button type="button" className="new-chat" onClick={() => void handleNewChat()}>

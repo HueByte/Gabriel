@@ -19,11 +19,21 @@
 import { refreshSession, signalSessionExpired } from './authRefresh';
 
 export type AgentEvent =
+  // First event of every send-driven turn (not regenerate). Carries the real
+  // DB id of the just-persisted user message so the client can swap its
+  // optimistic `tmp-xxxxx` user-entry id for the real one without a
+  // follow-up GET conversation round-trip.
+  | { type: 'userMessagePersisted'; messageId: string }
   | { type: 'textDelta'; delta: string }
   | { type: 'reasoningDelta'; delta: string }
   | { type: 'toolCall'; messageId: string; toolCallId: string; name: string; argumentsJson: string }
   | { type: 'toolResult'; messageId: string; toolCallId: string; content: string }
   | { type: 'assistantMessage'; messageId: string; content: string; reasoningContent?: string | null }
+  // Rolling-summary compaction is about to start. Emitted before the summary
+  // LLM call so the UI can swap to a "Compacting…" overlay; paired with a
+  // later `compactDone` (even on summary failure, so the overlay always clears).
+  | { type: 'compactStart'; messageCount: number; currentTokens: number; thresholdTokens: number }
+  | { type: 'compactDone'; messageCount: number; summaryTokens: number }
   | { type: 'error'; message: string }
   | { type: 'done' };
 

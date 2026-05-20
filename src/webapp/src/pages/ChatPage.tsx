@@ -4,7 +4,6 @@ import { HiOutlineArrowPath } from 'react-icons/hi2';
 import { Chat } from '../components/Chat';
 import { ContextStats } from '../components/ContextStats';
 import { GabrielSequenceView } from '../components/GabrielSequenceView';
-import { useMainLayout } from '../layouts/MainLayout';
 import { ConversationsService, type ConversationResponse } from '../api/generated';
 import { notifyError } from '../lib/notify';
 import { paletteForSeed, paletteVarsFromStops, type RGB } from '../pulse/palettes';
@@ -29,7 +28,6 @@ function persistActiveConversation(id: string | null) {
 export function ChatPage() {
   const { conversationId = '' } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
-  const { bumpSidebar } = useMainLayout();
 
   const [avatarSeed, setAvatarSeed] = useState<number>(FALLBACK_AVATAR_SEED);
   // The conversation's parent project (null until metadata loads). When
@@ -60,13 +58,15 @@ export function ChatPage() {
 
   const bumpSequence = useCallback(() => setSequenceRefresh(n => n + 1), []);
 
-  // Convenience for "a chat turn just completed" - both the sidebar list
-  // (re-sort by updatedAt) and the Gabriel Sequence (Live State just changed)
-  // are affected.
+  // Convenience for "a chat turn just completed". Only the Gabriel Sequence
+  // (Live State + token stats) is refreshed - the sidebar list intentionally
+  // stays put. Re-sorting by updatedAt isn't worth the cost of refetching the
+  // entire conversation list (and the projects list, via the same refresh
+  // signal) on every turn. The active conversation is already highlighted, so
+  // stale position-in-list is harmless until next mount.
   const onTurnComplete = useCallback(() => {
-    bumpSidebar();
     bumpSequence();
-  }, [bumpSidebar, bumpSequence]);
+  }, [bumpSequence]);
 
   // Chat fires this once it loads the conversation's metadata - lets us pick
   // up the avatar seed without doing a duplicate fetch. Effective seed +
@@ -94,12 +94,13 @@ export function ChatPage() {
       const conv = await ConversationsService.postApiConversationsAvatarReroll({ id: conversationId });
       setAvatarSeed(conv.avatarSeed);
       // Reroll changes the seed → the sequence's palette + pattern change.
-      bumpSidebar();
+      // No sidebar bump - the conversation list doesn't display avatars, so
+      // refetching it on every reroll is wasted work.
       bumpSequence();
     } catch (e: unknown) {
       notifyError(e);
     }
-  }, [conversationId, bumpSidebar, bumpSequence]);
+  }, [conversationId, bumpSequence]);
 
   // If the conversation comes back 404 (e.g. deleted on another tab), Chat
   // surfaces an error toast. We also bounce the user back to /, which will

@@ -20,6 +20,7 @@ import { notifyError } from '../lib/notify';
 import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
 import { StreamingText } from './StreamingText';
 import { ThinkingPulse } from './ThinkingPulse';
+import { CompactingOverlay } from './CompactingOverlay';
 import { MemoryQuickSave } from './MemoryQuickSave';
 import { ModeSelector } from './ModeSelector';
 import type { GabrielMode } from '../api/conversationMode';
@@ -42,17 +43,25 @@ type VariantMeta = {
   variantSiblingIds: readonly string[];
 };
 
+// `key` is the React list key, stable for the entry's whole lifetime. `id` is
+// the action target (delete, regenerate, ...). For in-flight entries `id`
+// starts optimistic (`tmp-xxxxx` / `streaming-xxxxx`) and gets patched in
+// place when the stream delivers `userMessagePersisted` or `assistantMessage`.
+// Keeping `key` separate means the in-flight StreamingText instance survives
+// the id swap - no remount, no typewriter snap. Action availability gates on
+// `id` via the `isPersisted` check in renderEntry, so buttons only appear
+// once `id` becomes a real DB id.
 type ChatEntry =
-  | { kind: 'text'; id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean; variant?: VariantMeta }
-  | { kind: 'thought'; id: string; content: string; streaming?: boolean }
+  | { kind: 'text'; key: string; id: string; role: 'user' | 'assistant'; content: string; streaming?: boolean; variant?: VariantMeta }
+  | { kind: 'thought'; key: string; id: string; content: string; streaming?: boolean }
   // `reasoning` carries the dedicated reasoning_content stream (Grok 4,
   // DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking). Rendered the
   // same way as a `thought` - collapsed by default - but kept distinct because
   // a single turn can produce both: pre-tool reasoning text *and* a separate
   // chain-of-thought stream.
-  | { kind: 'reasoning'; id: string; content: string; streaming?: boolean }
-  | { kind: 'toolCall'; id: string; toolCallId: string; name: string; argumentsJson: string }
-  | { kind: 'toolResult'; id: string; toolCallId: string; content: string };
+  | { kind: 'reasoning'; key: string; id: string; content: string; streaming?: boolean }
+  | { kind: 'toolCall'; key: string; id: string; toolCallId: string; name: string; argumentsJson: string }
+  | { kind: 'toolResult'; key: string; id: string; toolCallId: string; content: string };
 
 function variantMetaOf(m: MessageResponse): VariantMeta {
   return {
@@ -64,18 +73,23 @@ function variantMetaOf(m: MessageResponse): VariantMeta {
 }
 
 function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
+  // For history-built entries (loaded from the API), key == id because the
+  // id is already the real DB id and never changes. The key/id split only
+  // matters for in-flight entries whose id gets patched from optimistic to
+  // real mid-stream.
   const entries: ChatEntry[] = [];
   for (const m of messages) {
     if (m.role === 'user') {
       if (m.content) {
-        entries.push({ kind: 'text', id: m.id, role: 'user', content: m.content, variant: variantMetaOf(m) });
+        entries.push({ kind: 'text', key: m.id, id: m.id, role: 'user', content: m.content, variant: variantMetaOf(m) });
       }
     } else if (m.role === 'assistant') {
       // Reasoning stream (reasoning_content) renders first if the provider
       // captured one for this turn - it precedes both the model's regular
       // content and any tool calls.
       if (m.reasoningContent) {
-        entries.push({ kind: 'reasoning', id: `${m.id}-reasoning`, content: m.reasoningContent });
+        const rk = `${m.id}-reasoning`;
+        entries.push({ kind: 'reasoning', key: rk, id: rk, content: m.reasoningContent });
       }
       // Assistant content + tool calls on the same message ⇒ that content is
       // the model's reasoning ("Thought"). Without tool calls, it's the final
@@ -83,10 +97,11 @@ function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
       const hasToolCalls = !!m.toolCalls && m.toolCalls.length > 0;
       if (m.content) {
         if (hasToolCalls) {
-          entries.push({ kind: 'thought', id: m.id, content: m.content });
+          entries.push({ kind: 'thought', key: m.id, id: m.id, content: m.content });
         } else {
           entries.push({
             kind: 'text',
+            key: m.id,
             id: m.id,
             role: 'assistant',
             content: m.content,
@@ -100,7 +115,7 @@ function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
         }
       }
     } else if (m.role === 'tool' && m.toolCallId && m.content != null) {
-      entries.push({ kind: 'toolResult', id: m.id, toolCallId: m.toolCallId, content: m.content });
+      entries.push({ kind: 'toolResult', key: m.id, id: m.id, toolCallId: m.toolCallId, content: m.content });
     }
     // role === 'system' - not rendered.
   }
@@ -108,8 +123,10 @@ function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
 }
 
 function toolCallEntry(messageId: string, tc: MessageToolCall): ChatEntry {
+  const k = `${messageId}-call-${tc.id}`;
   return {
     kind: 'toolCall',
+    key: k,
     id: `${messageId}-call-${tc.id}`,
     toolCallId: tc.id,
     name: tc.name,
@@ -153,6 +170,11 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // Rolling-summary compaction overlay state. Set when the backend emits
+  // `compactStart` (carrying how many messages are being folded); cleared on
+  // `compactDone` or any terminal event so the swirl never gets stuck on
+  // screen if the stream errors mid-compact.
+  const [compactingCount, setCompactingCount] = useState<number | null>(null);
   // Conversation's projectId — tracked locally so the "Remember this" modal
   // can offer project-scope memories when relevant. Null = standalone chat
   // (Default-project) → modal shows user-scope only.
@@ -334,7 +356,9 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     isAtBottomRef.current = true;
 
     const tempUserId = `tmp-${crypto.randomUUID()}`;
-    const userEntry: ChatEntry = { kind: 'text', id: tempUserId, role: 'user', content: text };
+    // key stays as the optimistic id for the entry's whole lifetime; id will
+    // be patched to the real DB id when AgentUserMessagePersisted arrives.
+    const userEntry: ChatEntry = { kind: 'text', key: tempUserId, id: tempUserId, role: 'user', content: text };
     setEntries(prev => [...prev, userEntry]);
 
     const controller = new AbortController();
@@ -342,18 +366,40 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
 
     try {
       for await (const evt of streamChat(conversationId, text, { signal: controller.signal })) {
+        if (evt.type === 'compactStart') {
+          setCompactingCount(evt.messageCount);
+          continue;
+        }
+        if (evt.type === 'compactDone') {
+          setCompactingCount(null);
+          continue;
+        }
         applyAgentEvent(evt, setEntries);
         if (evt.type === 'done' || evt.type === 'error') break;
       }
+      // No refetch on the happy path - the stream's userMessagePersisted +
+      // assistantMessage events have already patched the optimistic
+      // tmp-xxxxx / streaming-xxxxx ids in place with the real DB ids, and
+      // a brand-new send produces only singleton variants whose metadata is
+      // also stamped from those events. Avoiding the GET keeps the
+      // typewriter from being remounted mid-reveal (id changes ⇒ React
+      // remount when the key was tied to id) and saves one round-trip per
+      // turn.
+      //
+      // Tradeoff: messagesRef.current is now stale immediately after a
+      // successful send - it still reflects the conversation BEFORE this
+      // turn. handleRegenerate is the only consumer that reads from
+      // messagesRef during the live session; it absorbs a lazy refetch when
+      // its lookup misses, so this staleness is invisible to the user.
       onMessageSent?.();
-      // Re-pull canonical history so the temporary user entry is replaced by
-      // the persisted server message (with its real id + variant metadata).
-      await refetchConversation();
     } catch (e: unknown) {
       // Network failure / pre-flight 4xx - drop the streaming placeholder if any.
       notifyError(e);
       setEntries(prev => prev.filter(e2 => !(e2.kind === 'text' && e2.role === 'assistant' && e2.streaming)));
     } finally {
+      // Safety net: clear the overlay even if the stream errored mid-compact
+      // (the matching `compactDone` would never arrive in that path).
+      setCompactingCount(null);
       setBusyState(false);
       abortRef.current = null;
     }
@@ -422,11 +468,18 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   const handleRegenerate = useCallback(async (messageId: string) => {
     if (busy) return;
 
-    // Find the target's variantGroupId from the canonical messages list. If
-    // it's not there (race: button clicked before the refetch settled),
-    // bail rather than risk a misplaced prune.
-    const target = messagesRef.current.find(m => m.id === messageId);
-    if (!target) return;
+    // Find the target's variantGroupId from the canonical messages list.
+    // After send() stopped refetching on success, messagesRef can be stale
+    // and miss messages that landed via the stream events. If the lookup
+    // misses, lazy-refresh once and retry before bailing - this absorbs
+    // the (relatively rare) "regenerate immediately after send" case
+    // without forcing send() to pay a refetch cost on every turn.
+    let target = messagesRef.current.find(m => m.id === messageId);
+    if (!target) {
+      await refetchConversation();
+      target = messagesRef.current.find(m => m.id === messageId);
+      if (!target) return;
+    }
     const groupId = target.variantGroupId;
 
     setBusyState(true);
@@ -443,6 +496,14 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
 
     try {
       for await (const evt of streamRegenerate(conversationId, messageId, { signal: controller.signal })) {
+        if (evt.type === 'compactStart') {
+          setCompactingCount(evt.messageCount);
+          continue;
+        }
+        if (evt.type === 'compactDone') {
+          setCompactingCount(null);
+          continue;
+        }
         applyAgentEvent(evt, setEntries);
         if (evt.type === 'done' || evt.type === 'error') break;
       }
@@ -457,6 +518,9 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
       setEntries(prev => prev.filter(e2 => !(e2.kind === 'text' && e2.role === 'assistant' && e2.streaming)));
       await refetchConversation();
     } finally {
+      // Safety net (see send()): the matching compactDone won't arrive on
+      // failure paths, so clear unconditionally.
+      setCompactingCount(null);
       setBusyState(false);
       abortRef.current = null;
     }
@@ -476,39 +540,47 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
 
   return (
     <div className="chat">
-      <div className="messages" ref={scrollRef}>
-        <div className="messages-content" ref={messagesContentRef}>
-          {entries.length === 0 && !busy && (
-            <div className="empty">Say hi to get started.</div>
-          )}
-          {/* Per-kind ReAct visibility filter. Each toggle independently
-              drops one scaffolding kind from the transcript while leaving
-              the user + assistant text bubbles intact. `text` always passes
-              through so the streaming typewriter keeps working. */}
-          {entries.filter(e => {
-            if (e.kind === 'thought' || e.kind === 'reasoning') return !hideThinking;
-            if (e.kind === 'toolCall') return !hideToolCalls;
-            if (e.kind === 'toolResult') return !hideToolResults;
-            return true;
-          }).map(e => renderEntry(e, {
-            busy,
-            onDelete: handleDelete,
-            onRegenerate: handleRegenerate,
-            onVariantSwitch: handleVariantSwitch,
-            onRemember: handleRemember,
-          }))}
-          {/* Thinking indicator - shows once the user has submitted and before
-              the first delta arrives. The condition checks that no assistant
-              bubble is currently streaming, which means tokens haven't started
-              flowing yet. Once a delta lands the streaming bubble takes over. */}
-          {busy && !hasActiveAssistantStream(entries) && (
-            <div className="thinking-pulse" aria-label="Thinking">
-              <ThinkingPulse seed={avatarSeed} paletteStops={paletteStops ?? undefined} />
-            </div>
-          )}
-          {/* Stick-to-bottom sentinel - IntersectionObserver above watches it. */}
-          <div ref={bottomSentinelRef} className="messages-bottom" aria-hidden="true" />
+      {/* Wrapper exists so the CompactingOverlay can `position: absolute; inset: 0`
+          over the scrollable messages area without also covering the composer. */}
+      <div className="messages-area">
+        <div className="messages" ref={scrollRef}>
+          <div className="messages-content" ref={messagesContentRef}>
+            {entries.length === 0 && !busy && (
+              <div className="empty">Say hi to get started.</div>
+            )}
+            {/* Per-kind ReAct visibility filter. Each toggle independently
+                drops one scaffolding kind from the transcript while leaving
+                the user + assistant text bubbles intact. `text` always passes
+                through so the streaming typewriter keeps working. */}
+            {entries.filter(e => {
+              if (e.kind === 'thought' || e.kind === 'reasoning') return !hideThinking;
+              if (e.kind === 'toolCall') return !hideToolCalls;
+              if (e.kind === 'toolResult') return !hideToolResults;
+              return true;
+            }).map(e => renderEntry(e, {
+              busy,
+              onDelete: handleDelete,
+              onRegenerate: handleRegenerate,
+              onVariantSwitch: handleVariantSwitch,
+              onRemember: handleRemember,
+            }))}
+            {/* Thinking indicator - shows once the user has submitted and before
+                the first delta arrives. The condition checks that no assistant
+                bubble is currently streaming, which means tokens haven't started
+                flowing yet. Once a delta lands the streaming bubble takes over.
+                Suppressed while compacting so the swirl owns the surface. */}
+            {busy && compactingCount === null && !hasActiveAssistantStream(entries) && (
+              <div className="thinking-pulse" aria-label="Thinking">
+                <ThinkingPulse seed={avatarSeed} paletteStops={paletteStops ?? undefined} />
+              </div>
+            )}
+            {/* Stick-to-bottom sentinel - IntersectionObserver above watches it. */}
+            <div ref={bottomSentinelRef} className="messages-bottom" aria-hidden="true" />
+          </div>
         </div>
+        {compactingCount !== null && (
+          <CompactingOverlay paletteStops={paletteStops} messageCount={compactingCount} />
+        )}
       </div>
       <form className="composer" onSubmit={onSubmit}>
         <div className="composer-toolbar">
@@ -589,7 +661,7 @@ function renderEntry(e: ChatEntry, actions: EntryActions) {
       const canRegenerate = showActions && e.role === 'assistant' && isLatestVariant;
       const hasVariants = !!e.variant && e.variant.variantCount > 1;
       return (
-        <div key={e.id} className={`message ${e.role}${e.streaming ? ' streaming' : ''}`}>
+        <div key={e.key} className={`message ${e.role}${e.streaming ? ' streaming' : ''}`}>
           {e.role === 'assistant' ? (
             <StreamingText text={e.content} animate={isLiveAssistant} caret galactic />
           ) : (
@@ -647,17 +719,17 @@ function renderEntry(e: ChatEntry, actions: EntryActions) {
     }
     case 'toolCall':
       return (
-        <div key={e.id} className="react-step tool-call">
+        <div key={e.key} className="react-step tool-call">
           <span className="tool-badge action-badge">action</span>
           <code>{e.name}({prettyArgs(e.argumentsJson)})</code>
         </div>
       );
     case 'toolResult':
-      return <ToolResult key={e.id} content={e.content} />;
+      return <ToolResult key={e.key} content={e.content} />;
     case 'thought':
-      return <Thought key={e.id} content={e.content} />;
+      return <Thought key={e.key} content={e.content} />;
     case 'reasoning':
-      return <Reasoning key={e.id} content={e.content} streaming={e.streaming} />;
+      return <Reasoning key={e.key} content={e.content} streaming={e.streaming} />;
   }
 }
 
@@ -802,12 +874,16 @@ function applyAgentEvent(
           const updated: ChatEntry = { ...last, content: last.content + evt.delta };
           return [...prev.slice(0, -1), updated];
         }
-        // Start a fresh streaming bubble.
+        // Start a fresh streaming bubble. key stays as the synthetic streaming
+        // id forever; id gets patched to the real DB id on assistantMessage so
+        // the same React instance keeps typing.
+        const streamingId = `streaming-${crypto.randomUUID()}`;
         return [
           ...prev,
           {
             kind: 'text',
-            id: `streaming-${crypto.randomUUID()}`,
+            key: streamingId,
+            id: streamingId,
             role: 'assistant',
             content: evt.delta,
             streaming: true,
@@ -831,11 +907,13 @@ function applyAgentEvent(
           const updated: ChatEntry = { ...existing, content: existing.content + evt.delta };
           return [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
         }
+        const reasoningId = `streaming-reasoning-${crypto.randomUUID()}`;
         return [
           ...prev,
           {
             kind: 'reasoning',
-            id: `streaming-reasoning-${crypto.randomUUID()}`,
+            key: reasoningId,
+            id: reasoningId,
             content: evt.delta,
             streaming: true,
           },
@@ -855,7 +933,7 @@ function applyAgentEvent(
         // preceded this tool call - reclassify it as a `thought` so the UI
         // renders it as a collapsed ReAct step alongside the action/observation.
         // Empty buffers are dropped (some providers emit no reasoning before
-        // calling a tool). Keep its id stable so any in-flight StreamingText
+        // calling a tool). Keep its key/id stable so any in-flight StreamingText
         // doesn't remount.
         const last = frozenReasoning[frozenReasoning.length - 1];
         const head = (last && last.kind === 'text' && last.role === 'assistant' && last.streaming)
@@ -863,7 +941,7 @@ function applyAgentEvent(
           : frozenReasoning;
         const thoughtFromStreaming: ChatEntry[] = (last && last.kind === 'text' && last.role === 'assistant' && last.streaming)
           ? (last.content.trim().length > 0
-              ? [{ kind: 'thought', id: last.id, content: last.content }]
+              ? [{ kind: 'thought', key: last.key, id: last.id, content: last.content }]
               : [])
           : [];
         return [
@@ -881,8 +959,42 @@ function applyAgentEvent(
     case 'toolResult':
       setEntries(prev => [
         ...prev,
-        { kind: 'toolResult', id: evt.messageId, toolCallId: evt.toolCallId, content: evt.content },
+        { kind: 'toolResult', key: evt.messageId, id: evt.messageId, toolCallId: evt.toolCallId, content: evt.content },
       ]);
+      break;
+
+    case 'userMessagePersisted':
+      // Server emits this as the first event of any send-driven turn (not
+      // regenerate). Find the trailing tmp-xxxxx user entry and patch its id
+      // in place to the real DB id. key stays the same so React doesn't
+      // remount; isPersisted in renderEntry flips to true so the user can
+      // now delete-from-here on their own message without a refetch.
+      setEntries(prev => {
+        // The optimistic user entry is the most recent user-text entry whose
+        // id still has the tmp- prefix. Patch only that one - older user
+        // entries are already persisted with real ids.
+        const idx = lastIndexWhere(
+          prev,
+          e => e.kind === 'text' && e.role === 'user' && e.id.startsWith('tmp-'),
+        );
+        if (idx < 0) return prev;
+        const existing = prev[idx] as Extract<ChatEntry, { kind: 'text' }>;
+        // Also stamp variant metadata: a fresh user message is a singleton
+        // variant (groupId = its own id, count 1) so the variant picker stays
+        // hidden and any future regenerate of its assistant reply knows what
+        // to anchor on.
+        const updated: ChatEntry = {
+          ...existing,
+          id: evt.messageId,
+          variant: {
+            variantGroupId: evt.messageId,
+            variantIndex: 0,
+            variantCount: 1,
+            variantSiblingIds: [evt.messageId],
+          },
+        };
+        return [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
+      });
       break;
 
     case 'assistantMessage':
@@ -893,16 +1005,18 @@ function applyAgentEvent(
         // text), inject it now so reloads-vs-live-view stay consistent.
         let next = prev.map<ChatEntry>(e =>
           e.kind === 'reasoning' && e.streaming
-            ? { ...e, streaming: false, content: evt.reasoningContent ?? e.content }
+            ? { ...e, streaming: false, content: evt.reasoningContent ?? e.content, id: `${evt.messageId}-reasoning` }
             : e,
         );
         const hasStreamedReasoning = next.some(e => e.kind === 'reasoning');
         if (!hasStreamedReasoning && evt.reasoningContent) {
           // Insert before the final assistant text bubble (if any), else append.
           const tail = next[next.length - 1];
+          const reasoningKey = `${evt.messageId}-reasoning`;
           const insertEntry: ChatEntry = {
             kind: 'reasoning',
-            id: `${evt.messageId}-reasoning`,
+            key: reasoningKey,
+            id: reasoningKey,
             content: evt.reasoningContent,
           };
           next = tail?.kind === 'text' && tail.role === 'assistant'
@@ -912,15 +1026,47 @@ function applyAgentEvent(
 
         const last = next[next.length - 1];
         if (last?.kind === 'text' && last.role === 'assistant' && last.streaming) {
-          // Keep id stable so the in-flight StreamingText keeps typing.
-          return [
-            ...next.slice(0, -1),
-            { ...last, content: evt.content, streaming: false },
-          ];
+          // Patch the streaming entry in place: key stays the synthetic
+          // streaming id (so React doesn't remount and the typewriter keeps
+          // running) but id gets stamped with the real DB id + the canonical
+          // content + singleton variant metadata. The `streaming: false` flag
+          // is left ON intentionally - the StreamingText is still revealing
+          // chars even though the network stream has stopped; the `done` case
+          // below flips streaming once the iter is fully over. Actually -
+          // current behaviour is to flip on assistantMessage, keep that since
+          // streaming refers to "model is still producing" not "typewriter
+          // is still revealing".
+          const updated: ChatEntry = {
+            ...last,
+            id: evt.messageId,
+            content: evt.content,
+            streaming: false,
+            variant: {
+              variantGroupId: evt.messageId,
+              variantIndex: 0,
+              variantCount: 1,
+              variantSiblingIds: [evt.messageId],
+            },
+          };
+          return [...next.slice(0, -1), updated];
         }
+        // No streaming bubble (rare: assistant message arrived before any
+        // text delta did, e.g. provider buffered everything). Append fresh.
         return [
           ...next,
-          { kind: 'text', id: evt.messageId, role: 'assistant', content: evt.content },
+          {
+            kind: 'text',
+            key: evt.messageId,
+            id: evt.messageId,
+            role: 'assistant',
+            content: evt.content,
+            variant: {
+              variantGroupId: evt.messageId,
+              variantIndex: 0,
+              variantCount: 1,
+              variantSiblingIds: [evt.messageId],
+            },
+          },
         ];
       });
       break;

@@ -132,16 +132,38 @@ public class AgentService : IAgentService
         // source rather than threading the flag through every consumer.
         var prompts = await LoadTurnPromptsAsync(conversation, userId, selection, ct);
 
-        // Compact here (between turns), never mid-iteration - cutting between an
-        // assistant's tool_calls and its tool results would orphan them.
-        await MaybeCompactAsync(conversation, prompts, selection, ct);
-
         // Populate the scoped tool-execution context so project-aware tools
         // (list_project_files / read_project_file) know which project to scope
         // to without having the model fill in the projectId itself.
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
-        return RunStreamAsync(conversation, variantGroupIdOverride: null, prompts, selection, ct);
+        // Compaction runs inside RunStreamAsync so it can yield CompactStart /
+        // CompactDone events to the SSE wire - the user sees "Compacting…"
+        // instead of staring at a silent HTTP request while a summary LLM
+        // call burns 5-30s before the real turn begins.
+        //
+        // The user message was persisted above with `userMessage.Id`. The
+        // wrapper yields a AgentUserMessagePersisted as the first event so the
+        // client can swap its tmp-xxxxx user-entry id for the real DB id
+        // without doing a "GET conversation" round-trip after the stream
+        // ends. RegenerateAsync skips this preamble (no new user message).
+        return RunStreamWithUserPreambleAsync(
+            userMessage.Id, conversation, variantGroupIdOverride: null, prompts, selection, ct);
+    }
+
+    private async IAsyncEnumerable<AgentEvent> RunStreamWithUserPreambleAsync(
+        Guid userMessageId,
+        Conversation conversation,
+        Guid? variantGroupIdOverride,
+        TurnPrompts prompts,
+        ModelSelection selection,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        yield return new AgentUserMessagePersisted(userMessageId);
+        await foreach (var evt in RunStreamAsync(conversation, variantGroupIdOverride, prompts, selection, ct))
+        {
+            yield return evt;
+        }
     }
 
     public async Task<IAsyncEnumerable<AgentEvent>> RegenerateAsync(
@@ -181,9 +203,9 @@ public class AgentService : IAgentService
 
         // No new user message + no state update - state was set when the user
         // originally sent this turn, and we're regenerating against that same
-        // state. Compact between turns as usual.
+        // state. Compaction happens inside RunStreamAsync so it can yield
+        // events (see RunAsync for the rationale).
         var prompts = await LoadTurnPromptsAsync(conversation, userId, selection, ct);
-        await MaybeCompactAsync(conversation, prompts, selection, ct);
 
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
@@ -199,14 +221,29 @@ public class AgentService : IAgentService
         return _modelCatalog.Resolve(prefs.PreferredProvider, prefs.PreferredModel);
     }
 
-    // One-shot lookup of the project's SystemPrompt for this turn. Returns null
-    // when the conversation has no ProjectId yet (legacy pre-Phase-8 data that
-    // hasn't been backfilled) or the project has no prompt set.
+    // Build the [Project context] block for this turn. Two responsibilities:
+    //   1. Tell the agent which project the conversation lives in - without
+    //      this, memory_save defaults to scope='user' because nothing in the
+    //      system prompt signals that a project scope is even applicable.
+    //   2. Inject the user-authored project SystemPrompt (if any) under that
+    //      header.
+    // Returns null for the Default project (standalone conversations) and for
+    // legacy pre-Phase-8 data with no ProjectId.
     private async Task<string?> LoadProjectSystemPromptAsync(Conversation conversation, Guid userId, CancellationToken ct)
     {
         if (conversation.ProjectId is not { } pid) return null;
         var project = await _projects.GetByIdAsync(pid, userId, ct);
-        return project?.SystemPrompt;
+        if (project is null || project.IsDefault) return null;
+
+        var sb = new StringBuilder();
+        sb.Append("This conversation belongs to project '").Append(project.Name).AppendLine("'.");
+        sb.AppendLine("When calling memory_save, default to scope='project' for facts that only matter to this project's work. Use scope='user' only when the user clearly intends the memory to follow them across every project.");
+        if (!string.IsNullOrWhiteSpace(project.SystemPrompt))
+        {
+            sb.AppendLine();
+            sb.Append(project.SystemPrompt);
+        }
+        return sb.ToString();
     }
 
     // Formats the user's saved memories as a single system message. Two
@@ -293,6 +330,15 @@ public class AgentService : IAgentService
         ModelSelection selection,
         [EnumeratorCancellation] CancellationToken ct)
     {
+        // Compact between turns, never mid-iteration - cutting between an
+        // assistant's tool_calls and its tool results would orphan them.
+        // Runs first so the summarizer's output is in conversation.Summary
+        // before AgentContext.Build assembles history for the real turn.
+        await foreach (var evt in MaybeCompactAsync(conversation, prompts, selection, ct))
+        {
+            yield return evt;
+        }
+
         // ToolMode.Emulated wraps the base provider in GabrielToolBridge,
         // which injects tool docs into the system prompt and parses
         // <tool_call> markers out of the text stream. Native and None both
@@ -483,60 +529,78 @@ public class AgentService : IAgentService
     // Using the full breakdown rather than the old "summary + post-cut
     // messages" estimate means a heavy project prompt or memory block also
     // counts toward the trigger - matching what the provider actually sees.
-    private async Task MaybeCompactAsync(
+    private async IAsyncEnumerable<AgentEvent> MaybeCompactAsync(
         Conversation conv,
         TurnPrompts prompts,
         ModelSelection selection,
-        CancellationToken ct)
+        [EnumeratorCancellation] CancellationToken ct)
     {
         var window = selection.ContextWindowTokens;
-        if (window <= 0) return;
+        if (window <= 0) yield break;
         var ratio = selection.CompactThreshold ?? _options.CompactThreshold;
         var threshold = (int)(window * ratio);
 
         var context = AgentContext.Build(
             conv, prompts.PersonaPrompt, prompts.ProjectPrompt, prompts.MemoryBlock, prompts.Tools);
         var currentTokens = context.ComputeBreakdown(_tokens).Total;
-        if (currentTokens < threshold) return;
+        if (currentTokens < threshold) yield break;
 
         var messages = conv.Messages.ToList();
         var cutIdx = SelectCompactCutIndex(messages, _options.CompactKeepLast);
-        if (cutIdx <= 0) return;
+        if (cutIdx <= 0) yield break;
 
         // Don't re-summarize ground we already covered.
         if (conv.SummarizedThroughMessageId is { } prevCutId)
         {
             var prevIdx = messages.FindIndex(m => m.Id == prevCutId);
-            if (prevIdx >= 0 && cutIdx <= prevIdx + 1) return;
+            if (prevIdx >= 0 && cutIdx <= prevIdx + 1) yield break;
         }
 
         var toSummarize = messages.Take(cutIdx).ToList();
-        if (toSummarize.Count == 0) return;
+        if (toSummarize.Count == 0) yield break;
 
-        string newSummary;
+        // Past every short-circuit - we're definitely making the summary call.
+        // Yield CompactStart now so the UI can swap to the compacting overlay
+        // while the (potentially slow) LLM summary call runs below.
+        yield return new AgentCompactStart(toSummarize.Count, currentTokens, threshold);
+
+        string? newSummary = null;
+        Exception? failure = null;
         try
         {
             newSummary = await GenerateSummaryAsync(conv.Summary, toSummarize, selection, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Compact summary call failed; skipping compact");
-            return;
+            failure = ex;
+        }
+
+        if (failure is not null)
+        {
+            _logger.LogWarning(failure, "Compact summary call failed; skipping compact");
+            // Still emit Done so the UI clears its overlay - the turn proceeds
+            // un-compacted but the user shouldn't be stuck staring at a swirl.
+            yield return new AgentCompactDone(toSummarize.Count, 0);
+            yield break;
         }
 
         if (string.IsNullOrWhiteSpace(newSummary))
         {
             _logger.LogWarning("Compact summary returned empty; skipping compact");
-            return;
+            yield return new AgentCompactDone(toSummarize.Count, 0);
+            yield break;
         }
 
         conv.UpdateSummary(newSummary, toSummarize[^1].Id);
         _conversations.Update(conv);
         await _uow.SaveChangesAsync(ct);
 
+        var summaryTokens = _tokens.EstimateText(newSummary);
         _logger.LogInformation(
-            "Compacted conversation {Id}: summarized {Cut} messages at ~{Tokens} tokens (threshold {Threshold})",
-            conv.Id, toSummarize.Count, currentTokens, threshold);
+            "Compacted conversation {Id}: summarized {Cut} messages at ~{Tokens} tokens (threshold {Threshold}) into ~{SummaryTokens} tokens",
+            conv.Id, toSummarize.Count, currentTokens, threshold, summaryTokens);
+
+        yield return new AgentCompactDone(toSummarize.Count, summaryTokens);
     }
 
     // Walks back from the end keeping at least `keepLast` messages, then keeps walking
