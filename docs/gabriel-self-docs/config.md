@@ -17,8 +17,9 @@ Every options POCO bound from `appsettings*.json`, its section name, defaults, a
 | `Personality` | `PersonalityOptions` | Engine | Persona name, typing-tempo (SSE pacing). |
 | `AgentTools` | `AgentToolsOptions` | Engine | Tool-level toggles (per-tool enable/disable, future). |
 | `Providers:Grok` | `GrokOptions` | Engine | xAI Grok provider + per-model catalog. |
-| `Tools:Web:Active` | string | n/a | `"ddg"` (default) or `"brave"`. |
+| `Tools:Web:Active` | string | n/a | Comma-separated list of providers: any of `ddg`, `brave`, `tavily`. One = direct; many = `CompositeWebSearch` parallel-query + merge. Default `"ddg"`. |
 | `Tools:Web:Brave` | `BraveSearchOptions` | Engine | Brave Search API key + endpoint. |
+| `Tools:Web:Tavily` | `TavilySearchOptions` | Engine | Tavily Search API key + endpoint + search depth (`basic`/`advanced`). |
 | `Tools:Docs:GitHub` | `GitHubDocsOptions` | Engine | GitHub-backed self-docs fallback. |
 | `Tools:Docs:Local` | `LocalDocsOptions` | Engine | **Local LLM-native self-docs (primary).** |
 | `Projects:Files` | `ProjectFilesOptions` | Engine | Project file storage (disk root). |
@@ -131,16 +132,26 @@ Typing-tempo knobs are consumed by the SSE controller in `Gabriel.API`, not Engi
 
 **Fallback source** behind `LocalDocsLookup`. Note: working-tree folder is `PulsePixel`, but the GitHub remote is `Gabriel`.
 
-### `Tools:Web` — search provider
+### `Tools:Web` — search provider(s)
 
 ```jsonc
 {
   "Tools": {
     "Web": {
-      "Active": "ddg",                       // or "brave"
+      // Comma-separated list. One = direct; many = parallel-query + merge
+      // via CompositeWebSearch. Order doesn't affect ranking (the merge is
+      // already rank-aware). Unknown keys are skipped; if nothing in the
+      // list resolves to a recognized provider, DDG is used as fallback.
+      "Active": "tavily,brave,ddg",
       "Brave": {
         "ApiKey": "<via secret>",
-        "BaseUrl": "https://api.search.brave.com/res/v1/web/search",
+        "BaseUrl": "https://api.search.brave.com/res/v1/web/",
+        "TimeoutSeconds": 15
+      },
+      "Tavily": {
+        "ApiKey": "<via secret>",
+        "BaseUrl": "https://api.tavily.com/",
+        "SearchDepth": "basic",              // or "advanced" (2x credit cost)
         "TimeoutSeconds": 15
       }
     }
@@ -148,7 +159,7 @@ Typing-tempo knobs are consumed by the SSE controller in `Gabriel.API`, not Engi
 }
 ```
 
-Unknown values log a warning and fall back to DDG.
+**Wiring rule**: when more than one provider is listed in `Active`, all of them are registered and wrapped in `CompositeWebSearch`. The composite parallel-queries each, catches per-provider failures (a missing key or anomaly page from one doesn't affect the others), and merges by canonicalized URL — cross-provider hits rank first. With a single provider listed the composite is bypassed and the bare implementation is registered as `IWebSearch`. Setting `Active=""` or to all-garbage falls back to DDG so the tool never crashes at first call.
 
 ### `Projects:Files` — `ProjectFilesOptions`
 
@@ -220,6 +231,7 @@ Secrets pulled from Infisical at host startup merge into the configuration provi
 | `TOOLS__DOCS__GITHUB__TOKEN` | `Tools:Docs:GitHub:Token` |
 | `TOOLS__DOCS__LOCAL__PATH` | `Tools:Docs:Local:Path` |
 | `TOOLS__WEB__BRAVE__APIKEY` | `Tools:Web:Brave:ApiKey` |
+| `TOOLS__WEB__TAVILY__APIKEY` | `Tools:Web:Tavily:ApiKey` |
 | `JWT__KEY` | `Jwt:Key` |
 | `CONNECTIONSTRINGS__DEFAULT` | `ConnectionStrings:Default` |
 

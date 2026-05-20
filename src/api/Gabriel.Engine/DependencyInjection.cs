@@ -30,6 +30,12 @@ public static class DependencyInjection
         services.AddScoped<IToolRegistry, ToolRegistry>();
         services.AddSingleton<ITokenEstimator, NaiveTokenEstimator>();
 
+        // Generic metric event log. Singleton write surface (bridges to the
+        // scoped IMetricRepository via IServiceScopeFactory on each call).
+        // Subsystems record via IMetricRecorder; the diagnostics endpoint
+        // reads via IMetricRepository directly.
+        services.AddSingleton<IMetricRecorder, MetricRecorder>();
+
         // Per-request tool execution context. AgentService.Set populates it
         // once per turn; project-scoped tools read from it.
         services.AddScoped<IToolExecutionContext, ToolExecutionContext>();

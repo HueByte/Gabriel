@@ -941,9 +941,16 @@ button {
   max-width: 85%;
   padding: 8px 0;
   white-space: pre-wrap;
-  word-wrap: break-word;
+  /* `anywhere` (not `break-word`) so a long unbroken token - URL, hash,
+     identifier - counts toward the box's min-content width. Without this,
+     flex shrinking is defeated by the long word and the bubble pushes past
+     its max-width, forcing a horizontal scrollbar on the chat. */
+  overflow-wrap: anywhere;
   font-size: 14.5px;
   line-height: 1.6;
+  /* Same reasoning: flex items default to min-width: auto (= min-content),
+     which long-token content inflates. Clamping to 0 lets max-width win. */
+  min-width: 0;
   /* Anchor for the hover overlay (delete / regenerate / variant picker). The
      overlay positions itself relative to this. */
   position: relative;
@@ -1994,6 +2001,12 @@ button {
 
 .md {
   display: block;
+  /* Inherit the message's overflow-wrap so children (p, li, h*) all wrap
+     long tokens cleanly. min-width: 0 keeps the markdown root from
+     inflating to its min-content size when long tokens are present. */
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 /* Markdown wraps content in <p> by default. We want consecutive paragraphs
    to read with a comfortable gap; the first one shouldn't add a top margin
@@ -2034,10 +2047,21 @@ button {
   border-radius: 0 6px 6px 0;
 }
 
+/* Tables in chat default to `display: table` which is sized to content and
+   ignores the message's max-width - a wide table will push the bubble past
+   the chat column and force a horizontal scrollbar on .messages. Flipping
+   to `display: block` makes the table itself scroll horizontally when it
+   outgrows its container, which is the standard "responsive table" trick.
+   Side effect: row widths no longer auto-balance, which is fine for chat. */
 .md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin: 0 0 0.6em;
   font-size: 0.95em;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 .md th, .md td {
   border: 1px solid var(--border);
@@ -2057,6 +2081,10 @@ button {
   border-radius: 5px;
   padding: 1px 6px;
   color: var(--text);
+  /* Long inline code (file paths, signatures) must wrap rather than blow
+     the message bubble out horizontally. */
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .md pre {
@@ -2087,6 +2115,9 @@ button {
   text-underline-offset: 2px;
   text-decoration-thickness: 1px;
   transition: text-decoration-color 0.15s, text-decoration-thickness 0.15s;
+  /* Long URLs can't escape the message bubble. */
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .md-link:hover {
   text-decoration-color: var(--palette-accent, var(--accent));
@@ -2158,30 +2189,149 @@ button {
 }
 
 /* ---------- Mermaid diagrams ----------
-   The rendered SVG is inserted by mermaid; we just constrain the wrapper so
-   the diagram sits centered and doesn't blow past the message width. The
-   palette-accent tinted background is subtle enough to read as "this is a
-   rendered diagram, not just text". */
+   Inline-rendered SVG. The container is the positioning context for the
+   maximize button overlay; the inner `.md-mermaid-svg` holds the diagram
+   itself and is what we scroll if the SVG outgrows the message bubble.
+   Diagrams in chat are necessarily small - the maximize button lifts the
+   same SVG into a full-viewport modal for readability. */
 .md-mermaid {
-  display: flex;
-  justify-content: center;
+  position: relative;
   margin: 0 0 0.6em;
   padding: 12px;
   background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: 8px;
+}
+.md-mermaid-svg {
+  display: flex;
+  justify-content: center;
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
-.md-mermaid svg {
+.md-mermaid-svg svg {
   max-width: 100%;
+  height: auto;
+}
+
+/* Maximize button sits in the top-right corner. Hidden until hover/focus on
+   the diagram so it doesn't compete with the artwork; revealed on hover so
+   the affordance is still there when the user reaches for it. */
+.md-mermaid-maximize {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: rgba(20, 20, 22, 0.78);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease, background 120ms ease;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.md-mermaid:hover .md-mermaid-maximize,
+.md-mermaid:focus-within .md-mermaid-maximize,
+.md-mermaid-maximize:focus-visible {
+  opacity: 1;
+}
+.md-mermaid-maximize:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: rgba(30, 30, 34, 0.92);
+}
+
+/* Full-viewport modal. Same overlay treatment as the "Remember this" memory
+   modal but sized for visualisation - the diagram body takes the full
+   inner panel and scales the SVG up to fill it. */
+.md-mermaid-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  animation: fade-in 0.18s ease-out;
+}
+.md-mermaid-modal {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 1400px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.md-mermaid-modal-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-2);
+}
+.md-mermaid-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.md-mermaid-modal-btn:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: var(--accent-dim);
+}
+.md-mermaid-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.md-mermaid-modal-body svg {
+  /* Fill the modal but keep aspect ratio. The SVG mermaid emits already has
+     a viewBox, so width: 100% + height: 100% scales correctly. */
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
 }
 
 /* Fallback for partial/invalid mermaid source (commonly seen mid-stream) -
    identical visual to a normal code block so it doesn't look like an error,
-   just unrendered source. */
+   just unrendered source. word-break keeps long unbroken tokens from
+   blowing the message bubble out horizontally. */
 .md-mermaid-fallback {
   margin: 0 0 0.6em;
   padding: 10px 12px;
@@ -2193,6 +2343,8 @@ button {
   border-radius: 8px;
   color: var(--text-dim);
   overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ---------- KaTeX math ----------

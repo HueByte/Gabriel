@@ -15,7 +15,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | Tool | Category | Provider dep | One-line purpose |
 | --- | --- | --- | --- |
 | `get_current_time` | Time | none | UTC ISO-8601 timestamp. |
-| `web_search` | Web | `IWebSearch` | Search the public web. |
+| `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
 | `docs_read` | **Self-docs** | `IDocsLookup` | Read one Gabriel doc by path. |
@@ -70,11 +70,26 @@ public record ToolDescriptor(string Name, string Description, string ParametersJ
 
 Schema: `{ "query": string, "limit": int = 5 }`.
 
-Selection via `Tools:Web:Active`:
-- `"ddg"` (default) → `DuckDuckGoWebSearch`. POSTs `q=` to `https://html.duckduckgo.com/html/`, regex-parses results, unwraps `/l/?uddg=…` redirects. Free, no key. Brittle if DDG changes class names — falls back to "no results" log line.
-- `"brave"` → `BraveWebSearch`. Requires `Tools:Web:Brave:ApiKey`. Cleaner, 2000 queries/month free tier.
+Selection via `Tools:Web:Active`. The value is a **comma-separated list** of provider keys; supply one or many. When more than one is listed, all of them are queried in parallel per call and the results are merged by URL (cross-provider hits rank first). Examples:
+
+- `"ddg"` (default) — `DuckDuckGoWebSearch`. POSTs `q=` to `https://html.duckduckgo.com/html/`, regex-parses results, unwraps `/l/?uddg=…` redirects. Falls back automatically to the `lite/` endpoint when html/ returns zero results or trips DDG's anomaly/CAPTCHA page. Free, no key, hobby-grade reliability.
+- `"brave"` — `BraveWebSearch`. Plain GET against `api.search.brave.com/res/v1/web/search` with `X-Subscription-Token`. Requires `Tools:Web:Brave:ApiKey`. Independent index (not Google/Bing relay); 2000 queries/month free tier.
+- `"tavily"` — `TavilyWebSearch`. POSTs `{ query, max_results, search_depth }` against `api.tavily.com/search` with a Bearer token. Requires `Tools:Web:Tavily:ApiKey`. Purpose-built for LLM agents: each result's `content` field is pre-trimmed for context-window economy, so the snippet you see is already model-ready. Free tier is generous for hobby use.
+- `"tavily,brave,ddg"` (or any subset, in any order) — `CompositeWebSearch` wraps the selected providers and runs them in parallel. URLs are canonicalized (lowercase host, dropped trailing slash, stripped `utm_*` / `fbclid` / `gclid` / `ref`) before merging. Ranking score is `appearances * 1000 - min_rank_across_providers`, so a URL surfaced by two providers ranks ahead of any single-provider hit. One provider failing (network error, missing key, anomaly page) does not poison the others — the merge proceeds with whatever did return, with a warn-level log per failed provider.
+
+Unknown keys in the list are silently skipped; if the entire list resolves to nothing recognized, DDG is used as a safety fallback so the tool never crashes at first call. With a single provider in the list the composite is bypassed entirely — no merge overhead on the hot path.
 
 Tool description steers the model: *use for recent events, public docs of external libraries, factual lookups; DO NOT use for questions about Gabriel itself — use `docs_list` / `docs_read`.*
+
+#### Provider health metrics
+
+Every `IWebSearch` implementation is wrapped in an `InstrumentedWebSearch` decorator at DI registration, recording one row per call into the generic metric event log (`MetricEntries` table; see `agent-loop.md` → "Metric event log" if it ever lands there). The row's `System` column is `"web_search.<provider>"` (e.g. `"web_search.tavily"`); its `Metric` column is a JSON document with `outcome` (`success` / `empty` / `error`), `query`, `result_count`, `latency_ms`, and `error_message`. The composite path picks these up automatically — and single-provider mode is tracked too, since "is the one provider you configured still working?" is exactly the question the metric exists to answer.
+
+`GET /api/diagnostics/web-search` (authenticated, not admin-gated) reads the last N rows (default 200, override with `?windowSize=`) under the `web_search.` prefix and aggregates them on the server: one entry per provider with total / successful / error / empty counts, average latency over successful + empty calls, the most recent success and failure timestamps, and the most recent failure detail (query + error message). The response also carries a `HasUnhealthyProvider` flag the UI can use to badge the search tool. A provider counts as unhealthy when it has at least one event in the window and either has zero successful calls or its most recent event was a failure. Providers with no events in the window are absent from the response — there's nothing to report.
+
+`GET /api/diagnostics/metrics?system=<exact>&limit=<N>` (or `?systemPrefix=<prefix>&limit=<N>`) is the generic raw browse, useful when you want to see the actual JSON payloads instead of the per-provider rollup.
+
+Cancellation isn't recorded — the decorator catches `OperationCanceledException` separately and lets it pass through unchanged so caller-side aborts (user navigated away, agent loop bailed) don't pollute the log. Errors mid-cancellation still record (using `CancellationToken.None` for the metric write) so a "we got 50% through and then the user navigated away" failure still surfaces.
 
 ### `web_fetch`
 

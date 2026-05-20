@@ -2,6 +2,7 @@ using Gabriel.Core.Configuration;
 using Gabriel.Core.Repositories;
 using Gabriel.Core.Services;
 using Gabriel.Engine.Providers;
+using Gabriel.Engine.Services;
 using Gabriel.Engine.Tools.Docs;
 using Gabriel.Engine.Tools.Web;
 using Gabriel.Infrastructure.Persistence;
@@ -32,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IMemoryRepository, MemoryRepository>();
+        services.AddScoped<IMetricRepository, MetricRepository>();
 
         // Project file storage (Phase 8). Options bound from Projects:Files,
         // disk-backed implementation persists under {Root}/{ProjectId:N}.
@@ -64,44 +66,141 @@ public static class DependencyInjection
         services.AddSingleton<IUrlFetcher, HttpUrlFetcher>();
     }
 
-    // Web search wiring. Default is DuckDuckGo - free, no API key, fine for
-    // a single-user hobby deployment. Set Tools:Web:Active=brave to switch to
-    // the Brave Search API (requires Tools:Web:Brave:ApiKey). Unknown values
-    // log a warning and fall back to DDG so a typo doesn't break the tool.
+    // Web search wiring. `Tools:Web:Active` is a comma-separated list of
+    // provider keys (one or many). Examples:
+    //   "ddg"                 -> DuckDuckGo only (default; free, no key).
+    //   "brave"               -> Brave only (requires Tools:Web:Brave:ApiKey).
+    //   "tavily"              -> Tavily only (requires Tools:Web:Tavily:ApiKey).
+    //   "tavily,brave,ddg"    -> all three, parallel-queried + merged by
+    //                            CompositeWebSearch. Cross-provider hits rank
+    //                            first. Unknown keys are dropped with a warn.
+    // The order in the list doesn't affect ranking - merging is rank-aware
+    // already. With one provider the composite is bypassed and we register
+    // the bare implementation as IWebSearch.
     private static void AddWebSearch(IServiceCollection services, IConfiguration config)
     {
-        var active = config["Tools:Web:Active"]?.Trim().ToLowerInvariant() ?? "ddg";
+        // Per-provider call recording is handled by InstrumentedWebSearch (a
+        // decorator below), writing into the generic IMetricRecorder. Reads
+        // come from IMetricRepository, queried by the /diagnostics/web-search
+        // endpoint. Both are already registered by Engine + the EF wiring
+        // above; nothing to add here besides the decorator.
 
-        switch (active)
+        var raw = config["Tools:Web:Active"]?.Trim() ?? "ddg";
+        var requested = raw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => s.ToLowerInvariant())
+            .Distinct()
+            .ToList();
+
+        // Map each known key to a registration delegate that adds the named
+        // HttpClient + the concrete singleton, and returns the concrete type
+        // + display name so we can wrap it in InstrumentedWebSearch when
+        // building the final IWebSearch.
+        var registered = new List<(Type ConcreteType, string DisplayName)>(requested.Count);
+        foreach (var key in requested)
         {
-            case "brave":
-                services.Configure<BraveSearchOptions>(config.GetSection(BraveSearchOptions.SectionName));
-                services.AddHttpClient(BraveWebSearch.HttpClientName, (sp, client) =>
-                {
-                    var opts = sp.GetRequiredService<IOptions<BraveSearchOptions>>().Value;
-                    client.BaseAddress = new Uri(opts.BaseUrl);
-                    client.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-                    client.DefaultRequestHeaders.Add("X-Subscription-Token", opts.ApiKey);
-                    client.DefaultRequestHeaders.Add("Accept", "application/json");
-                });
-                services.AddSingleton<IWebSearch, BraveWebSearch>();
-                break;
+            switch (key)
+            {
+                case "brave":
+                    services.Configure<BraveSearchOptions>(config.GetSection(BraveSearchOptions.SectionName));
+                    services.AddHttpClient(BraveWebSearch.HttpClientName, (sp, client) =>
+                    {
+                        var opts = sp.GetRequiredService<IOptions<BraveSearchOptions>>().Value;
+                        client.BaseAddress = new Uri(opts.BaseUrl);
+                        client.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+                        client.DefaultRequestHeaders.Add("X-Subscription-Token", opts.ApiKey);
+                        client.DefaultRequestHeaders.Add("Accept", "application/json");
+                    });
+                    services.AddSingleton<BraveWebSearch>();
+                    registered.Add((typeof(BraveWebSearch), "Brave"));
+                    break;
 
-            case "ddg":
-            case "duckduckgo":
-            default:
-                services.AddHttpClient(DuckDuckGoWebSearch.HttpClientName, client =>
-                {
-                    client.BaseAddress = new Uri("https://html.duckduckgo.com/");
-                    client.Timeout = TimeSpan.FromSeconds(15);
-                    // DDG blocks blank/unfamiliar UAs. A normal browser UA passes
-                    // their bot heuristics and gets a real HTML response.
-                    client.DefaultRequestHeaders.Add(
-                        "User-Agent",
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-                });
-                services.AddSingleton<IWebSearch, DuckDuckGoWebSearch>();
-                break;
+                case "tavily":
+                    services.Configure<TavilySearchOptions>(config.GetSection(TavilySearchOptions.SectionName));
+                    services.AddHttpClient(TavilyWebSearch.HttpClientName, (sp, client) =>
+                    {
+                        var opts = sp.GetRequiredService<IOptions<TavilySearchOptions>>().Value;
+                        client.BaseAddress = new Uri(opts.BaseUrl);
+                        client.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+                        client.DefaultRequestHeaders.Add("Accept", "application/json");
+                    });
+                    services.AddSingleton<TavilyWebSearch>();
+                    registered.Add((typeof(TavilyWebSearch), "Tavily"));
+                    break;
+
+                case "ddg":
+                case "duckduckgo":
+                    services.AddHttpClient(DuckDuckGoWebSearch.HttpClientName, client =>
+                    {
+                        client.BaseAddress = new Uri("https://html.duckduckgo.com/");
+                        client.Timeout = TimeSpan.FromSeconds(15);
+                        // DDG blocks blank/unfamiliar UAs. A normal browser UA
+                        // passes their bot heuristics and gets a real HTML
+                        // response. The implementation also falls back to the
+                        // lite/ endpoint if html/ returns zero results.
+                        client.DefaultRequestHeaders.Add(
+                            "User-Agent",
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+                    });
+                    services.AddSingleton<DuckDuckGoWebSearch>();
+                    registered.Add((typeof(DuckDuckGoWebSearch), "DuckDuckGo"));
+                    break;
+
+                default:
+                    // Don't crash on a typo - just skip. Empty `registered`
+                    // is handled by the fallback below.
+                    break;
+            }
+        }
+
+        // Fallback: bad config entirely (no recognized keys) -> DDG, so the
+        // tool keeps working instead of throwing at first call.
+        if (registered.Count == 0)
+        {
+            services.AddHttpClient(DuckDuckGoWebSearch.HttpClientName, client =>
+            {
+                client.BaseAddress = new Uri("https://html.duckduckgo.com/");
+                client.Timeout = TimeSpan.FromSeconds(15);
+                client.DefaultRequestHeaders.Add(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            });
+            services.AddSingleton<DuckDuckGoWebSearch>();
+            registered.Add((typeof(DuckDuckGoWebSearch), "DuckDuckGo"));
+        }
+
+        if (registered.Count == 1)
+        {
+            // Single-provider path: wrap in the metrics decorator so the
+            // diagnostics endpoint still tells us when this provider stops
+            // working. No composite overhead, no merge logic in the hot path.
+            var (concreteType, name) = registered[0];
+            services.AddSingleton<IWebSearch>(sp =>
+            {
+                var inner = (IWebSearch)sp.GetRequiredService(concreteType);
+                var recorder = sp.GetRequiredService<IMetricRecorder>();
+                return new InstrumentedWebSearch(inner, recorder, name);
+            });
+        }
+        else
+        {
+            // Multi-provider path: wrap each provider in InstrumentedWebSearch,
+            // then hand the wrapped instances to the composite. The composite
+            // sees the decorators - so its per-provider error catch still
+            // works, and the metric event log records every per-provider call
+            // before the composite's merge ever runs.
+            services.AddSingleton<IWebSearch>(sp =>
+            {
+                var recorder = sp.GetRequiredService<IMetricRecorder>();
+                var instances = registered
+                    .Select(r => (IWebSearch)new InstrumentedWebSearch(
+                        (IWebSearch)sp.GetRequiredService(r.ConcreteType),
+                        recorder,
+                        r.DisplayName))
+                    .ToList();
+                var logger = sp.GetRequiredService<ILogger<CompositeWebSearch>>();
+                return new CompositeWebSearch(instances, logger);
+            });
         }
     }
 
