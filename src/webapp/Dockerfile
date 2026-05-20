@@ -9,12 +9,11 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# The OpenAPI generator runs as part of `npm run gen-api` if swagger.json is
-# present; the dev workflow regenerates it from the API build. For the prod
-# image we expect the typed client to already be present in src/api/generated/
-# (committed via the gen-api script during local dev). Anything missing falls
-# back to whatever's checked into source — vite build will fail loudly if a
-# referenced symbol is absent.
+# Bring in the source. Both swagger.json and src/api/generated/ are gitignored
+# but expected to exist on disk - they're regenerated on every `dotnet build`
+# by the MSBuild OpenAPI target in Gabriel.API.csproj. Workflow contract: run
+# `dotnet build` once before `docker compose build webapp` so this COPY has
+# something to pick up. Vite will fail loudly here if either is missing.
 COPY . .
 RUN npm run build
 
