@@ -2021,7 +2021,9 @@ button {
 }
 
 .md h1, .md h2, .md h3, .md h4 {
-  margin: 0.8em 0 0.4em;
+  /* Top margin matches paragraph spacing (0.6em) so it collapses cleanly
+     with a preceding p; bottom is tighter so the heading hugs its content. */
+  margin: 0.5em 0 0.2em;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.3;
@@ -2035,7 +2037,7 @@ button {
   margin: 0 0 0.6em;
   padding-left: 1.4em;
 }
-.md li { margin: 0.15em 0; }
+.md li { margin: 0.05em 0; }
 .md li > p { margin: 0; }
 
 .md blockquote {

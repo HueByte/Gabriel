@@ -188,10 +188,19 @@ public static class DependencyInjection
 
     // Registers the named HttpClient for DuckDuckGoWebSearch. Pulled out so
     // the active-providers path and the empty-config fallback share one
-    // source of truth - both want the same bot-resistant header set and
-    // the same automatic gzip/deflate handling (DDG compresses responses
-    // for browsers; without AutomaticDecompression we'd read raw bytes
-    // and the HTML parser would silently fail).
+    // source of truth.
+    //
+    // The handler carries a long-lived CookieContainer so the session built
+    // by DuckDuckGoWebSearch's homepage pre-warm carries into the actual
+    // search request. Without it every search reads as a cold one-shot and
+    // DDG's first-request anomaly heuristic fires more often. Handler
+    // lifetime is bumped to an hour (default 2 min) so a fresh handler
+    // doesn't pop the cookie jar out from under us mid-conversation.
+    //
+    // Per-request headers (User-Agent rotation, Sec-Fetch-Site context,
+    // Referer) are set in DuckDuckGoWebSearch on each HttpRequestMessage -
+    // DefaultRequestHeaders here would pin one UA for the lifetime of the
+    // named client and defeat the rotation.
     private static void ConfigureDdgHttpClient(IServiceCollection services)
     {
         services.AddHttpClient(DuckDuckGoWebSearch.HttpClientName, client =>
@@ -199,25 +208,6 @@ public static class DependencyInjection
             // Endpoint URLs are absolute in DuckDuckGoWebSearch - the html/
             // and lite/ subdomains differ, so we can't share one BaseAddress.
             client.Timeout = TimeSpan.FromSeconds(15);
-            // Full browser-like header set. DDG flags requests that look
-            // synthetic (UA-only) more aggressively than ones carrying the
-            // sticks a real Chrome navigation has - Accept, Accept-Language,
-            // and the Sec-Fetch-* family in particular. Adding these lifts
-            // the request out of the "obvious scraper" bucket. Cookies
-            // aren't required for the html/ + lite/ endpoints.
-            client.DefaultRequestHeaders.Add(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-            client.DefaultRequestHeaders.Add(
-                "Accept",
-                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
-            client.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
-            client.DefaultRequestHeaders.Add("DNT", "1");
-            client.DefaultRequestHeaders.Add("Upgrade-Insecure-Requests", "1");
-            client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
-            client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
-            client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
-            client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
         })
         .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
         {
@@ -225,7 +215,17 @@ public static class DependencyInjection
             // negotiates it via vary headers) means we receive gzipped bytes
             // and ReadAsStringAsync hands back gibberish that doesn't parse.
             AutomaticDecompression = System.Net.DecompressionMethods.All,
-        });
+            // Persist cookies across requests. DDG sets a few session cookies
+            // on the homepage that subsequent /html/ and /lite/ requests
+            // include - real browsers do this transparently and the absence
+            // of it is one of the signals their heuristics flag on.
+            UseCookies = true,
+            CookieContainer = new System.Net.CookieContainer(),
+        })
+        // Default is 2 minutes - too short to hold a session across a chat
+        // turn that spans several searches. An hour is plenty without
+        // letting DNS go stale.
+        .SetHandlerLifetime(TimeSpan.FromHours(1));
     }
 
     // Docs lookup wiring. The model-facing IDocsLookup is a CompositeDocsLookup
