@@ -74,6 +74,7 @@ Typing-tempo knobs are consumed by the SSE controller in `Gabriel.API`, not Engi
           "IsActive": true,
           "ContextWindowTokens": 1000000,
           "CompactThreshold": 0.18,         // per-model override
+          "ToolMode": "Native",             // Native | Emulated | None
           "InputPricePerMTokens": 1.25,
           "OutputPricePerMTokens": 2.50,
           "CacheReadPricePerMTokens": 0.0,
@@ -86,6 +87,8 @@ Typing-tempo knobs are consumed by the SSE controller in `Gabriel.API`, not Engi
 ```
 
 **Wiring rule**: provider registers ONLY if section exists AND `Models` has at least one entry. `ApiKey` is required (validated at startup via `.Validate(...)`). At most one model can have `IsActive=true`.
+
+**`ToolMode`** declares how tools are transported for this specific model. `Native` (default) uses the provider's first-class `tools` field; `Emulated` wraps the provider with `GabrielToolBridge` so the model speaks XML-tagged JSON in its content stream (used for models whose providers don't expose tool-calling); `None` drops the tool descriptors entirely (chat-only models). See `agent-loop.md` → "Tool transport modes" for the full mechanics.
 
 ### `Tools:Docs:Local` — `LocalDocsOptions`
 

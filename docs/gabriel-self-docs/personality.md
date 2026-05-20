@@ -72,9 +72,11 @@ Other signals:
 
 ### GabrielSystemPromptBuilder
 
-Per-turn prompt = **static persona** ++ **dynamic block** ++ **few-shot block**.
+Per-turn persona system message = **static persona** ++ **formatting block** ++ **mode fragment** ++ **dynamic block** ++ **few-shot block**.
 
-Static persona has two modes; the prompt leads with **TASK MODE** rules because that's the failure-prone case.
+This builds only the persona system message. `AgentContext.ToProviderHistory` then layers it with the `[Project context]`, `[Saved memories]`, `[Summary]`, and conversation tail in a fixed left-to-right order that respects provider prefix caching (see `agent-loop.md` for the full assembly).
+
+Static persona has two modes; the prompt leads with **TASK MODE** rules because that's the failure-prone case. The static block also carries the identity preamble (created by HueByte, repo at `https://github.com/HueByte/Gabriel`) and a pointer that authoritative self-documentation is available via `docs_list` / `docs_read`.
 
 **TASK MODE** (when `UserAskedForDetail`):
 - Deliver the full artifact. Length-matching does NOT apply.
@@ -128,6 +130,30 @@ User is in TASK MODE - they want a substantive artifact.  ; if UserAskedForDetai
 | `Neutral` | Bring an angle, a take, or a curious question — don't strip personality. |
 
 **Few-shot block**: chat-mode examples (`lol → lol`, `how's it going → caffeinated regex fight + question`) + task-mode examples (Python string reverse, TS BFS, OAuth explainer). The task-mode examples were added to undo the chat-only prior that taught the model to never deliver code.
+
+### Persona fragments
+
+The static persona is split across several files in `Personality/Prompts/Fragments.*.cs`. The builder concatenates them in fixed order so each piece can evolve independently without disturbing the rest.
+
+- `Fragments.PersonaStatic` — the "who you are" core: identity preamble (HueByte / repo / self-doc pointer), ZERO-th PRINCIPLE, TASK MODE, CHAT MODE, hard prohibitions.
+- `Fragments.PersonaFormatting` — markdown surface guide (GFM + Mermaid + KaTeX), when to reach for each, when chat-mode should stay prose.
+- `Fragments.PersonaMemory` — memory-tool guidance (when to save, what NOT to save, format conventions for `name` / `description` / `body`). Currently always present; designed to be omittable if memory tools aren't registered.
+- `Fragments.Modes` — one of `ModeChatty` (default, no bias) / `ModeElaborative` / `ModeConcise` / `ModeTutor` / `ModeCritic`. Selected per-conversation from `Conversation.Mode`; sits right after the formatting block as "additional rules layered on top of the baseline persona". Always one mode block is present so the prompt shape is uniform.
+- `Fragments.FewShot` — the few-shot examples block, appended last.
+
+### Mode bias (Conversation.Mode)
+
+Each conversation carries a `GabrielMode` selectable from the UI; the active mode adjusts the dial without rewriting the persona:
+
+- `Chatty` (default) — baseline. No additional bias.
+- `Elaborative` — fuller responses; complete artifacts in TASK MODE with trade-offs after; in CHAT MODE expand answers with examples, alternatives, push-back.
+- `Concise` — shortest correct answer; one-line caveat in TASK MODE only if there's a real footgun; one or two sentences max in CHAT MODE.
+- `Tutor` — optimize for the user's understanding, not throughput; build up from simplest version, name the *why* on every non-trivial choice; gently correct misconceptions in CHAT MODE.
+- `Critic` — default stance is skepticism; lead with the strongest objection, flag what's missing, name what the user got wrong; never manufacture disagreement.
+
+### Project context and memory blocks
+
+When the conversation is in a non-default project, the assembled history also carries a `[Project context]` block (carrying the project's name, a directive to default `memory_save` to `scope='project'`, and any user-authored per-project `SystemPrompt`) and a `[Saved memories]` block (user-scope first, then project-scope entries for THIS project, formatted as `### [type] name` + description + body). Neither block lives in the persona file — they're assembled by `AgentContext.ToProviderHistory` so the persona builder can stay stateless.
 
 ### ResponsePostProcessor
 
@@ -191,7 +217,7 @@ Section `Personality`:
 - "Why did Gabriel give me 8 words when I asked for a function?" — the `UserAskedForDetail` regex didn't match. Check the request for one of the task verbs.
 - "Why did my markdown survive?" — markdown is deliberately preserved; the post-processor only targets AI-isms.
 - Mood is best-effort heuristic; mis-classification is expected and acceptable.
-- The persona name in the system prompt is fixed at `PersonalityOptions.Name`. Per-project personas are a planned feature (Phase 8) but not yet shipped.
+- The persona name in the system prompt is fixed at `PersonalityOptions.Name`. Per-project personas ship as the per-project `SystemPrompt` (set in Project Settings) — that text is appended under the `[Project context]` block, not blended into the static persona.
 
 ## SEE ALSO
 

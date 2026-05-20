@@ -30,7 +30,8 @@ Onion rule: **dependencies point inward**. Core has zero project references.
 | `ConversationState`, `Mood` value objects | Core | Even though Engine *operates* on them, `Conversation.GetState()` exposes them, so Core must own the type. |
 | `IConversationRepository`, `IUnitOfWork`, `ICurrentUser`, `IJwtTokenService` | Core | Contracts. Engine consumes; Infrastructure implements. |
 | `IChatService` / `ChatService` (CRUD over conversations) | Core | Not LLM-flavored, lives with the domain it manipulates. |
-| `IChatProvider`, `ITool`, `IToolRegistry`, `IAgentService`, `ITokenEstimator` | Engine | Agent orchestration. |
+| `IChatProvider`, `ITool`, `IToolRegistry`, `IAgentService`, `ITokenEstimator`, `AgentContext` | Engine | Agent orchestration. `AgentContext` is the per-turn value object that holds persona / project prompt / memory block / summary / messages / tools — assembled once, shared by the live call and the metrics breakdown. |
+| `GabrielToolBridge` (emulated tools decorator) | Engine, `Providers/ToolBridge/` | Wraps `IChatProvider` when a model declares `ToolMode.Emulated` — translates the model's XML-tagged-JSON tool transport into the same `ChatProviderEvent` shape the native path uses. |
 | `Personality/*` (state updater, prompt builder, post-processor) | Engine | The classes; the value objects they pass around (`ConversationState`, `Mood`) live in Core. |
 | `Sequence/*` (avatar generator, palette templates, patterns) | Engine | Pure CPU compute. |
 | `GrokChatProvider`, `MockChatProvider` | Infrastructure | HTTP + transport. |
@@ -45,15 +46,19 @@ Onion rule: **dependencies point inward**. Core has zero project references.
 ```
 Gabriel.Engine/
 ├── DependencyInjection.cs       AddEngineServices()
-├── Providers/                   IChatProvider + DTOs
+├── Providers/                   IChatProvider + DTOs + model catalog
+│   └── ToolBridge/              GabrielToolBridge (emulated-tools decorator),
+│                                ToolCallStreamSplitter, ToolCallBlockParser
 ├── Tools/                       ITool + IToolRegistry + every tool
 │   ├── Docs/                    DocsListTool, DocsReadTool, IDocsLookup
 │   ├── Files/                   FileInfoTool, ListDirTool, FindTool, GrepTool
 │   ├── Memory/                  MemorySave / List / Remove
 │   ├── Projects/                ListProjectFiles, ReadProjectFile
 │   └── Web/                     WebSearchTool, WebFetchTool
-├── Services/                    IAgentService, AgentService, AgentEvent, AgentOptions, token estimator
-├── Personality/                 IConversationStateUpdater, ISystemPromptBuilder, IResponsePostProcessor
+├── Services/                    IAgentService, AgentService, AgentEvent, AgentContext,
+│                                AgentOptions, ContextMetrics, token estimator
+├── Personality/                 IConversationStateUpdater, ISystemPromptBuilder,
+│                                IResponsePostProcessor, Prompts/Fragments.*
 └── Sequence/                    IGabrielSequenceGenerator, palette templates, patterns
 ```
 

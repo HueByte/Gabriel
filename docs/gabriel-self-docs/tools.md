@@ -133,13 +133,41 @@ Rate limit: 60 req/h per IP unauthenticated; `Tools:Docs:GitHub:Token` PAT bumps
 
 Recursive `.md` walk; titles parsed from first H1 line.
 
-### Memory tools (Claude-style)
+### Memory tools
 
 Two scopes:
-- `user` — cross-project, per-account.
-- `project` — current project only.
 
-`memory_save` schema: `{ "key": string, "value": string, "scope": "user"|"project", "tags"?: string[] }`. `memory_list` schema: `{ "scope"?: "user"|"project"|"both", "query"?: string }`. `memory_remove` schema: `{ "id": string }`.
+- `user` — cross-project, per-account. Saved memories show up in the `[Saved memories]` block of every conversation.
+- `project` — current project only. Saved memories show up only in conversations attached to that project.
+
+When the current conversation is in a non-default project, the system prompt's `[Project context]` block tells you to default to `scope='project'`; use `scope='user'` only when the user clearly means the memory to follow them across every project.
+
+`memory_save` schema:
+
+```json
+{
+  "scope":       "user" | "project",
+  "type":        "user" | "feedback" | "project" | "reference",
+  "name":        "kebab-case-slug",
+  "description": "one-line summary used at retrieval time",
+  "body":        "the actual content. For feedback/project entries, lead with the rule/fact then **Why:** and **How to apply:** lines."
+}
+```
+
+Idempotent — saving twice with the same `(scope, name)` updates the existing entry in place.
+
+`memory_list` takes **no arguments**. Returns the union of user-scope memories plus the current project's project-scope memories (if any), one line per entry: `[type, scope] name — description`. Use this to scan before deciding whether to read the body of a specific entry — the system-prompt memory block lists names + descriptions but not bodies.
+
+`memory_remove` schema:
+
+```json
+{
+  "scope": "user" | "project",
+  "name":  "kebab-case-slug"
+}
+```
+
+Lookup is by `(scope, name)`. `scope='project'` only operates on memories saved for THIS project. Returns a confirmation string indicating whether anything matched.
 
 ### Project-file tools
 

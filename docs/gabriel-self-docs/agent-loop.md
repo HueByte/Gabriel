@@ -21,6 +21,8 @@ The ReAct iteration in `Gabriel.Engine.Services.AgentService`: how one chat turn
 | Empty-stop retries | `AgentService.EmptyStopMaxRetries` (default `2`, so 3 attempts) |
 | Empty-stop backoff | `AgentService.EmptyStopRetryDelayMs * attempt` (default `500ms × N`) |
 | Token estimate | `⌈chars/4⌉ + 8` per message (naive; behind `ITokenEstimator`) |
+| Tool transport | Per-model `LLMModel.ToolMode` ∈ {`Native`, `Emulated`, `None`}. `Emulated` routes through `GabrielToolBridge` (XML-tagged JSON in the assistant stream); `None` drops tool descriptors entirely. |
+| Per-turn assembly | `AgentContext.Build(conversation, persona, projectPrompt, memoryBlock, tools)` → single value object passed to both the provider call and the metrics breakdown. |
 
 ## DETAILS
 
@@ -39,15 +41,19 @@ In-stream failures cannot change HTTP status; they emit a final `AgentError` eve
 
 1. Load conversation (user-scoped) via `IConversationRepository`.
 2. (`RunAsync` only) Append user message, update `ConversationState` via `IConversationStateUpdater`, save.
-3. `MaybeCompactAsync` between turns (see "Rolling compact").
-4. Build provider history via `ToProviderHistory` (system prompt + summary + filtered active messages).
-5. Loop up to `MaxIterations`:
-   - `IChatProvider.StreamAsync(history, tools)` yields a stream of `ChatProviderEvent`.
+3. Resolve `ModelSelection` from the user's preferences (provider + model + `ToolMode`).
+4. Load per-turn prompt pieces via `LoadTurnPromptsAsync` (persona, project prompt, memory block, tool descriptors). `ToolMode.None` hands back an empty tool list at this step so the provider call doesn't advertise capabilities the model can't use.
+5. Set the scoped `IToolExecutionContext` so project-aware tools know their project.
+6. (`RunAsync` only) Wrap the stream with `RunStreamWithUserPreambleAsync` — yields `AgentUserMessagePersisted` first so the client can swap its `tmp-xxxxx` user-entry id for the real DB id without a follow-up GET.
+7. `MaybeCompactAsync` runs **inside** `RunStreamAsync`, so it can yield `AgentCompactStart` / `AgentCompactDone` events to the SSE wire and the UI can show a "Compacting…" overlay (see "Rolling compact").
+8. Build provider history via `AgentContext.ToProviderHistory()` (system prompt + project context + memory + summary + filtered active messages).
+9. Loop up to `MaxIterations`:
+   - `IChatProvider.StreamAsync(history, tools)` yields a stream of `ChatProviderEvent`. When `ToolMode == Emulated`, the registered provider is wrapped by `GabrielToolBridge`, which translates between the model's XML-tagged-JSON tool transport and the same `ChatProviderEvent` shape the native path uses — the loop sees no difference.
    - Forward text/reasoning deltas to the caller as `AgentEvent`.
    - On `FinishEvent.ToolCalls`: persist assistant tool-calls msg, execute each tool serially via `IToolRegistry`, persist each tool result, continue loop.
    - On `FinishEvent.Stop`: run `IResponsePostProcessor.Clean`, persist assistant text, yield `AgentAssistantMessage` + `AgentDone`, exit.
    - On `FinishEvent.Length` / `Error` / unexpected: yield `AgentError` + `AgentDone`, exit.
-6. If max iterations hit without `Stop`: persist `"(stopped after N tool iterations)"`, yield `AgentDone`.
+10. If max iterations hit without `Stop`: persist `"(stopped after N tool iterations)"`, yield `AgentDone`.
 
 ### Streaming events
 
@@ -64,6 +70,9 @@ Agent forwards as `AgentEvent` to the SSE wire:
 
 | Type | When |
 | --- | --- |
+| `AgentUserMessagePersisted(MessageId)` | First event of every `RunAsync`-driven turn. Carries the real DB id of the just-persisted user message so the client can swap its optimistic `tmp-xxxxx` id in place. Not emitted by `RegenerateAsync` (no new user message). |
+| `AgentCompactStart(MessageCount, CurrentTokens, ThresholdTokens)` | Before the rolling-summary LLM call, when the pre-compact total has crossed the threshold. Lets the UI swap to a "Compacting…" overlay. |
+| `AgentCompactDone(MessageCount, SummaryTokens)` | After the summary call returns successfully. Always paired with a preceding `AgentCompactStart`; skipped entirely when summarization fails (the UI then sees a long thinking phase but no compact pair, which is fine). |
 | `AgentTextDelta(Delta)` | Each text delta, unmodified. |
 | `AgentReasoningDelta(Delta)` | Each reasoning delta. |
 | `AgentToolCall(MessageId, ToolCallId, Name, ArgsJson)` | After persisting the assistant's tool-call msg. |
@@ -72,7 +81,7 @@ Agent forwards as `AgentEvent` to the SSE wire:
 | `AgentError(Message)` | In-stream failure. |
 | `AgentDone()` | Terminal. |
 
-JSON discriminator is `type` (e.g., `"textDelta"`, `"toolCall"`). Webapp switches on it in `streamChat.ts`.
+JSON discriminator is `type` (e.g., `"textDelta"`, `"toolCall"`, `"userMessagePersisted"`, `"compactStart"`). Webapp switches on it in `streamChat.ts`.
 
 ### Two reasoning channels (both can fire per iteration)
 
@@ -81,14 +90,20 @@ JSON discriminator is `type` (e.g., `"textDelta"`, `"toolCall"`). Webapp switche
 
 Never collapse these into one channel; the data model and UI treat them as separate.
 
-### History assembly (`ToProviderHistory`)
+### History assembly (`AgentContext.ToProviderHistory`)
 
-1. Prepend per-turn system prompt from `ISystemPromptBuilder.Build(state)`.
-2. Prepend rolling summary (if any) as a second system message.
-3. Skip pre-summary messages when `Conversation.SummarizedThroughMessageId` is set.
-4. Filter:
+Assembly is consolidated into the `AgentContext` value object so the live provider call and the metrics breakdown see exactly the same bytes (they used to diverge — metrics ignored persona / project prompt / memory / tools entirely). Order matters for prefix-caching:
+
+1. Persona system message (`PersonaStatic` + `PersonaFormatting` + active mode fragment + per-turn `[Conversation metadata]` + few-shot).
+2. `[Project context]` block, when the conversation is in a non-default project. Carries the project name, a directive to default `memory_save` to `scope='project'`, and the user's optional per-project `SystemPrompt`. Omitted for Default-project / standalone conversations.
+3. `[Saved memories]` block — user-scope first, then project-scope (current project only).
+4. `[Summary of earlier conversation]` block — the rolling summary, when present.
+5. Filtered active messages (the conversation tail):
+   - Skip messages at or before `Conversation.SummarizedThroughMessageId`.
    - Non-tool messages: keep only `IsActiveVariant == true`.
    - Tool messages: keep only if their `ToolCallId` is referenced by an active assistant's `ToolCallsJson` (catches orphans from deactivated regen branches and legacy data).
+
+The order — system → tools (sibling field) → project → memory → summary → conversation — is fixed left-to-right because every provider we target caches on a prefix match. Reordering would invalidate the cache for every following turn.
 
 ### Rolling compact
 
@@ -105,7 +120,21 @@ Cut-point: walk back from the end keeping ≥ `CompactKeepLast` messages, then k
 
 Summarization uses the provider with an empty tool list and a fixed system prompt. Result stored on `Conversation.Summary` and `Conversation.SummarizedThroughMessageId`. Failure or empty summary → log warning and skip; retried next turn.
 
+Compaction runs **inside** `RunStreamAsync` (not before it) so it can yield `AgentCompactStart` / `AgentCompactDone` events to the SSE wire. The UI then shows a "Compacting…" overlay while the summarization LLM call burns its 5-30s before the real turn starts, instead of staring at a silent HTTP request. The pair always brackets the work: `AgentCompactStart` first, `AgentCompactDone` only on success — failure paths skip `AgentCompactDone` and the loop continues without a fresh summary.
+
 Never compacts mid-iteration.
+
+### Tool transport modes
+
+Each model in the catalog declares a `ToolMode` (default `Native`):
+
+| Mode | What happens |
+| --- | --- |
+| `Native` | Provider's first-class `tools` field carries the descriptors; provider emits `ToolCallReadyEvent`s as structured JSON. The straight path. |
+| `Emulated` | `GabrielToolBridge` decorates `IChatProvider` at registration. The bridge: (a) injects tool documentation into the system message at the system→conversation boundary, (b) translates persisted assistant `ToolCallsJson` into inline `<tool_call>{...}</tool_call>` blocks in the assistant content stream and translates `Tool`-role messages into synthetic user "[Tool result: name]" messages, (c) runs a prefix-aware lookahead splitter over the model's content stream to detect `<tool_call>` blocks, parse them into `ToolCallReadyEvent`s, and forward everything else as `TextDeltaEvent`s. The agent loop sees the same `ChatProviderEvent` shape either way. On malformed JSON inside a block, the bridge retries the turn up to `MaxParseRetries` (default 2) with a "fix the JSON" prompt before bubbling the failure up. |
+| `None` | Tool descriptors are dropped at `LoadTurnPromptsAsync`; the metrics breakdown reports `ToolsTokens = 0` and the provider call never advertises a capability the model can't use. For chat-only models. |
+
+The choice is per-model, set in `Providers:Grok:Models[*].ToolMode` (or equivalent for future providers). The user never picks transport — they pick a model, the model declares how its tools should be transported. |
 
 ### Empty-Stop retry
 

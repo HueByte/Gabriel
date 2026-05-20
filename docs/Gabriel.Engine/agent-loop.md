@@ -91,6 +91,9 @@ The agent transforms these into `AgentEvent`s for the SSE wire:
 
 | Type | When |
 | --- | --- |
+| `AgentUserMessagePersisted(MessageId)` | First event of every `RunAsync`-driven turn. Carries the real DB id of the just-persisted user message so the client can swap its optimistic `tmp-xxxxx` user-entry id in place — no follow-up "GET conversation" round-trip after the stream ends. Not emitted by `RegenerateAsync` (no new user message there). |
+| `AgentCompactStart(MessageCount, CurrentTokens, ThresholdTokens)` | Before the rolling-summary LLM call, when the pre-compact total has crossed the threshold. Lets the UI swap to a "Compacting…" overlay during the 5-30s the summary call would otherwise burn silently. |
+| `AgentCompactDone(MessageCount, SummaryTokens)` | After a successful summary. Always paired with a preceding `AgentCompactStart`; skipped entirely when summarization fails (the UI then sees a long thinking phase but no `compactDone`, which is fine — the real turn just starts late). |
 | `AgentTextDelta(Delta)` | Every text delta forwarded as-is. |
 | `AgentReasoningDelta(Delta)` | Every reasoning delta forwarded as-is. Surfaces in the UI as a collapsible "thinking" panel. |
 | `AgentToolCall(MessageId, ToolCallId, Name, ArgsJson)` | After persisting the assistant's tool-call message. |
@@ -99,7 +102,7 @@ The agent transforms these into `AgentEvent`s for the SSE wire:
 | `AgentError(Message)` | In-stream failure. |
 | `AgentDone()` | Terminal - loop exited. |
 
-Polymorphic JSON: every `AgentEvent` serializes with a `type` discriminator (`"textDelta"`, `"reasoningDelta"`, `"toolCall"`, etc.) via `[JsonPolymorphic]`. The webapp's `streamChat.ts` switches on that string.
+Polymorphic JSON: every `AgentEvent` serializes with a `type` discriminator (`"textDelta"`, `"reasoningDelta"`, `"toolCall"`, `"userMessagePersisted"`, `"compactStart"`, etc.) via `[JsonPolymorphic]`. The webapp's `streamChat.ts` switches on that string.
 
 ## Reasoning channels - native CoT + external ReAct
 
