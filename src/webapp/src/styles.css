@@ -1285,6 +1285,11 @@ button {
   align-items: center;
   gap: 8px;
   max-width: 100%;
+  /* Flex items default to min-width: auto, which lets long unbreakable
+     content (URLs / JSON args inside the <code>) inflate this row past
+     max-width and push the whole chat sideways. min-width: 0 lets the row
+     actually obey max-width so the inner <code> can take the overflow. */
+  min-width: 0;
   font-size: 12.5px;
   color: var(--text-dim);
   padding-top: 4px;
@@ -1299,6 +1304,21 @@ button {
   border-radius: 6px;
   padding: 2px 8px;
   color: var(--text);
+  /* Single-line signature - scroll horizontally inside the chip rather than
+     wrapping (no natural break points in JSON / URLs) or escaping the chat
+     column. min-width: 0 overrides the flex default that would otherwise
+     keep this growing to fit its content. */
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.tool-call code::-webkit-scrollbar { height: 6px; }
+.tool-call code::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
 }
 
 /* Tool result - collapsed by default, click to expand. Uses native <details>
