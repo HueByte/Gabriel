@@ -16,6 +16,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | --- | --- | --- | --- |
 | `get_current_time` | Time | none | UTC ISO-8601 timestamp. |
 | `calculate` | Math | none | Evaluate an arithmetic expression (precedence, `^`, `%`, functions, constants). |
+| `base_convert` | Numbers | none | Convert a whole number between bases 2-36 (binary/octal/decimal/hex/...). |
 | `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
@@ -204,6 +205,12 @@ Schema: `{ "expression": string }`. No provider dependency, no I/O — a pure fu
 A recursive-descent evaluator over doubles. Precedence, lowest-binding first: `+ -` → `* / %` → unary `+ -` → `^` (right-associative, so `2^3^2 = 512`). Unary binds below the exponent, matching convention: `-3^2 = -9`, and the exponent's right side accepts a unary so `2^-3 = 0.125`. Supports parentheses, the functions `sqrt abs round floor ceil sign min max pow sin cos tan asin acos atan log ln exp` (trig in radians; `log(x)` is base-10, `log(x, b)` is base-b, `round(x, digits)` takes an optional precision), and the constants `pi e tau`.
 
 Operators are required between terms — `2*pi`, not `2pi`. Results format friendlily: integral values print without a decimal point, everything else trims to 12 fractional digits so binary-float dust folds away (`0.1 + 0.2 = 0.3`). Bad input never throws into the loop — unknown names, malformed syntax, division/modulo by zero, `sqrt` of a negative, and results that overflow to ±infinity or NaN all come back as `Error: …` observations. Input is capped at 1000 chars and nesting at depth 64.
+
+### `base_convert`
+
+Schema: `{ "value": string, "from_base"?: int = 10, "to_base": int }`. No provider dependency, no I/O. Use it for any base conversion (read a hex value as decimal, turn a binary literal into a number) instead of converting in-head, which is error-prone past a couple of digits.
+
+Backed by `BigInteger`, so the magnitude is unbounded — a 40-digit hex value converts without overflow. Digit alphabet is `0-9` then `A-Z` for values 10-35; both bases must be 2-36. Input is case-insensitive, accepts a leading `-`, and ignores `_` as a grouping separator (so `1_0000_0000` is fine). Whole numbers only — no fractional part. Output echoes the result as `value (base F) = result (base T)`; result letters are uppercase. Bad input comes back as an `Error: …` observation: an out-of-range base, a digit that isn't valid for `from_base` (e.g. `'2'` in base 2, `'G'` in base 16), an empty value, or a bare sign. Input capped at 1000 chars.
 
 ### `get_current_time`
 

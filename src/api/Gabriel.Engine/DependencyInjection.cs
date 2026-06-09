@@ -8,6 +8,7 @@ using Gabriel.Engine.Tools.Docs;
 using Gabriel.Engine.Tools.Calc;
 using Gabriel.Engine.Tools.Files;
 using Gabriel.Engine.Tools.Memory;
+using Gabriel.Engine.Tools.Numbers;
 using Gabriel.Engine.Tools.Projects;
 using Gabriel.Engine.Tools.Web;
 using Microsoft.Extensions.Configuration;
@@ -61,6 +62,7 @@ public static class DependencyInjection
         // Gabriel.Infrastructure.DependencyInjection.AddInfrastructure.
         services.AddScoped<ITool, GetCurrentTimeTool>();
         services.AddScoped<ITool, CalculateTool>();
+        services.AddScoped<ITool, BaseConvertTool>();
         services.AddScoped<ITool, WebSearchTool>();
         services.AddScoped<ITool, WebFetchTool>();
         services.AddScoped<ITool, DocsListTool>();
