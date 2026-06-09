@@ -1,0 +1,553 @@
+# Drift Report — HueByte/Gabriel
+
+> 1 broken, 255 stale, 15 ambiguous, 239 ok since commit `35467ec`.
+
+**Drift score:** ![high (50.2%)](https://img.shields.io/badge/drift-50.2%2525%20high-orange)
+
+| Status | Count |
+| --- | ---: |
+| 🔴 Broken | 1 |
+| 🟡 Stale | 255 |
+| 🟠 Ambiguous | 15 |
+| 🟢 OK | 239 |
+| **Total** | **510** |
+
+## Broken (1)
+
+Docs that reference symbols the merge deleted. These must be regenerated or removed before publish.
+
+- [`src/webapp/src/components/GalacticTypewriter.tsx`](../Code/src/webapp/src/components/GalacticTypewriter.tsx.md) — References a deleted symbol
+
+## Stale (255)
+
+Docs whose underlying symbols changed in this merge. Targeted regeneration is in flight.
+
+- [`docs/auriondocs/Architecture.md`](../Code/docs/auriondocs/Architecture.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/Onboarding.md`](../Code/docs/auriondocs/Onboarding.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/Workflows/agent-tool.md`](../Code/docs/auriondocs/Workflows/agent-tool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/Workflows/controller.md`](../Code/docs/auriondocs/Workflows/controller.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/Workflows/repository.md`](../Code/docs/auriondocs/Workflows/repository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/Workflows/service.md`](../Code/docs/auriondocs/Workflows/service.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/authentication-and-authorization.md`](../Code/docs/auriondocs/authentication-and-authorization.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/configuration-and-secrets-management.md`](../Code/docs/auriondocs/configuration-and-secrets-management.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/dependency-injection-and-composition.md`](../Code/docs/auriondocs/dependency-injection-and-composition.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/index.md`](../Code/docs/auriondocs/index.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/observability-and-logging.md`](../Code/docs/auriondocs/observability-and-logging.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/prototype/generate.md`](../Code/docs/auriondocs/prototype/generate.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/prototype/palettes.md`](../Code/docs/auriondocs/prototype/palettes.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/prototype/patterns.md`](../Code/docs/auriondocs/prototype/patterns.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/prototype/play.md`](../Code/docs/auriondocs/prototype/play.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/prototype/run.md`](../Code/docs/auriondocs/prototype/run.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Configuration/GlobalRoutePrefixConvention.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Configuration/GlobalRoutePrefixConvention.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Configuration/InfisicalConfigurationProvider.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Configuration/InfisicalConfigurationProvider.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Configuration/InfisicalConfigurationSource.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Configuration/InfisicalConfigurationSource.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Configuration/InfisicalExtensions.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Configuration/InfisicalExtensions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Configuration/LogDateEnricher.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Configuration/LogDateEnricher.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/JwtResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/JwtResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/LoginRequest.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/LoginRequest.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/MeResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/MeResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/RefreshTokenRequest.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/RefreshTokenRequest.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/RegisterRequest.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Auth/RegisterRequest.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/CreateConversationRequest.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/CreateConversationRequest.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/SetConversationModeRequest.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/SetConversationModeRequest.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/UpdateConversationRequest.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Conversations/UpdateConversationRequest.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Diagnostics/MetricEntryDto.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Diagnostics/MetricEntryDto.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Diagnostics/WebSearchDiagnosticsResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Diagnostics/WebSearchDiagnosticsResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Memories/MemoryDto.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Memories/MemoryDto.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Messages/MessageResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Messages/MessageResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Messages/SendMessageRequest.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Messages/SendMessageRequest.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Models/ModelDto.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Models/ModelDto.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Projects/ProjectResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Projects/ProjectResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Controllers/AuthController.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Controllers/AuthController.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Controllers/ConversationsController.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Controllers/ConversationsController.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Controllers/DiagnosticsController.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Controllers/DiagnosticsController.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Controllers/MemoriesController.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Controllers/MemoriesController.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Controllers/ModelsController.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Controllers/ModelsController.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Controllers/ProjectFilesController.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Controllers/ProjectFilesController.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Controllers/ProjectsController.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Controllers/ProjectsController.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Controllers/SequenceController.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Controllers/SequenceController.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Identity/AuthCookies.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Identity/AuthCookies.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Identity/HttpContextCurrentUser.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Identity/HttpContextCurrentUser.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Identity/IdentitySeeder.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Identity/IdentitySeeder.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Mapping/ContractMappings.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Mapping/ContractMappings.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Middleware/GlobalExceptionHandler.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Middleware/GlobalExceptionHandler.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Middleware/RequireNonNullablePropertiesSchemaFilter.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Middleware/RequireNonNullablePropertiesSchemaFilter.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.API/Program.md`](../Code/docs/auriondocs/src/api/Gabriel.API/Program.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/AgentOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/AgentOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/AgentToolsOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/AgentToolsOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/AuthOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/AuthOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/BraveSearchOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/BraveSearchOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/GitHubDocsOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/GitHubDocsOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/GrokOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/GrokOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/IConfigSection.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/IConfigSection.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/InfisicalOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/InfisicalOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/JwtOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/JwtOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/LLMModel.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/LLMModel.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/LLMProviderOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/LLMProviderOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/LocalDocsOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/LocalDocsOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/ModelSelection.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/ModelSelection.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/PersonalityOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/PersonalityOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/ProjectFilesOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/ProjectFilesOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/TavilySearchOptions.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/TavilySearchOptions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Configuration/ToolMode.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Configuration/ToolMode.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/DependencyInjection.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/DependencyInjection.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/Conversation.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/Conversation.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/GabrielMode.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/GabrielMode.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/MemoryEntry.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/MemoryEntry.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/MemoryEntryType.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/MemoryEntryType.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/Message.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/Message.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/MessageRole.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/MessageRole.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/MetricEntry.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/MetricEntry.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/Project.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/Project.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Entities/ProjectFile.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Entities/ProjectFile.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Exceptions/DomainException.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Exceptions/DomainException.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Exceptions/NotFoundException.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Exceptions/NotFoundException.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Identity/ICurrentUser.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Identity/ICurrentUser.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Identity/IJwtTokenService.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Identity/IJwtTokenService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Identity/IRefreshTokenStore.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Identity/IRefreshTokenStore.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Identity/IUserPreferences.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Identity/IUserPreferences.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Identity/RefreshToken.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Identity/RefreshToken.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Personality/ConversationState.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Personality/ConversationState.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Personality/Mood.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Personality/Mood.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Repositories/IConversationRepository.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Repositories/IConversationRepository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Repositories/IMemoryRepository.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Repositories/IMemoryRepository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Repositories/IMetricRepository.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Repositories/IMetricRepository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Repositories/IProjectRepository.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Repositories/IProjectRepository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Repositories/IUnitOfWork.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Repositories/IUnitOfWork.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Services/ChatService.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Services/ChatService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Services/IChatService.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Services/IChatService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Services/IMemoryService.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Services/IMemoryService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Services/IProjectFileService.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Services/IProjectFileService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Services/IProjectService.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Services/IProjectService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Services/MemoryService.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Services/MemoryService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Core/Services/ProjectService.md`](../Code/docs/auriondocs/src/api/Gabriel.Core/Services/ProjectService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/DependencyInjection.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/DependencyInjection.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/GabrielSystemPromptBuilder.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/GabrielSystemPromptBuilder.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/HeuristicConversationStateUpdater.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/HeuristicConversationStateUpdater.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/IConversationStateUpdater.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/IConversationStateUpdater.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/IResponsePostProcessor.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/IResponsePostProcessor.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/ISystemPromptBuilder.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/ISystemPromptBuilder.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.FewShot.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.FewShot.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Memory.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Memory.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Modes.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Modes.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Persona.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Persona.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/IPromptRegistry.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/IPromptRegistry.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/PromptKey.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/PromptKey.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Personality/ResponsePostProcessor.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Personality/ResponsePostProcessor.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/AvailableModel.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/AvailableModel.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/ChatProviderEvent.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/ChatProviderEvent.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/ChatProviderMessage.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/ChatProviderMessage.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/ChatProviderToolCall.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/ChatProviderToolCall.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/IChatProvider.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/IChatProvider.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/IChatProviderRegistry.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/IChatProviderRegistry.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/IModelCatalog.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/IModelCatalog.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/ModelCatalog.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/ModelCatalog.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallBlockParser.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallBlockParser.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallStreamSplitter.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallStreamSplitter.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Providers/ToolDescriptor.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Providers/ToolDescriptor.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/Frame.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/Frame.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/FrameLayer.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/FrameLayer.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/GabrielSequence.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/GabrielSequence.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/GabrielSequenceService.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/GabrielSequenceService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/IGabrielSequenceService.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/IGabrielSequenceService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/Noise.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/Noise.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/Palette.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/Palette.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/PaletteTemplates.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/PaletteTemplates.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/PatternKind.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/PatternKind.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/Patterns.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/Patterns.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/RgbColor.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/RgbColor.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Sequence/SequenceCatalog.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Sequence/SequenceCatalog.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/AgentContext.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/AgentContext.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/AgentEvent.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/AgentEvent.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/AgentService.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/AgentService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/ContextMetrics.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/ContextMetrics.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/IAgentService.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/IAgentService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/IMetricRecorder.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/IMetricRecorder.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/ITokenEstimator.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/ITokenEstimator.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/MetricRecorder.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/MetricRecorder.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Services/NaiveTokenEstimator.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Services/NaiveTokenEstimator.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Docs/DocsListTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Docs/DocsListTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Docs/DocsReadTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Docs/DocsReadTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/FileInfoTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/FileInfoTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/FindTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/FindTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/GrepTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/GrepTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/ListDirTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Files/ListDirTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/ITool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/ITool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/IToolExecutionContext.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/IToolExecutionContext.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/IToolRegistry.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/IToolRegistry.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Memory/MemoryListTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Memory/MemoryListTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Projects/ReadProjectFileTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Projects/ReadProjectFileTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/ToolRegistry.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/ToolRegistry.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Web/IUrlFetcher.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Web/IUrlFetcher.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Web/IWebSearch.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Web/IWebSearch.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Web/WebFetchTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Web/WebFetchTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Engine/Tools/Web/WebSearchTool.md`](../Code/docs/auriondocs/src/api/Gabriel.Engine/Tools/Web/WebSearchTool.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/DependencyInjection.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/DependencyInjection.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Identity/ApplicationUser.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Identity/ApplicationUser.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Identity/IdentityServiceCollectionExtensions.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Identity/IdentityServiceCollectionExtensions.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Identity/JwtTokenService.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Identity/JwtTokenService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Identity/UserPreferencesService.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Identity/UserPreferencesService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/AppDbContext.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/AppDbContext.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/ConversationConfiguration.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/ConversationConfiguration.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/MemoryEntryConfiguration.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/MemoryEntryConfiguration.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/MessageConfiguration.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/MessageConfiguration.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/MetricEntryConfiguration.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/MetricEntryConfiguration.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectConfiguration.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectConfiguration.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectFileConfiguration.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectFileConfiguration.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/ConversationRepository.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/ConversationRepository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/MemoryRepository.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/MemoryRepository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/MetricRepository.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/MetricRepository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/ProjectRepository.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/ProjectRepository.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/RefreshTokenStore.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/Repositories/RefreshTokenStore.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/UnitOfWork.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Persistence/UnitOfWork.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Providers/GrokAuthHandler.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Providers/GrokAuthHandler.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Providers/MockChatProvider.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Providers/MockChatProvider.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Docs/CompositeDocsLookup.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Docs/CompositeDocsLookup.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Docs/GitHubDocsLookup.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Docs/GitHubDocsLookup.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Docs/LocalDocsLookup.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Docs/LocalDocsLookup.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/CompositeWebSearch.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/CompositeWebSearch.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/HttpUrlFetcher.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/HttpUrlFetcher.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/TavilyWebSearch.md`](../Code/docs/auriondocs/src/api/Gabriel.Infrastructure/Tools/Web/TavilyWebSearch.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/App.md`](../Code/docs/auriondocs/src/webapp/src/App.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/api/authInterceptor.md`](../Code/docs/auriondocs/src/webapp/src/api/authInterceptor.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/api/authRefresh.md`](../Code/docs/auriondocs/src/webapp/src/api/authRefresh.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/api/conversationMode.md`](../Code/docs/auriondocs/src/webapp/src/api/conversationMode.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/api/memories.md`](../Code/docs/auriondocs/src/webapp/src/api/memories.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/api/models.md`](../Code/docs/auriondocs/src/webapp/src/api/models.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/api/sequence.md`](../Code/docs/auriondocs/src/webapp/src/api/sequence.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/api/streamChat.md`](../Code/docs/auriondocs/src/webapp/src/api/streamChat.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/auth/AuthContext.md`](../Code/docs/auriondocs/src/webapp/src/auth/AuthContext.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/Avatar.md`](../Code/docs/auriondocs/src/webapp/src/components/Avatar.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/Chat.md`](../Code/docs/auriondocs/src/webapp/src/components/Chat.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/CompactingOverlay.md`](../Code/docs/auriondocs/src/webapp/src/components/CompactingOverlay.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/ContextStats.md`](../Code/docs/auriondocs/src/webapp/src/components/ContextStats.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/GabrielSequenceView.md`](../Code/docs/auriondocs/src/webapp/src/components/GabrielSequenceView.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/GalacticTypewriter.md`](../Code/docs/auriondocs/src/webapp/src/components/GalacticTypewriter.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/Markdown.md`](../Code/docs/auriondocs/src/webapp/src/components/Markdown.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/MemoryList.md`](../Code/docs/auriondocs/src/webapp/src/components/MemoryList.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/MemoryQuickSave.md`](../Code/docs/auriondocs/src/webapp/src/components/MemoryQuickSave.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/Mermaid.md`](../Code/docs/auriondocs/src/webapp/src/components/Mermaid.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/ModeSelector.md`](../Code/docs/auriondocs/src/webapp/src/components/ModeSelector.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/ModelSelector.md`](../Code/docs/auriondocs/src/webapp/src/components/ModelSelector.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/ProjectPicker.md`](../Code/docs/auriondocs/src/webapp/src/components/ProjectPicker.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/Sidebar.md`](../Code/docs/auriondocs/src/webapp/src/components/Sidebar.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/SkinPicker.md`](../Code/docs/auriondocs/src/webapp/src/components/SkinPicker.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/StreamingText.md`](../Code/docs/auriondocs/src/webapp/src/components/StreamingText.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/components/ThinkingPulse.md`](../Code/docs/auriondocs/src/webapp/src/components/ThinkingPulse.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/layouts/AuthLayout.md`](../Code/docs/auriondocs/src/webapp/src/layouts/AuthLayout.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/layouts/MainLayout.md`](../Code/docs/auriondocs/src/webapp/src/layouts/MainLayout.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/lib/notify.md`](../Code/docs/auriondocs/src/webapp/src/lib/notify.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/lib/userPrefs.md`](../Code/docs/auriondocs/src/webapp/src/lib/userPrefs.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/main.md`](../Code/docs/auriondocs/src/webapp/src/main.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pages/ChatPage.md`](../Code/docs/auriondocs/src/webapp/src/pages/ChatPage.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pages/DiagnosticsPage.md`](../Code/docs/auriondocs/src/webapp/src/pages/DiagnosticsPage.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pages/IndexPage.md`](../Code/docs/auriondocs/src/webapp/src/pages/IndexPage.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pages/LoginPage.md`](../Code/docs/auriondocs/src/webapp/src/pages/LoginPage.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pages/ProjectSettingsPage.md`](../Code/docs/auriondocs/src/webapp/src/pages/ProjectSettingsPage.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pages/RegisterPage.md`](../Code/docs/auriondocs/src/webapp/src/pages/RegisterPage.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pages/UserSettingsPage.md`](../Code/docs/auriondocs/src/webapp/src/pages/UserSettingsPage.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pulse/palettes.md`](../Code/docs/auriondocs/src/webapp/src/pulse/palettes.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pulse/patterns.md`](../Code/docs/auriondocs/src/webapp/src/pulse/patterns.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/pulse/rng.md`](../Code/docs/auriondocs/src/webapp/src/pulse/rng.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/router.md`](../Code/docs/auriondocs/src/webapp/src/router.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/routes/ProtectedRoute.md`](../Code/docs/auriondocs/src/webapp/src/routes/ProtectedRoute.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/routes/PublicRoute.md`](../Code/docs/auriondocs/src/webapp/src/routes/PublicRoute.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/src/vite-env.d.md`](../Code/docs/auriondocs/src/webapp/src/vite-env.d.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/src/webapp/vite.config.md`](../Code/docs/auriondocs/src/webapp/vite.config.md.md) — New file — needs initial documentation
+- [`docs/auriondocs/tooling-and-tooling-integration.md`](../Code/docs/auriondocs/tooling-and-tooling-integration.md.md) — New file — needs initial documentation
+
+## Ambiguous (15)
+
+Docs that reference symbols the baseline cache doesn't know about — likely a stale cache rather than real drift.
+
+- [`prototype/palettes.js`](../Code/prototype/palettes.js.md) — References an unknown symbol — cache may be stale
+- [`prototype/patterns.js`](../Code/prototype/patterns.js.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/router.tsx`](../Code/src/webapp/src/router.tsx.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/pulse/rng.ts`](../Code/src/webapp/src/pulse/rng.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/models.ts`](../Code/src/webapp/src/api/models.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/lib/notify.ts`](../Code/src/webapp/src/lib/notify.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/memories.ts`](../Code/src/webapp/src/api/memories.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/sequence.ts`](../Code/src/webapp/src/api/sequence.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/lib/userPrefs.ts`](../Code/src/webapp/src/lib/userPrefs.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/pulse/palettes.ts`](../Code/src/webapp/src/pulse/palettes.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/pulse/patterns.ts`](../Code/src/webapp/src/pulse/patterns.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/authRefresh.ts`](../Code/src/webapp/src/api/authRefresh.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/auth/AuthContext.tsx`](../Code/src/webapp/src/auth/AuthContext.tsx.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/conversationMode.ts`](../Code/src/webapp/src/api/conversationMode.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/components/Markdown.tsx`](../Code/src/webapp/src/components/Markdown.tsx.md) — References an unknown symbol — cache may be stale
+
+## OK (239)
+
+Docs the merge did not impact. No action required.
+
+<details>
+<summary>Show 239 unaffected doc(s)</summary>
+
+- [`index.md`](../Code/index.md.md)
+- [`Onboarding.md`](../Code/Onboarding.md.md)
+- [`Architecture.md`](../Code/Architecture.md.md)
+- [`prototype/run.js`](../Code/prototype/run.js.md)
+- [`prototype/play.js`](../Code/prototype/play.js.md)
+- [`Workflows/service.md`](../Code/Workflows/service.md.md)
+- [`prototype/generate.js`](../Code/prototype/generate.js.md)
+- [`src/webapp/src/App.tsx`](../Code/src/webapp/src/App.tsx.md)
+- [`Workflows/agent-tool.md`](../Code/Workflows/agent-tool.md.md)
+- [`Workflows/controller.md`](../Code/Workflows/controller.md.md)
+- [`Workflows/repository.md`](../Code/Workflows/repository.md.md)
+- [`src/webapp/src/main.tsx`](../Code/src/webapp/src/main.tsx.md)
+- [`src/webapp/vite.config.ts`](../Code/src/webapp/vite.config.ts.md)
+- [`observability-and-logging.md`](../Code/observability-and-logging.md.md)
+- [`src/webapp/src/vite-env.d.ts`](../Code/src/webapp/src/vite-env.d.ts.md)
+- [`src/api/Gabriel.API/Program.cs`](../Code/src/api/Gabriel.API/Program.cs.md)
+- [`src/webapp/src/api/streamChat.ts`](../Code/src/webapp/src/api/streamChat.ts.md)
+- [`src/webapp/src/pages/ChatPage.tsx`](../Code/src/webapp/src/pages/ChatPage.tsx.md)
+- [`src/webapp/src/components/Chat.tsx`](../Code/src/webapp/src/components/Chat.tsx.md)
+- [`src/webapp/src/pages/IndexPage.tsx`](../Code/src/webapp/src/pages/IndexPage.tsx.md)
+- [`src/webapp/src/pages/LoginPage.tsx`](../Code/src/webapp/src/pages/LoginPage.tsx.md)
+- [`tooling-and-tooling-integration.md`](../Code/tooling-and-tooling-integration.md.md)
+- [`authentication-and-authorization.md`](../Code/authentication-and-authorization.md.md)
+- [`src/webapp/src/components/Avatar.tsx`](../Code/src/webapp/src/components/Avatar.tsx.md)
+- [`src/api/Gabriel.Engine/Tools/ITool.cs`](../Code/src/api/Gabriel.Engine/Tools/ITool.cs.md)
+- [`src/webapp/src/api/authInterceptor.ts`](../Code/src/webapp/src/api/authInterceptor.ts.md)
+- [`src/webapp/src/components/Mermaid.tsx`](../Code/src/webapp/src/components/Mermaid.tsx.md)
+- [`src/webapp/src/components/Sidebar.tsx`](../Code/src/webapp/src/components/Sidebar.tsx.md)
+- [`src/webapp/src/layouts/AuthLayout.tsx`](../Code/src/webapp/src/layouts/AuthLayout.tsx.md)
+- [`src/webapp/src/layouts/MainLayout.tsx`](../Code/src/webapp/src/layouts/MainLayout.tsx.md)
+- [`src/webapp/src/pages/RegisterPage.tsx`](../Code/src/webapp/src/pages/RegisterPage.tsx.md)
+- [`src/webapp/src/routes/PublicRoute.tsx`](../Code/src/webapp/src/routes/PublicRoute.tsx.md)
+- [`configuration-and-secrets-management.md`](../Code/configuration-and-secrets-management.md.md)
+- [`dependency-injection-and-composition.md`](../Code/dependency-injection-and-composition.md.md)
+- [`src/api/Gabriel.Core/Entities/Message.cs`](../Code/src/api/Gabriel.Core/Entities/Message.cs.md)
+- [`src/api/Gabriel.Core/Entities/Project.cs`](../Code/src/api/Gabriel.Core/Entities/Project.cs.md)
+- [`src/api/Gabriel.Core/Personality/Mood.cs`](../Code/src/api/Gabriel.Core/Personality/Mood.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/Frame.cs`](../Code/src/api/Gabriel.Engine/Sequence/Frame.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/Noise.cs`](../Code/src/api/Gabriel.Engine/Sequence/Noise.cs.md)
+- [`src/webapp/src/components/MemoryList.tsx`](../Code/src/webapp/src/components/MemoryList.tsx.md)
+- [`src/webapp/src/components/SkinPicker.tsx`](../Code/src/webapp/src/components/SkinPicker.tsx.md)
+- [`src/webapp/src/pages/DiagnosticsPage.tsx`](../Code/src/webapp/src/pages/DiagnosticsPage.tsx.md)
+- [`src/webapp/src/routes/ProtectedRoute.tsx`](../Code/src/webapp/src/routes/ProtectedRoute.tsx.md)
+- [`src/webapp/src/pages/UserSettingsPage.tsx`](../Code/src/webapp/src/pages/UserSettingsPage.tsx.md)
+- [`src/api/Gabriel.Engine/Sequence/Palette.cs`](../Code/src/api/Gabriel.Engine/Sequence/Palette.cs.md)
+- [`src/webapp/src/components/ContextStats.tsx`](../Code/src/webapp/src/components/ContextStats.tsx.md)
+- [`src/webapp/src/components/ModeSelector.tsx`](../Code/src/webapp/src/components/ModeSelector.tsx.md)
+- [`src/api/Gabriel.API/Identity/AuthCookies.cs`](../Code/src/api/Gabriel.API/Identity/AuthCookies.cs.md)
+- [`src/api/Gabriel.Core/DependencyInjection.cs`](../Code/src/api/Gabriel.Core/DependencyInjection.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/Patterns.cs`](../Code/src/api/Gabriel.Engine/Sequence/Patterns.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/RgbColor.cs`](../Code/src/api/Gabriel.Engine/Sequence/RgbColor.cs.md)
+- [`src/webapp/src/components/ModelSelector.tsx`](../Code/src/webapp/src/components/ModelSelector.tsx.md)
+- [`src/webapp/src/components/ProjectPicker.tsx`](../Code/src/webapp/src/components/ProjectPicker.tsx.md)
+- [`src/webapp/src/components/StreamingText.tsx`](../Code/src/webapp/src/components/StreamingText.tsx.md)
+- [`src/webapp/src/components/ThinkingPulse.tsx`](../Code/src/webapp/src/components/ThinkingPulse.tsx.md)
+- [`src/api/Gabriel.Core/Entities/GabrielMode.cs`](../Code/src/api/Gabriel.Core/Entities/GabrielMode.cs.md)
+- [`src/api/Gabriel.Core/Entities/MemoryEntry.cs`](../Code/src/api/Gabriel.Core/Entities/MemoryEntry.cs.md)
+- [`src/api/Gabriel.Core/Entities/MessageRole.cs`](../Code/src/api/Gabriel.Core/Entities/MessageRole.cs.md)
+- [`src/api/Gabriel.Core/Entities/MetricEntry.cs`](../Code/src/api/Gabriel.Core/Entities/MetricEntry.cs.md)
+- [`src/api/Gabriel.Core/Entities/ProjectFile.cs`](../Code/src/api/Gabriel.Core/Entities/ProjectFile.cs.md)
+- [`src/api/Gabriel.Core/Services/ChatService.cs`](../Code/src/api/Gabriel.Core/Services/ChatService.cs.md)
+- [`src/api/Gabriel.Engine/Tools/ToolRegistry.cs`](../Code/src/api/Gabriel.Engine/Tools/ToolRegistry.cs.md)
+- [`src/webapp/src/pages/ProjectSettingsPage.tsx`](../Code/src/webapp/src/pages/ProjectSettingsPage.tsx.md)
+- [`src/api/Gabriel.Core/Entities/Conversation.cs`](../Code/src/api/Gabriel.Core/Entities/Conversation.cs.md)
+- [`src/api/Gabriel.Core/Identity/ICurrentUser.cs`](../Code/src/api/Gabriel.Core/Identity/ICurrentUser.cs.md)
+- [`src/api/Gabriel.Core/Identity/RefreshToken.cs`](../Code/src/api/Gabriel.Core/Identity/RefreshToken.cs.md)
+- [`src/api/Gabriel.Core/Services/IChatService.cs`](../Code/src/api/Gabriel.Core/Services/IChatService.cs.md)
+- [`src/api/Gabriel.Engine/DependencyInjection.cs`](../Code/src/api/Gabriel.Engine/DependencyInjection.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/FrameLayer.cs`](../Code/src/api/Gabriel.Engine/Sequence/FrameLayer.cs.md)
+- [`src/api/Gabriel.Engine/Services/AgentEvent.cs`](../Code/src/api/Gabriel.Engine/Services/AgentEvent.cs.md)
+- [`src/api/Gabriel.Engine/Tools/IToolRegistry.cs`](../Code/src/api/Gabriel.Engine/Tools/IToolRegistry.cs.md)
+- [`src/webapp/src/components/MemoryQuickSave.tsx`](../Code/src/webapp/src/components/MemoryQuickSave.tsx.md)
+- [`src/api/Gabriel.API/Identity/IdentitySeeder.cs`](../Code/src/api/Gabriel.API/Identity/IdentitySeeder.cs.md)
+- [`src/api/Gabriel.Core/Configuration/LLMModel.cs`](../Code/src/api/Gabriel.Core/Configuration/LLMModel.cs.md)
+- [`src/api/Gabriel.Core/Configuration/ToolMode.cs`](../Code/src/api/Gabriel.Core/Configuration/ToolMode.cs.md)
+- [`src/api/Gabriel.Core/Services/MemoryService.cs`](../Code/src/api/Gabriel.Core/Services/MemoryService.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/PatternKind.cs`](../Code/src/api/Gabriel.Engine/Sequence/PatternKind.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/FindTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/FindTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/GrepTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/GrepTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Web/IWebSearch.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/IWebSearch.cs.md)
+- [`src/api/Gabriel.API/Mapping/ContractMappings.cs`](../Code/src/api/Gabriel.API/Mapping/ContractMappings.cs.md)
+- [`src/api/Gabriel.Core/Services/IMemoryService.cs`](../Code/src/api/Gabriel.Core/Services/IMemoryService.cs.md)
+- [`src/api/Gabriel.Core/Services/ProjectService.cs`](../Code/src/api/Gabriel.Core/Services/ProjectService.cs.md)
+- [`src/api/Gabriel.Engine/Services/AgentContext.cs`](../Code/src/api/Gabriel.Engine/Services/AgentContext.cs.md)
+- [`src/api/Gabriel.Engine/Services/AgentService.cs`](../Code/src/api/Gabriel.Engine/Services/AgentService.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Web/IUrlFetcher.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/IUrlFetcher.cs.md)
+- [`src/webapp/src/components/CompactingOverlay.tsx`](../Code/src/webapp/src/components/CompactingOverlay.tsx.md)
+- [`src/api/Gabriel.API/Contracts/Auth/MeResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/MeResponse.cs.md)
+- [`src/api/Gabriel.API/Contracts/Models/ModelDto.cs`](../Code/src/api/Gabriel.API/Contracts/Models/ModelDto.cs.md)
+- [`src/api/Gabriel.Core/Configuration/JwtOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/JwtOptions.cs.md)
+- [`src/api/Gabriel.Core/Entities/MemoryEntryType.cs`](../Code/src/api/Gabriel.Core/Entities/MemoryEntryType.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IUnitOfWork.cs`](../Code/src/api/Gabriel.Core/Repositories/IUnitOfWork.cs.md)
+- [`src/api/Gabriel.Core/Services/IProjectService.cs`](../Code/src/api/Gabriel.Core/Services/IProjectService.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ModelCatalog.cs`](../Code/src/api/Gabriel.Engine/Providers/ModelCatalog.cs.md)
+- [`src/api/Gabriel.Engine/Services/IAgentService.cs`](../Code/src/api/Gabriel.Engine/Services/IAgentService.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs`](../Code/src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Web/WebFetchTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/WebFetchTool.cs.md)
+- [`src/api/Gabriel.API/Contracts/Auth/JwtResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/JwtResponse.cs.md)
+- [`src/api/Gabriel.API/Controllers/AuthController.cs`](../Code/src/api/Gabriel.API/Controllers/AuthController.cs.md)
+- [`src/api/Gabriel.Core/Configuration/AuthOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/AuthOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/GrokOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/GrokOptions.cs.md)
+- [`src/api/Gabriel.Core/Identity/IJwtTokenService.cs`](../Code/src/api/Gabriel.Core/Identity/IJwtTokenService.cs.md)
+- [`src/api/Gabriel.Core/Identity/IUserPreferences.cs`](../Code/src/api/Gabriel.Core/Identity/IUserPreferences.cs.md)
+- [`src/api/Gabriel.Engine/Providers/IChatProvider.cs`](../Code/src/api/Gabriel.Engine/Providers/IChatProvider.cs.md)
+- [`src/api/Gabriel.Engine/Providers/IModelCatalog.cs`](../Code/src/api/Gabriel.Engine/Providers/IModelCatalog.cs.md)
+- [`src/api/Gabriel.Engine/Services/ContextMetrics.cs`](../Code/src/api/Gabriel.Engine/Services/ContextMetrics.cs.md)
+- [`src/api/Gabriel.Engine/Services/MetricRecorder.cs`](../Code/src/api/Gabriel.Engine/Services/MetricRecorder.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Docs/DocsListTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Docs/DocsListTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Docs/DocsReadTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Docs/DocsReadTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/ListDirTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/ListDirTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Web/WebSearchTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/WebSearchTool.cs.md)
+- [`src/webapp/src/components/GabrielSequenceView.tsx`](../Code/src/webapp/src/components/GabrielSequenceView.tsx.md)
+- [`src/api/Gabriel.API/Contracts/Auth/LoginRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/LoginRequest.cs.md)
+- [`src/api/Gabriel.Core/Configuration/AgentOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/AgentOptions.cs.md)
+- [`src/api/Gabriel.Core/Exceptions/DomainException.cs`](../Code/src/api/Gabriel.Core/Exceptions/DomainException.cs.md)
+- [`src/api/Gabriel.Engine/Providers/AvailableModel.cs`](../Code/src/api/Gabriel.Engine/Providers/AvailableModel.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ToolDescriptor.cs`](../Code/src/api/Gabriel.Engine/Providers/ToolDescriptor.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/GabrielSequence.cs`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequence.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/SequenceCatalog.cs`](../Code/src/api/Gabriel.Engine/Sequence/SequenceCatalog.cs.md)
+- [`src/api/Gabriel.Engine/Services/IMetricRecorder.cs`](../Code/src/api/Gabriel.Engine/Services/IMetricRecorder.cs.md)
+- [`src/api/Gabriel.Engine/Services/ITokenEstimator.cs`](../Code/src/api/Gabriel.Engine/Services/ITokenEstimator.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/FileInfoTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/FileInfoTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.cs`](../Code/src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.cs.md)
+- [`src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs`](../Code/src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs.md)
+- [`src/api/Gabriel.API/Controllers/ModelsController.cs`](../Code/src/api/Gabriel.API/Controllers/ModelsController.cs.md)
+- [`src/api/Gabriel.Core/Identity/IRefreshTokenStore.cs`](../Code/src/api/Gabriel.Core/Identity/IRefreshTokenStore.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/PaletteTemplates.cs`](../Code/src/api/Gabriel.Engine/Sequence/PaletteTemplates.cs.md)
+- [`src/api/Gabriel.API/Configuration/LogDateEnricher.cs`](../Code/src/api/Gabriel.API/Configuration/LogDateEnricher.cs.md)
+- [`src/api/Gabriel.Core/Configuration/IConfigSection.cs`](../Code/src/api/Gabriel.Core/Configuration/IConfigSection.cs.md)
+- [`src/api/Gabriel.Core/Configuration/ModelSelection.cs`](../Code/src/api/Gabriel.Core/Configuration/ModelSelection.cs.md)
+- [`src/api/Gabriel.Core/Exceptions/NotFoundException.cs`](../Code/src/api/Gabriel.Core/Exceptions/NotFoundException.cs.md)
+- [`src/api/Gabriel.Core/Services/IProjectFileService.cs`](../Code/src/api/Gabriel.Core/Services/IProjectFileService.cs.md)
+- [`src/api/Gabriel.API/Contracts/Auth/RegisterRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/RegisterRequest.cs.md)
+- [`src/api/Gabriel.API/Controllers/MemoriesController.cs`](../Code/src/api/Gabriel.API/Controllers/MemoriesController.cs.md)
+- [`src/api/Gabriel.API/Controllers/ProjectsController.cs`](../Code/src/api/Gabriel.API/Controllers/ProjectsController.cs.md)
+- [`src/api/Gabriel.API/Controllers/SequenceController.cs`](../Code/src/api/Gabriel.API/Controllers/SequenceController.cs.md)
+- [`src/api/Gabriel.Core/Personality/ConversationState.cs`](../Code/src/api/Gabriel.Core/Personality/ConversationState.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs`](../Code/src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs.md)
+- [`src/api/Gabriel.Engine/Tools/IToolExecutionContext.cs`](../Code/src/api/Gabriel.Engine/Tools/IToolExecutionContext.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Memory/MemoryListTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemoryListTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.cs.md)
+- [`src/api/Gabriel.Infrastructure/DependencyInjection.cs`](../Code/src/api/Gabriel.Infrastructure/DependencyInjection.cs.md)
+- [`src/api/Gabriel.API/Identity/HttpContextCurrentUser.cs`](../Code/src/api/Gabriel.API/Identity/HttpContextCurrentUser.cs.md)
+- [`src/api/Gabriel.Core/Configuration/InfisicalOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/InfisicalOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/LocalDocsOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/LocalDocsOptions.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IMemoryRepository.cs`](../Code/src/api/Gabriel.Core/Repositories/IMemoryRepository.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IMetricRepository.cs`](../Code/src/api/Gabriel.Core/Repositories/IMetricRepository.cs.md)
+- [`src/api/Gabriel.Engine/Services/NaiveTokenEstimator.cs`](../Code/src/api/Gabriel.Engine/Services/NaiveTokenEstimator.cs.md)
+- [`src/api/Gabriel.Core/Configuration/AgentToolsOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/AgentToolsOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/GitHubDocsOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/GitHubDocsOptions.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IProjectRepository.cs`](../Code/src/api/Gabriel.Core/Repositories/IProjectRepository.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/PromptKey.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/PromptKey.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ChatProviderMessage.cs`](../Code/src/api/Gabriel.Engine/Providers/ChatProviderMessage.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.cs.md)
+- [`src/api/Gabriel.API/Configuration/InfisicalExtensions.cs`](../Code/src/api/Gabriel.API/Configuration/InfisicalExtensions.cs.md)
+- [`src/api/Gabriel.API/Controllers/DiagnosticsController.cs`](../Code/src/api/Gabriel.API/Controllers/DiagnosticsController.cs.md)
+- [`src/api/Gabriel.API/Middleware/GlobalExceptionHandler.cs`](../Code/src/api/Gabriel.API/Middleware/GlobalExceptionHandler.cs.md)
+- [`src/api/Gabriel.Core/Configuration/BraveSearchOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/BraveSearchOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/LLMProviderOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/LLMProviderOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/PersonalityOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/PersonalityOptions.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ChatProviderToolCall.cs`](../Code/src/api/Gabriel.Engine/Providers/ChatProviderToolCall.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/UnitOfWork.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/UnitOfWork.cs.md)
+- [`src/api/Gabriel.API/Contracts/Auth/RefreshTokenRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/RefreshTokenRequest.cs.md)
+- [`src/api/Gabriel.API/Contracts/Messages/MessageResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Messages/MessageResponse.cs.md)
+- [`src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs.md)
+- [`src/api/Gabriel.API/Controllers/ProjectFilesController.cs`](../Code/src/api/Gabriel.API/Controllers/ProjectFilesController.cs.md)
+- [`src/api/Gabriel.Core/Configuration/ProjectFilesOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/ProjectFilesOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/TavilySearchOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/TavilySearchOptions.cs.md)
+- [`src/api/Gabriel.Engine/Providers/IChatProviderRegistry.cs`](../Code/src/api/Gabriel.Engine/Providers/IChatProviderRegistry.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs.md)
+- [`src/api/Gabriel.API/Controllers/ConversationsController.cs`](../Code/src/api/Gabriel.API/Controllers/ConversationsController.cs.md)
+- [`src/api/Gabriel.Engine/Personality/ISystemPromptBuilder.cs`](../Code/src/api/Gabriel.Engine/Personality/ISystemPromptBuilder.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/IGabrielSequenceService.cs`](../Code/src/api/Gabriel.Engine/Sequence/IGabrielSequenceService.cs.md)
+- [`src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs`](../Code/src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs.md)
+- [`src/api/Gabriel.Infrastructure/Identity/JwtTokenService.cs`](../Code/src/api/Gabriel.Infrastructure/Identity/JwtTokenService.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/AppDbContext.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/AppDbContext.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/HttpUrlFetcher.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/HttpUrlFetcher.cs.md)
+- [`src/api/Gabriel.API/Contracts/Diagnostics/MetricEntryDto.cs`](../Code/src/api/Gabriel.API/Contracts/Diagnostics/MetricEntryDto.cs.md)
+- [`src/api/Gabriel.Engine/Personality/ResponsePostProcessor.cs`](../Code/src/api/Gabriel.Engine/Personality/ResponsePostProcessor.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.cs`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.cs.md)
+- [`src/api/Gabriel.Infrastructure/Providers/GrokAuthHandler.cs`](../Code/src/api/Gabriel.Infrastructure/Providers/GrokAuthHandler.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/TavilyWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/TavilyWebSearch.cs.md)
+- [`src/api/Gabriel.API/Contracts/Messages/SendMessageRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Messages/SendMessageRequest.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IConversationRepository.cs`](../Code/src/api/Gabriel.Core/Repositories/IConversationRepository.cs.md)
+- [`src/api/Gabriel.Engine/Personality/IResponsePostProcessor.cs`](../Code/src/api/Gabriel.Engine/Personality/IResponsePostProcessor.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs`](../Code/src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Projects/ReadProjectFileTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Projects/ReadProjectFileTool.cs.md)
+- [`src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs`](../Code/src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs.md)
+- [`src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs`](../Code/src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Docs/LocalDocsLookup.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Docs/LocalDocsLookup.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.Modes.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Modes.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/IPromptRegistry.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/IPromptRegistry.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Docs/GitHubDocsLookup.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Docs/GitHubDocsLookup.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.Memory.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Memory.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/CompositeWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/CompositeWebSearch.cs.md)
+- [`src/api/Gabriel.Engine/Personality/IConversationStateUpdater.cs`](../Code/src/api/Gabriel.Engine/Personality/IConversationStateUpdater.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.FewShot.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.FewShot.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.Persona.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Persona.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs.md)
+- [`src/api/Gabriel.API/Configuration/GlobalRoutePrefixConvention.cs`](../Code/src/api/Gabriel.API/Configuration/GlobalRoutePrefixConvention.cs.md)
+- [`src/api/Gabriel.Engine/Personality/GabrielSystemPromptBuilder.cs`](../Code/src/api/Gabriel.Engine/Personality/GabrielSystemPromptBuilder.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Docs/CompositeDocsLookup.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Docs/CompositeDocsLookup.cs.md)
+- [`src/api/Gabriel.API/Configuration/InfisicalConfigurationSource.cs`](../Code/src/api/Gabriel.API/Configuration/InfisicalConfigurationSource.cs.md)
+- [`src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.cs.md)
+- [`src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.cs.md)
+- [`src/api/Gabriel.Infrastructure/Identity/UserPreferencesService.cs`](../Code/src/api/Gabriel.Infrastructure/Identity/UserPreferencesService.cs.md)
+- [`src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.cs`](../Code/src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallBlockParser.cs`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallBlockParser.cs.md)
+- [`src/api/Gabriel.API/Configuration/InfisicalConfigurationProvider.cs`](../Code/src/api/Gabriel.API/Configuration/InfisicalConfigurationProvider.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallStreamSplitter.cs`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallStreamSplitter.cs.md)
+- [`src/api/Gabriel.Engine/Personality/HeuristicConversationStateUpdater.cs`](../Code/src/api/Gabriel.Engine/Personality/HeuristicConversationStateUpdater.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/CreateConversationRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/CreateConversationRequest.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/UpdateConversationRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/UpdateConversationRequest.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/SetConversationModeRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/SetConversationModeRequest.cs.md)
+- [`src/api/Gabriel.API/Contracts/Diagnostics/WebSearchDiagnosticsResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Diagnostics/WebSearchDiagnosticsResponse.cs.md)
+- [`src/api/Gabriel.API/Middleware/RequireNonNullablePropertiesSchemaFilter.cs`](../Code/src/api/Gabriel.API/Middleware/RequireNonNullablePropertiesSchemaFilter.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/MemoryRepository.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/MemoryRepository.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/MetricRepository.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/MetricRepository.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/ProjectRepository.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/ProjectRepository.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/RefreshTokenStore.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/RefreshTokenStore.cs.md)
+- [`src/api/Gabriel.Infrastructure/Identity/IdentityServiceCollectionExtensions.cs`](../Code/src/api/Gabriel.Infrastructure/Identity/IdentityServiceCollectionExtensions.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/MessageConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/MessageConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/ConversationRepository.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/ConversationRepository.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/MemoryEntryConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/MemoryEntryConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/MetricEntryConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/MetricEntryConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectFileConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectFileConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/ConversationConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/ConversationConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs.md)
+
+</details>
+
+---
+
+*Generated by Aurion on 2026-06-09 05:49:00 UTC*
+*Commit range: `35467ec` → `HEAD`*
