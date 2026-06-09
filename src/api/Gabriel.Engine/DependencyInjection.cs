@@ -5,6 +5,7 @@ using Gabriel.Engine.Sequence;
 using Gabriel.Engine.Services;
 using Gabriel.Engine.Tools;
 using Gabriel.Engine.Tools.Docs;
+using Gabriel.Engine.Tools.Calc;
 using Gabriel.Engine.Tools.Files;
 using Gabriel.Engine.Tools.Memory;
 using Gabriel.Engine.Tools.Projects;
@@ -59,6 +60,7 @@ public static class DependencyInjection
         // IDocsLookup) are registered here but their providers come from
         // Gabriel.Infrastructure.DependencyInjection.AddInfrastructure.
         services.AddScoped<ITool, GetCurrentTimeTool>();
+        services.AddScoped<ITool, CalculateTool>();
         services.AddScoped<ITool, WebSearchTool>();
         services.AddScoped<ITool, WebFetchTool>();
         services.AddScoped<ITool, DocsListTool>();

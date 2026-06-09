@@ -15,6 +15,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | Tool | Category | Provider dep | One-line purpose |
 | --- | --- | --- | --- |
 | `get_current_time` | Time | none | UTC ISO-8601 timestamp. |
+| `calculate` | Math | none | Evaluate an arithmetic expression (precedence, `^`, `%`, functions, constants). |
 | `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
@@ -195,6 +196,14 @@ Lookup is by `(scope, name)`. `scope='project'` only operates on memories saved 
 ### Filesystem tools (`file_info`, `list_dir`, `find`, `grep`)
 
 Operate on the agent's host filesystem via `IAgentPathResolver`. The resolver enforces host-vs-project sandboxing — by default they're scoped to safe roots; project files go through the project tools above.
+
+### `calculate`
+
+Schema: `{ "expression": string }`. No provider dependency, no I/O — a pure function of the argument string. Use it for any arithmetic instead of computing in-head, which is error-prone for multi-digit numbers.
+
+A recursive-descent evaluator over doubles. Precedence, lowest-binding first: `+ -` → `* / %` → unary `+ -` → `^` (right-associative, so `2^3^2 = 512`). Unary binds below the exponent, matching convention: `-3^2 = -9`, and the exponent's right side accepts a unary so `2^-3 = 0.125`. Supports parentheses, the functions `sqrt abs round floor ceil sign min max pow sin cos tan asin acos atan log ln exp` (trig in radians; `log(x)` is base-10, `log(x, b)` is base-b, `round(x, digits)` takes an optional precision), and the constants `pi e tau`.
+
+Operators are required between terms — `2*pi`, not `2pi`. Results format friendlily: integral values print without a decimal point, everything else trims to 12 fractional digits so binary-float dust folds away (`0.1 + 0.2 = 0.3`). Bad input never throws into the loop — unknown names, malformed syntax, division/modulo by zero, `sqrt` of a negative, and results that overflow to ±infinity or NaN all come back as `Error: …` observations. Input is capped at 1000 chars and nesting at depth 64.
 
 ### `get_current_time`
 
