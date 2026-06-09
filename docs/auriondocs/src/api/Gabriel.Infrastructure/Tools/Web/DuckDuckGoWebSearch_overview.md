@@ -1,0 +1,10 @@
+A lightweight, no-API-key IWebSearch implementation that scrapes DuckDuckGo HTML to produce search results. It prefers the richer html.duckduckgo.com endpoint and falls back to lite.duckduckgo.com when the primary endpoint yields no parseable results; both endpoints are queried with the same POST form payload. Use this when you need an out-of-the-box web search backend without API keys or quotas and can tolerate brittle HTML parsing and occasional rate-limiting — for production-grade reliability a paid/search-provider API is recommended.
+
+## Remarks
+This class exists to provide a zero-configuration web-search backend by emulating a real browser session: on first use it can pre-warm the DuckDuckGo homepage to populate the HttpClientHandler's CookieContainer and it selects one realistic User-Agent for the session (picked from a small pool). Session warmup is deduplicated with a SemaphoreSlim so concurrent callers won't pre-warm in parallel. The implementation attempts the richer "html/" endpoint first for snippets and metadata; if that yields no parseable hits it retries the lighter "lite/" endpoint which is less likely to be bot-flagged. HTML parsing is intentionally tolerant and regex-based so failures return zero results rather than throwing.
+
+## Notes
+- The HTML parsing is fragile by design: DuckDuckGo can change its markup and regex-based parsing may stop returning results until updated.
+- DuckDuckGo may rate-limit or return an "anomaly" (CAPTCHA-style) page; the class detects and logs these conditions with diagnostic detail but may still surface "no results" to callers.
+- The chosen User-Agent is fixed for the lifetime of the warmed session; rapid per-request UA rotation is avoided because it is itself a bot signal. Anomaly detection can reset the session and cause a new UA to be picked.
+- The CookieContainer is owned by the HttpClientHandler configured elsewhere (see DependencyInjection.ConfigureDdgHttpClient); this class only tracks whether it has performed the homepage pre-warm for the current handler generation.

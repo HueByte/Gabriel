@@ -1,30 +1,22 @@
-# DependencyInjection
-
-> **File:** `src/api/Gabriel.Engine/DependencyInjection.cs`  
-> **Kind:** class
-
-Registers Gabriel Engine services, tools and configuration into an IServiceCollection. Use this extension from application startup (Program.cs / Startup.cs) to wire the engine's agent, tooling, metric and prompt subsystems instead of registering each implementation manually.
+Registers the Gabriel Engine's core services, configuration bindings, and built-in tools into an IServiceCollection. Use this from your application's startup (Program.cs / Startup) when you want the engine, its personality/prompt stack, metrics plumbing, sequence services, and default tool set wired into DI rather than registering each piece manually.
 
 ## Remarks
-This is the central DI composition root for the Gabriel engine surface: it binds options, core agent services, the prompt/personality stack, the Gabriel sequence components, metric recording, path resolution and every ITool implementation the engine exposes. Lifetime choices are deliberate — stateless/config-driven components are singletons, per-request concerns and tool execution contexts are scoped — and ToolRegistry discovers tools by consuming `IEnumerable<ITool>`, so adding each ITool here is how new tools are made available to the engine. Provider implementations that perform HTTP/transport (for example Grok or any external search/docs provider) are registered in Gabriel.Infrastructure; call that registration as well.
+This extension centralizes engine wiring so callers don't need to know individual registrations or lifetimes. Configuration sections for AgentOptions, PersonalityOptions, and AgentToolsOptions are bound here; stateless, config-driven components are registered as singletons while per-request/turn state (tools and execution context) are scoped. All ITool implementations added here are later discovered by ToolRegistry via IEnumerable<ITool> injection. Note that infrastructure-side providers (e.g. IWebSearch, IDocsLookup) are registered in Gabriel.Infrastructure; ensure those are added to the IServiceCollection as well so tools depending on them have their dependencies satisfied.
 
 ## Example
 ```csharp
-// In Program.cs (minimal):
+// Program.cs (minimal example)
 var builder = WebApplication.CreateBuilder(args);
-
-// register infrastructure providers first (search, docs providers, etc.)
+// register infrastructure providers first (from Gabriel.Infrastructure)
 builder.Services.AddInfrastructure(builder.Configuration);
-
-// register engine services, tools and options
+// register engine services and default tools
 builder.Services.AddEngineServices(builder.Configuration);
 
 var app = builder.Build();
-app.MapControllers();
 app.Run();
 ```
 
 ## Notes
-- MetricRecorder is registered as a singleton but bridges to scoped IMetricRepository via IServiceScopeFactory; it must not directly depend on scoped services.
-- Tools that depend on infrastructure-side providers (IWebSearch, IDocsLookup, etc.) require Gabriel.Infrastructure registrations — missing those will cause runtime DI failures.
-- Tool discovery uses `IEnumerable<ITool>` injection; registering additional ITool implementations in this method is how they become available to the ToolRegistry.
+- MetricRecorder is registered as a singleton but is intended to bridge to a scoped IMetricRepository via IServiceScopeFactory; the repository itself must be registered with a scoped lifetime.
+- IToolExecutionContext is scoped and must be populated (AgentService.Set) once per agent turn — tools expect the context to be available at execution time.
+- Some tools registered here depend on providers added by Gabriel.Infrastructure.AddInfrastructure; failing to add those infrastructure registrations will cause runtime DI resolution errors.

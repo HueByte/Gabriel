@@ -3,15 +3,24 @@
 > **File:** `src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs`  
 > **Kind:** class
 
-Performs web searches against the Brave Search API and returns results as a list of WebSearchResult. Reach for this implementation when you want an IWebSearch backed by Brave and have configured a named HttpClient (HttpClientName = "BraveSearch") with the API base address, timeout and X-Subscription-Token authentication header in your DI setup.
+```csharp
+// IWebSearch implementation backed by the Brave Search API. Plain GET on
+// /search?q=... + X-Subscription-Token header for auth. The named HttpClient
+// is configured in DependencyInjection.AddInfrastructure so the BaseAddress +
+// timeout + key header all live in one place.
+public sealed class BraveWebSearch : IWebSearch
+```
+
+
+Implements IWebSearch using the Brave Search HTTP API; use this when you need a DI-friendly, minimal web search backed by Brave where the named HttpClient ("BraveSearch") and API key are configured externally.
 
 ## Remarks
-A thin adapter over Brave's GET /search endpoint: it constructs an escaped query URL with a count parameter (clamped to 1–10), issues the request using IHttpClientFactory.CreateClient("BraveSearch"), deserializes the minimal JSON shape required, and projects Brave's results into WebSearchResult DTOs. Keeping authentication and connection settings on the named HttpClient centralizes configuration and avoids leaking API keys into callers.
+BraveWebSearch encapsulates the HTTP call and JSON mapping so callers receive a simple IReadOnlyList<WebSearchResult>. It expects an IHttpClientFactory-provided client named "BraveSearch" to be configured with base address, timeout and the X-Subscription-Token header. The class validates configuration via BraveSearchOptions.IsConfigured, logs non-success HTTP responses (including response body), and converts the subset of Brave's response it consumes into the project's WebSearchResult DTOs.
 
 ## Example
 ```csharp
-// Assume IWebSearch is registered and resolved from DI
-var results = await webSearch.SearchAsync("open source databases", 5, CancellationToken.None);
+// Typical usage from an async context after BraveWebSearch is registered in DI
+var results = await braveWebSearch.SearchAsync("open source projects", 5, CancellationToken.None);
 foreach (var r in results)
 {
     Console.WriteLine($"{r.Title} - {r.Url}\n{r.Snippet}\n");
@@ -19,8 +28,7 @@ foreach (var r in results)
 ```
 
 ## Notes
-- If BraveSearchOptions.IsConfigured is false, SearchAsync throws InvalidOperationException; ensure the API key is present in configuration before calling.
-- The requested limit is clamped to 1..10; passing a larger value will not increase the number of results returned from Brave.
-- On non-success HTTP responses the response body is logged at Warning level and SearchAsync throws HttpRequestException; the response body is not included in the exception.
-- JSON deserialization may produce null payloads; the implementation treats missing payload/results as an empty result set.
-- The provided CancellationToken is passed to both the HTTP request and JSON read operations.
+- Throws InvalidOperationException if BraveSearchOptions.IsConfigured is false (API key missing).
+- The requested limit is clamped to the range 1..10 before sending to the API.
+- Non-success HTTP responses are logged (warning) and surface as HttpRequestException.
+- Missing or partially populated JSON fields result in empty lists/empty strings rather than nulls (safe defaults).

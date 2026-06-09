@@ -1,32 +1,28 @@
-# GrokChatProvider
-
-> **File:** `src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs`  
-> **Kind:** class
-
-Provides a streaming IChatProvider implementation that talks to xAI's OpenAI-compatible /v1/chat/completions endpoint (branded here as "Grok"). Use this provider when you need token-by-token and tool-call streaming from the xAI service rather than getting a single completed response. The provider expects a named HttpClient (HttpClientName = "Grok") to be configured via DI with base URL, timeouts and authentication.
+A streaming chat provider that wraps xAI's OpenAI-compatible /v1/chat/completions endpoint and exposes incremental events as an IAsyncEnumerable<ChatProviderEvent>. Use this when you want token- or chunk-level streaming of model reasoning, text deltas and tool-invocation information rather than waiting for a final completion.
 
 ## Remarks
-This class resolves an IHttpClientFactory per call so the underlying HttpMessageHandler pool stays healthy (DNS refresh, lifetime management). It snapshots the configured model catalog from GrokOptions at construction and exposes it via Models so UI components can present a stable list. The StreamAsync method implements server-sent-event style streaming: it reads lines starting with the "data:" prefix, deserializes JSON chunks into StreamChunk instances, emits delta events (reasoning/text) as they arrive, accumulates piecewise tool-call fragments by index and emits completed tool calls once the stream signals them, and yields a FinishEvent on error or when the stream ends.
+GrokChatProvider resolves a named HttpClient (HttpClientName = "Grok") from IHttpClientFactory for each call so the underlying handler pooling and DNS refresh behavior is preserved. It snapshots the configured model catalog from GrokOptions at construction time to present a stable Models list for UI population. The StreamAsync method consumes an SSE-style streaming response (lines beginning with "data:"), deserializes JSON chunks into StreamChunk objects, and yields typed ChatProviderEvent instances (e.g. ReasoningDeltaEvent, TextDeltaEvent, FinishEvent) as data arrives.
 
 ## Example
 ```csharp
-// Consume streaming events from the provider
-await foreach (var ev in grokProvider.StreamAsync(history, tools, "grok-small", ct))
+// provider is obtained from DI (IChatProvider / GrokChatProvider registered)
+IChatProvider provider = /* resolve from IServiceProvider */;
+var cts = new CancellationTokenSource();
+await foreach (var ev in provider.StreamAsync(history, tools, "grok-small", cts.Token))
 {
     switch (ev)
     {
         case TextDeltaEvent t: Console.Write(t.Content); break;
-        case ReasoningDeltaEvent r: /* handle reasoning */ break;
-        case ToolCallEvent tc: /* invoke tool */ break;
-        case FinishEvent f: Console.WriteLine($"Finished: {f.Reason}"); break;
+        case ReasoningDeltaEvent r: /* append/display reasoning */ break;
+        case FinishEvent f: /* check f.Reason and finalize */ break;
+        default: /* handle other provider-specific events (e.g. tool calls) */ break;
     }
 }
 ```
 
 ## Notes
-- The Models property is a snapshot taken at construction; changes to GrokOptions after construction are not reflected.
-- StreamAsync expects server-sent-event lines prefixed with "data:" and treats a line of "[DONE]" as stream termination.
-- Malformed JSON chunks are skipped with a warning (the provider logs and continues) — consumers should tolerate missing or delayed deltas.
-- If the initial HTTP response is non-successful the provider logs the response body and yields a FinishEvent with an error reason.
-- Callers should pass a CancellationToken when enumerating StreamAsync to ensure the underlying HTTP stream is closed promptly on cancellation.
-```
+- The HTTP client must be registered under the GrokChatProvider.HttpClientName ("Grok") so the provider can create it via IHttpClientFactory.
+- A non-success HTTP response is logged and results in an immediate FinishEvent with reason Error; no further events are produced.
+- Malformed JSON chunks are skipped and logged; the stream continues unless the server sends the terminal "[DONE]" marker.
+- Models is a snapshot taken at construction; updates to configuration after construction are not reflected in GrokChatProvider.Models.
+- StreamAsync expects SSE-style lines beginning with "data:" and uses ResponseHeadersRead to stream incrementally — consumers should respect the provided CancellationToken to stop reading promptly.
