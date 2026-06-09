@@ -925,7 +925,7 @@ button {
 .messages-content {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 /* Zero-height anchor watched by the IntersectionObserver for stick-to-bottom.
@@ -947,7 +947,7 @@ button {
      its max-width, forcing a horizontal scrollbar on the chat. */
   overflow-wrap: anywhere;
   font-size: 14.5px;
-  line-height: 1.6;
+  line-height: 1.5;
   /* Same reasoning: flex items default to min-width: auto (= min-content),
      which long-token content inflates. Clamping to 0 lets max-width win. */
   min-width: 0;
@@ -2034,16 +2034,17 @@ button {
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md p {
-  margin: 0 0 0.6em;
+  margin: 0 0 0.4em;
 }
 .md p:last-child {
   margin-bottom: 0;
 }
 
 .md h1, .md h2, .md h3, .md h4 {
-  /* Top margin matches paragraph spacing (0.6em) so it collapses cleanly
-     with a preceding p; bottom is tighter so the heading hugs its content. */
-  margin: 0.5em 0 0.2em;
+  /* Top margin gives a heading a little breathing room from the preceding
+     block (it collapses cleanly with a paragraph's bottom margin); bottom is
+     tighter so the heading hugs its own content. */
+  margin: 0.6em 0 0.2em;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.3;
@@ -2054,14 +2055,27 @@ button {
 .md h4 { font-size: 1em; }
 
 .md ul, .md ol {
-  margin: 0 0 0.6em;
-  padding-left: 1.4em;
+  margin: 0 0 0.4em;
+  padding-left: 1.3em;
 }
-.md li { margin: 0.05em 0; }
+.md li { margin: 0.1em 0; }
 .md li > p { margin: 0; }
+/* Custom bullets: native ::markers drift vertically under our message
+   line-height (the dot floats above the text). An absolutely-positioned
+   ::before with `top: auto` snaps to the pseudo-element's static position -
+   i.e. the first text line - so the dot tracks the first line's baseline
+   regardless of line-height, while letting us tint it to match the prose. */
+.md ul { list-style: none; }
+.md ul > li { position: relative; }
+.md ul > li::before {
+  content: '•';
+  position: absolute;
+  left: -1em;
+  color: var(--text-dim);
+}
 
 .md blockquote {
-  margin: 0 0 0.6em;
+  margin: 0 0 0.4em;
   padding: 0.3em 0.9em;
   border-left: 2px solid var(--palette-accent, var(--accent));
   color: var(--text-dim);
@@ -2080,7 +2094,7 @@ button {
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
-  margin: 0 0 0.6em;
+  margin: 0 0 0.4em;
   font-size: 0.95em;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -2110,7 +2124,7 @@ button {
 }
 
 .md pre {
-  margin: 0 0 0.6em;
+  margin: 0 0 0.4em;
   padding: 10px 12px;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.88em;
@@ -2218,7 +2232,7 @@ button {
    same SVG into a full-viewport modal for readability. */
 .md-mermaid {
   position: relative;
-  margin: 0 0 0.6em;
+  margin: 0 0 0.4em;
   padding: 12px;
   background: var(--surface);
   border: 1px solid var(--border-soft);
@@ -2355,7 +2369,7 @@ button {
    just unrendered source. word-break keeps long unbroken tokens from
    blowing the message bubble out horizontally. */
 .md-mermaid-fallback {
-  margin: 0 0 0.6em;
+  margin: 0 0 0.4em;
   padding: 10px 12px;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.88em;
@@ -2379,7 +2393,7 @@ button {
 .md .katex-display {
   /* Centered block math with a touch of breathing room. KaTeX defaults to
      margin: 1em 0 which is heavier than the rest of the .md block spacing. */
-  margin: 0.6em 0;
+  margin: 0.4em 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
