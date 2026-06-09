@@ -469,3 +469,5 @@ CLAUDE.md
 .env.local
 .env.*.local
 !.env.example
+
+**/projects_data/**

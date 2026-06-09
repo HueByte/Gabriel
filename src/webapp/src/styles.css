@@ -1524,12 +1524,11 @@ button {
   border-radius: 3px;
 }
 
-/* ---------- Galactic typewriter ---------- */
+/* ---------- Galactic cipher trail ---------- */
 
-.gtw {
-  display: inline;
-}
-
+/* The cipher glyphs at the leading edge of the streaming reveal. StreamingText
+   wraps its untranslated trail in GAL_OPEN/GAL_CLOSE sentinels and
+   remarkInlineEnrichments lifts that slice into a `.gtw-galactic` span. */
 .gtw-galactic {
   /* Palette-driven gradient over the cipher glyphs. Falls back to the static
      accent when no palette is in scope (e.g. login screens). */
@@ -1540,14 +1539,6 @@ button {
   letter-spacing: 0.04em;
   font-feature-settings: "calt" off;
   opacity: 0.95;
-}
-
-.gtw-caret {
-  display: inline-block;
-  margin-left: 1px;
-  color: var(--text-dim);
-  animation: caret-blink 900ms steps(2, end) infinite;
-  transform: translateY(1px);
 }
 
 /* ---------- Sidebar footer (user + logout) ---------- */
