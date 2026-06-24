@@ -18,6 +18,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `calculate` | Math | none | Evaluate an arithmetic expression (precedence, `^`, `%`, functions, constants). |
 | `base_convert` | Numbers | none | Convert a whole number between bases 2-36 (binary/octal/decimal/hex/...). |
 | `base64` | Codecs | none | Encode text to Base64 or decode Base64 to text (UTF-8; standard + URL-safe). |
+| `hash` | Codecs | none | Cryptographic hash digest of text (md5/sha1/sha256/sha512) as lowercase hex. |
 | `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
@@ -218,6 +219,12 @@ Backed by `BigInteger`, so the magnitude is unbounded — a 40-digit hex value c
 Schema: `{ "text": string, "op": "encode" | "decode", "url_safe"?: bool = false }`. No provider dependency, no I/O. Use it to read an encoded token/payload or to encode text for transport, rather than attempting Base64 by hand. Text is UTF-8 throughout.
 
 `encode` is `Convert.ToBase64String` over the UTF-8 bytes; `url_safe=true` swaps `+/` for `-_` and drops `=` padding. `decode` is tolerant — it folds URL-safe characters back, strips whitespace, and restores padding before `Convert.FromBase64String`, so it accepts either alphabet regardless of the flag (the flag only shapes `encode` output). Returns `Encoded: …` or `Decoded: …`. Errors come back as observations: a non-string/empty `text`, an `op` that isn't `encode`/`decode`, or input that isn't valid Base64 on decode. Input capped at 100,000 chars.
+
+### `hash`
+
+Schema: `{ "text": string, "algo"?: "md5" | "sha1" | "sha256" | "sha512" = "sha256" }`. No provider dependency, no I/O. Use it to fingerprint/checksum a string; it's one-way (no inverse — reach for `base64` when you need to get the text back).
+
+Hashes the UTF-8 bytes via the in-box `System.Security.Cryptography` one-shots (`SHA256.HashData` etc.) and returns lowercase hex, prefixed with the algorithm: `sha256: ba78…`. `algo` is case-insensitive and defaults to `sha256`; `md5`/`sha1` are offered for legacy checksums, not security. The empty string is allowed (it has a well-defined digest). Errors come back as observations for a missing/non-string `text` or an unrecognised `algo`. Input capped at 1,000,000 chars.
 
 ### `get_current_time`
 

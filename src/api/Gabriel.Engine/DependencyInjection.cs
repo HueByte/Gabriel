@@ -65,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<ITool, CalculateTool>();
         services.AddScoped<ITool, BaseConvertTool>();
         services.AddScoped<ITool, Base64Tool>();
+        services.AddScoped<ITool, HashTool>();
         services.AddScoped<ITool, WebSearchTool>();
         services.AddScoped<ITool, WebFetchTool>();
         services.AddScoped<ITool, DocsListTool>();
