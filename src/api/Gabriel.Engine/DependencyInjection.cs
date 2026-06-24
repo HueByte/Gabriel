@@ -6,6 +6,7 @@ using Gabriel.Engine.Services;
 using Gabriel.Engine.Tools;
 using Gabriel.Engine.Tools.Docs;
 using Gabriel.Engine.Tools.Calc;
+using Gabriel.Engine.Tools.Codecs;
 using Gabriel.Engine.Tools.Files;
 using Gabriel.Engine.Tools.Memory;
 using Gabriel.Engine.Tools.Numbers;
@@ -63,6 +64,7 @@ public static class DependencyInjection
         services.AddScoped<ITool, GetCurrentTimeTool>();
         services.AddScoped<ITool, CalculateTool>();
         services.AddScoped<ITool, BaseConvertTool>();
+        services.AddScoped<ITool, Base64Tool>();
         services.AddScoped<ITool, WebSearchTool>();
         services.AddScoped<ITool, WebFetchTool>();
         services.AddScoped<ITool, DocsListTool>();

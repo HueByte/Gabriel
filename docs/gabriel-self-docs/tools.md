@@ -17,6 +17,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `get_current_time` | Time | none | UTC ISO-8601 timestamp. |
 | `calculate` | Math | none | Evaluate an arithmetic expression (precedence, `^`, `%`, functions, constants). |
 | `base_convert` | Numbers | none | Convert a whole number between bases 2-36 (binary/octal/decimal/hex/...). |
+| `base64` | Codecs | none | Encode text to Base64 or decode Base64 to text (UTF-8; standard + URL-safe). |
 | `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
@@ -211,6 +212,12 @@ Operators are required between terms — `2*pi`, not `2pi`. Results format frien
 Schema: `{ "value": string, "from_base"?: int = 10, "to_base": int }`. No provider dependency, no I/O. Use it for any base conversion (read a hex value as decimal, turn a binary literal into a number) instead of converting in-head, which is error-prone past a couple of digits.
 
 Backed by `BigInteger`, so the magnitude is unbounded — a 40-digit hex value converts without overflow. Digit alphabet is `0-9` then `A-Z` for values 10-35; both bases must be 2-36. Input is case-insensitive, accepts a leading `-`, and ignores `_` as a grouping separator (so `1_0000_0000` is fine). Whole numbers only — no fractional part. Output echoes the result as `value (base F) = result (base T)`; result letters are uppercase. Bad input comes back as an `Error: …` observation: an out-of-range base, a digit that isn't valid for `from_base` (e.g. `'2'` in base 2, `'G'` in base 16), an empty value, or a bare sign. Input capped at 1000 chars.
+
+### `base64`
+
+Schema: `{ "text": string, "op": "encode" | "decode", "url_safe"?: bool = false }`. No provider dependency, no I/O. Use it to read an encoded token/payload or to encode text for transport, rather than attempting Base64 by hand. Text is UTF-8 throughout.
+
+`encode` is `Convert.ToBase64String` over the UTF-8 bytes; `url_safe=true` swaps `+/` for `-_` and drops `=` padding. `decode` is tolerant — it folds URL-safe characters back, strips whitespace, and restores padding before `Convert.FromBase64String`, so it accepts either alphabet regardless of the flag (the flag only shapes `encode` output). Returns `Encoded: …` or `Decoded: …`. Errors come back as observations: a non-string/empty `text`, an `op` that isn't `encode`/`decode`, or input that isn't valid Base64 on decode. Input capped at 100,000 chars.
 
 ### `get_current_time`
 
