@@ -19,6 +19,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `base_convert` | Numbers | none | Convert a whole number between bases 2-36 (binary/octal/decimal/hex/...). |
 | `base64` | Codecs | none | Encode text to Base64 or decode Base64 to text (UTF-8; standard + URL-safe). |
 | `hash` | Codecs | none | Cryptographic hash digest of text (md5/sha1/sha256/sha512) as lowercase hex. |
+| `text_stats` | Strings | none | Count chars/words/lines/sentences/paragraphs + reading time + rough tokens. |
 | `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
@@ -225,6 +226,12 @@ Schema: `{ "text": string, "op": "encode" | "decode", "url_safe"?: bool = false 
 Schema: `{ "text": string, "algo"?: "md5" | "sha1" | "sha256" | "sha512" = "sha256" }`. No provider dependency, no I/O. Use it to fingerprint/checksum a string; it's one-way (no inverse — reach for `base64` when you need to get the text back).
 
 Hashes the UTF-8 bytes via the in-box `System.Security.Cryptography` one-shots (`SHA256.HashData` etc.) and returns lowercase hex, prefixed with the algorithm: `sha256: ba78…`. `algo` is case-insensitive and defaults to `sha256`; `md5`/`sha1` are offered for legacy checksums, not security. The empty string is allowed (it has a well-defined digest). Errors come back as observations for a missing/non-string `text` or an unrecognised `algo`. Input capped at 1,000,000 chars.
+
+### `text_stats`
+
+Schema: `{ "text": string }`. No provider dependency, no I/O. Use it to answer "how long is this?" about a block of text instead of eyeballing it.
+
+Returns a small block: characters (total and excluding whitespace), words, lines, sentences, paragraphs, reading time, and a rough token estimate. Characters are counted as Unicode scalar values (`EnumerateRunes`), so an emoji or a CJK glyph counts as one — not the two UTF-16 units it occupies. Words are runs of non-whitespace; lines split on normalized newlines; sentences and paragraphs are heuristic (terminator runs `[.!?]` and blank-line breaks respectively, hence "approx") and floor at 1 when there's any text. Reading time assumes 200 wpm; the token estimate is `ceil(chars / 4)`, matching the repo's `NaiveTokenEstimator`. The only error paths are a missing/non-string or empty `text`; input is capped at 1,000,000 chars.
 
 ### `get_current_time`
 

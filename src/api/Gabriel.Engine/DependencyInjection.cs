@@ -11,6 +11,7 @@ using Gabriel.Engine.Tools.Files;
 using Gabriel.Engine.Tools.Memory;
 using Gabriel.Engine.Tools.Numbers;
 using Gabriel.Engine.Tools.Projects;
+using Gabriel.Engine.Tools.Strings;
 using Gabriel.Engine.Tools.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<ITool, BaseConvertTool>();
         services.AddScoped<ITool, Base64Tool>();
         services.AddScoped<ITool, HashTool>();
+        services.AddScoped<ITool, TextStatsTool>();
         services.AddScoped<ITool, WebSearchTool>();
         services.AddScoped<ITool, WebFetchTool>();
         services.AddScoped<ITool, DocsListTool>();
