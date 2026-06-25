@@ -1,20 +1,31 @@
-A precompiled, private static readonly regular expression used to extract the visible snippet text from a DuckDuckGo search result’s HTML block. It targets an anchor element whose class attribute contains the word boundary-encapsulated token result__snippet and captures the element’s inner text into a named group called text. The expression is compiled for performance and uses Singleline so the snippet can span multiple lines, enabling efficient, repeated parsing of search results without recreating the Regex instance.
+# HtmlSnippetRegex
+
+> **File:** `src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs`  
+> **Kind:** field
+
+```csharp
+private static readonly Regex HtmlSnippetRegex = new(
+        @"class=""[^""]*\bresult__snippet\b[^""]*""[^>]*>(?<text>.*?)</a>",
+        RegexOptions.Singleline | RegexOptions.Compiled)
+```
+
+
+This private, precompiled Regex matches the anchor element in DuckDuckGo search result HTML whose class includes result__snippet and captures its inner text as the group 'text'. It is used when the code needs to extract the visible snippet from a page's HTML, avoiding ad hoc string handling and re-compiling the pattern on every call.
 
 ## Remarks
->This symbol centralizes the HTML-snippet extraction logic for DuckDuckGo search results. By caching a compiled pattern, it avoids re-parsing logic scattered across callers and communicates the intent clearly: pull the human-readable snippet from each result’s anchor text. Because it is private and static, the Regex instance is effectively shared across invocations, providing consistent behavior and reduced allocation on repeated parses.
+Centralizes HTML-snippet extraction and improves performance by reusing a single compiled Regex. It is brittle to HTML structure changes; if DuckDuckGo alters their markup or class names, the pattern will likely need updating.
 
 ## Example
 ```csharp
-// Example usage
+// Example usage (within the same class)
 var m = HtmlSnippetRegex.Match(htmlFragment);
 if (m.Success)
 {
     string snippet = m.Groups["text"].Value;
-    // Use snippet as the result summary
 }
 ```
 
 ## Notes
-- The regex relies on DuckDuckGo’s HTML structure (class containing result__snippet); any change to markup or class names may break extraction. Update the pattern if the page structure changes.
-- If you need all snippets from a page, use Regex.Matches instead of a single Match call, and iterate over the collection.
-- Because the Regex is static and compiled, it is safe to reuse across threads for read-only matching, avoiding repeated allocations.
+- Matches a single snippet per input; to process all results, iterate over Matches.
+- The captured text may require decoding HTML entities.
+- The Groups["text"] value may contain leading or trailing whitespace.

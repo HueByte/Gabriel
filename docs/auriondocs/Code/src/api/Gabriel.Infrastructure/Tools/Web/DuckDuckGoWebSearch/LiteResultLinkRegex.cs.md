@@ -1,8 +1,9 @@
-This private, precompiled Regex identifies the light-weight search result entries in the DuckDuckGo Lite HTML response. It matches an anchor tag with class='result-link' and captures the target URL from the href attribute and the displayed title from the anchor's inner text. The pattern is used during Lite endpoint parsing to extract the link and label for each result; named capture groups 'href' and 'text' are consumed downstream to build result items, and the link is passed through UnwrapRedirect when a redirect marker is present (the helper is a no-op otherwise). The Regex is compiled for performance (RegexOptions.Compiled) and uses Singleline to allow the inner text to span lines.
+Represents a precompiled regular expression used by the Lite endpoint parsing to extract result links from the simplified Lite HTML. The pattern matches anchor elements that have an href attribute and the class attribute set to result-link, capturing the URL as href and the displayed text as text. This regex assumes the Lite endpoint's flatter structure where a link is followed (one row down) by a snippet cell; even though such links are not wrapped in /l/?uddg=…, they are still passed through UnwrapRedirect for safety — the helper is a no-op when the marker is absent.
 
 ## Remarks
-Lite endpoint parsing uses a flatter table structure and single-quoted class attributes; this Regex captures exactly that scenario and is intentionally narrow to avoid false positives. Keeping this logic in a single compiled pattern helps readability and performance; if the Lite HTML changes, this symbol will need updating to reflect new markup.
+The Regex is stored as a private static readonly field and is compiled to ensure fast matching in hot paths, avoiding repeated allocations during parsing of multiple Lite results. It focuses narrowly on anchors with class='result-link' so the rest of the HTML is ignored, and it exposes two named capture groups (href and text) that downstream code uses to obtain the destination URL and the link title.
 
 ## Notes
-- Fragility: relies on exact Lite HTML markup (href value in double quotes and class='result-link'); changes in the endpoint’s markup may cause the pattern to fail.
-- Scope: specifically designed for the Lite results path; behavior may differ for other DuckDuckGo result formats.
+- The named capture groups href and text are relied upon by the surrounding parsing logic; renaming them would break the extraction.
+- Compiled Regex trades a small startup cost for faster repeated matches in tight loops.
+- The Lite HTML structure is assumed to remain stable; changes to the anchor shape or class name would require updating the pattern.

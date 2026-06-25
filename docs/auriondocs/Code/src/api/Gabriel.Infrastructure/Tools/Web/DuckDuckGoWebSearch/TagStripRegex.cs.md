@@ -1,8 +1,8 @@
-Precompiled, private Regex that matches simple HTML-like tags (<[^>]+>), used to strip markup from text in a consistent, low-overhead way. The field is static and readonly, so a single compiled instance is reused across the class, avoiding repeated allocations and regex creation during tag stripping.
+TagStripRegex is a precompiled regular expression field used to strip HTML-like tags from text within the DuckDuckGo web search component. The pattern <[^>]+> matches a '<' character, followed by one or more characters that are not '>', and a closing '>', enabling tag removal without incurring runtime regex compilation costs.
 
 ## Remarks
-Centralizes tag-stripping logic to ensure uniform, predictable results wherever HTML markup must be removed. The static readonly, compiled-Regex approach favors performance in hot paths such as sanitizing user input or processing web results, at the cost of relying on a pragmatic tag pattern rather than a full HTML parser. Note that this pattern trims tags but does not interpret or sanitize embedded JavaScript or CSS; use a full HTML sanitizer if those concerns apply.
+TagStripRegex is private, static, and readonly, so a single instance is shared across the class and cannot be reassigned after initialization. This design minimizes allocations and improves performance in hot paths that perform repeated tag stripping against search results. Note that the pattern is intentionally simple and not a full HTML parser; for complex HTML handling, prefer a dedicated parser.
 
 ## Notes
-- It only strips simple tags; it won't handle nested or malformed HTML with the depth and nuance of a real HTML parser.
-- It may over-strip text containing angle brackets used as literals, since <...> is treated as a tag.
+- The regex is simplistic and may not handle edge cases such as comments or CDATA sections, or angle brackets used in non-tag contexts.
+- Because the field is compiled, changes require recompiling the assembly to take effect.

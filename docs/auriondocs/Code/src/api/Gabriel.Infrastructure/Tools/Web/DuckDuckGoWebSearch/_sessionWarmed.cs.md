@@ -1,8 +1,28 @@
-This private boolean flag indicates whether the DuckDuckGo web search session has completed its one-time warm-up. It is used internally to guard initialization logic so that expensive setup steps (such as establishing a session, preloading state, or configuring headers) are performed only once per instance. After warming up, the flag is set to true to allow subsequent operations to reuse the prepared session state without repeating the setup.
+# _sessionWarmed
+
+> **File:** `src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs`  
+> **Kind:** field
+
+```csharp
+private bool _sessionWarmed
+```
+
+
+A private boolean flag that indicates whether the DuckDuckGo web search session has been warmed up. It is used to guard one-time initialization logic so that the expensive warm-up is performed only once per instance, allowing subsequent operations to proceed under the assumption that the session is ready.
 
 ## Remarks
-Encapsulating the warm-up state in this field keeps the initialization flow isolated from public behavior; it prevents repeated initialization and helps keep the object's lifecycle predictable across multiple calls to the search functionality.
+This flag encapsulates the component's lifecycle state, isolating initialization concerns from normal operation. It helps avoid repeated initialization costs and keeps warm-up concerns localized to the class. If the class instance is long-lived and accessed concurrently, consider synchronization to avoid race conditions around first-time warm-up.
+
+## Example
+```csharp
+if (!_sessionWarmed)
+{
+    // perform one-time session warm-up
+    WarmUpSession();
+    _sessionWarmed = true;
+}
+```
 
 ## Notes
-- Default value is false; unless the field is set during construction or warm-up, _sessionWarmed starts as false.
-- Not inherently thread-safe; if the object is used concurrently from multiple threads, reads and writes to this flag may race unless proper synchronization is applied.
+- If multiple threads can reach the warm-up check concurrently, you may need synchronization to ensure the warm-up runs exactly once.
+- Do not rely on this internal flag from outside the class; it represents internal state only and is not part of the public surface area.

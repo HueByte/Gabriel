@@ -1,11 +1,8 @@
-Configures the dependency injection container to compose the model-facing docs lookup from two sources: LocalDocsLookup (primary, reading from disk) and GitHubDocsLookup (fallback, reading from GitHub). This private static AddDocsLookup(IServiceCollection, IConfiguration) is invoked during startup to register the sources, their options, and a CompositeDocsLookup that presents a single IDocsLookup with local-first priority for both ListAsync and ReadAsync.
+Sets up the docs lookup pipeline by registering a composite that prioritizes a local, LLM-native docs source and falls back to GitHub-backed docs. Use this during application startup to enable runtime doc lookups via IDocsLookup with local-first behavior and safe fallback.
 
 ## Remarks
-
-By design, the composite pattern isolates the two sources while presenting a single API to consumers. Local docs are treated as the canonical source; if they are unavailable, the GitHub-backed docs are used as a fallback. The two HttpClients configured here (named ApiHttpClientName and RawHttpClientName) keep concerns separated and make network access configurable. The resulting CompositeDocsLookup enforces the priority order (local first, then remote) and ensures a failing source does not poison the others.
+Encapsulates the wiring in one DI-scoped place so the rest of the app can depend on IDocsLookup without caring about sources. The CompositeDocsLookup enforces priority (local first, then GitHub) and remains resilient if a source is unavailable; a failure in one source does not poison the others. LocalDocsLookup handles disk-stored, developer-authored docs while GitHubDocsLookup provides external, human-prose references, and the two are composed with an ILogger to aid diagnostics.
 
 ## Notes
-
-- The priority order affects both ListAsync and ReadAsync behavior; changing the order changes which source supplies data first and how overlaps are resolved.
-- GitHub token is optional; when provided, Authorization header is included; otherwise only public endpoints are used.
-- If both sources fail to provide a requested doc, there is no data to return; callers should handle missing content gracefully.
+- Local-first primacy; if you need to bypass, adjust the DI wiring to reorder sources.
+- GitHub API usage relies on two named HttpClients (List API and raw content); the token is optional and only sent when provided, enabling access to both public and private docs depending on configuration.

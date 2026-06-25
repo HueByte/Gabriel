@@ -1,16 +1,19 @@
-UnwrapRedirect extracts the final destination from a DuckDuckGo redirect URL. If the input href uses the DDG wrapper /l/?uddg=ENCODED_URL&rut=..., the uddg parameter is URL-decoded to recover the real target. If the wrapper shape is unrecognized (or the uddg value can’t be decoded), the method returns the original href. When the input is protocol-relative (starts with //), it prefixes https: to produce an absolute HTTPS URL. In all cases, the method returns a string representing the best-effort final URL.
+UnwrapRedirect extracts the true navigation target from a DuckDuckGo redirection wrapper. When a URL contains the uddg parameter (as in the /l/?uddg=ENCODED_URL&rut=... form), it decodes the embedded URL and returns it; if the wrapper is not present, it either prefixes https: for protocol-relative URLs (//example.com/...) or returns the original href unchanged. This helper is useful anytime you normalize or follow external links that may have been wrapped by a search proxy rather than using the literal href.
 
 ## Remarks
-UnwrapRedirect centralizes the logic for normalizing external links produced by DuckDuckGo redirects, enabling downstream code to work with stable, direct URLs. It is defensive: on unexpected inputs or decoding failures, it falls back to returning the original href rather than throwing. The helper is private static, indicating it’s an internal utility used where link normalization is needed within its class.
+By isolating this logic, the code centralizes the handling of DuckDuckGo's redirect wrapper, making link normalization safer wherever the application processes results from search pages. It also gracefully handles uncommon shapes of the wrapper and decoding failures by returning the original href, avoiding exceptions in the caller. This method assumes the use of a simple uddg wrapper and does not attempt to validate the decoded URL beyond decoding it.
 
 ## Example
 ```csharp
-// Common case: unwrap a DDG redirect to the final URL
-string target = UnwrapRedirect("https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fpage");
-// target == "https://example.com/page"
+// Common case: a DuckDuckGo redirect URL that wraps the real target
+var wrapped = "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fpage%3Fq%3Dtest&rut=...";
+var real = UnwrapRedirect(wrapped);
+// real == "https://example.org/page?q=test"
+
+// If there is no uddg parameter, the raw href is returned (or https: prefix is added for protocol-relative URLs)
 ```
 
 ## Notes
-- Only unwraps the uddg parameter when the DDG wrapper is present; other redirect formats are left intact.
-- If decoding fails (e.g., malformed percent-encoding), the original href is returned.
-- Protocol-relative URLs (starting with //) are normalized to HTTPS by prefixing https:.
+- Decoding errors are swallowed; if Uri.UnescapeDataString throws, the original href is returned.
+- If href starts with "//" and there is no uddg, the URL is prefixed with https:
+- Only the first occurrence of uddg is considered; subsequent occurrences are ignored.
