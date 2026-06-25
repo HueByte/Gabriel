@@ -1,0 +1,11 @@
+DependencyInjection_overview is a static helper that centralizes infrastructure wiring for Gabriel.Infrastructure. It provides startup extension methods that register storage, HTTP fetch, and web search components into the DI container, guided by configuration. By encapsulating provider selection, HttpClient setup, and instrumentation, it lets callers depend on abstractions like IWebSearch and IMetricRecorder without needing to know which concrete implementations are active.
+
+## Remarks
+DependencyInjection_overview acts as the DI bootstrap for infrastructure concerns. It decouples wiring from business logic and enables environment- or config-driven substitution of concrete implementations (e.g., different web search providers or storage backends). Instrumentation wrappers (e.g., InstrumentedWebSearch) and a composite pattern ensure per-provider diagnostics remain observable even when multiple providers are used.
+
+In addition to wiring, the class coordinates three core concerns: (1) infrastructure storage setup via AddInfrastructure, (2) HTTP fetch configuration via AddWebFetch, and (3) web search wiring via AddWebSearch. The web-search path supports both a single-provider shortcut and a multi-provider, merged path, with per-provider metrics collected through decorators and a fallback to a default provider when configuration is incomplete.
+
+## Notes
+- Fallback behavior: if no recognized web-search providers are configured, the system falls back to DuckDuckGo (DDG) to keep web search functional. Typos in the active provider list are ignored rather than causing a crash. 
+- Provider/session handling: the DuckDuckGoWebSearch wiring relies on a long-lived HttpClient with a persistent CookieContainer to maintain session state across requests, improving warm-up and reducing first-request anomalies. Adjustments to UA, headers, or cookie strategy should consider the impact on privacy and site terms of use. 
+- Instrumentation & diagnostics: per-provider calls are wrapped to emit metrics, enabling the diagnostics endpoint to report on individual provider health even when a composite merge is used. This binding requires the presence of IMetricRecorder/IMetricRepository infrastructure in the DI graph.

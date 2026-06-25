@@ -1,0 +1,8 @@
+BraveWebSearch is a sealed, DI-friendly implementation of IWebSearch that wires Brave Search into the generic search surface. It relies on an IHttpClientFactory to obtain a pre-configured HttpClient named BraveSearch, BraveSearchOptions for configuration values, and an ILogger for diagnostics. Upon SearchAsync, it requires the Brave API key to be configured; if not, it throws InvalidOperationException with a message guiding how to set Tools:Web:Brave:ApiKey. It constructs and sends a GET request to the Brave Search API at the /search endpoint with the provided query and a bounded count, and handles non-success responses by logging a warning with the response body and throwing HttpRequestException. When successful, it deserializes the payload into a minimal BraveSearchResponse shape, pulls payload.Web?.Results, and maps each BraveResult into a WebSearchResult using Title, Url, and Description as the Snippet. By using private records for the Brave-specific payload, the class stays focused on translating Brave results into the generic WebSearchResult type.
+
+## Remarks
+BraveWebSearch acts as the Brave provider behind the IWebSearch abstraction, allowing callers to remain unaware of provider-specific details. It centralizes API-key validation, request construction, and JSON transformation, while delegating HttpClient lifecycle and configuration to DI. The private record types help keep the Brave payload shape isolated and easily testable.
+
+## Notes
+- If the Brave API response omits expected fields, the implementation returns an empty result list instead of throwing.
+- The limit is clamped to 1–10 to guard against accidental or malicious requests.

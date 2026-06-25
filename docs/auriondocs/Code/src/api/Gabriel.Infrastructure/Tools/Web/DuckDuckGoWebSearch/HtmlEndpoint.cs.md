@@ -1,0 +1,4 @@
+HtmlEndpoint is a private constant that holds the absolute URL to DuckDuckGo's HTML search results endpoint. It is used by the web search logic to request the rich HTML output, ensuring the request hits the HTML host regardless of the HttpClient's configured BaseAddress.
+
+## Remarks
+This field encapsulates the endpoint for the primary HTML render of DuckDuckGo search results. It decouples request formation from the HttpClient base address and from the lite endpoint, reducing the chance of accidentally targeting the lite service when a base address is set differently. Centralizing the URL in a private constant simplifies future changes to the host or path and keeps the HTML and lite concerns clearly separated.
