@@ -1,0 +1,9 @@
+Bootstraps the app's infrastructure by wiring EF Core, repositories, and ancillary providers into the DI container. Call this during startup to centralize persistence and infrastructure concerns behind interfaces; it configures AppDbContext with SQLite using the Default connection string from configuration (falling back to a local SQLite file Data Source=gabriel.db), registers core repositories (IUnitOfWork, IConversationRepository, IProjectRepository, IMemoryRepository, IMetricRepository), binds project-file storage via ProjectFilesOptions and DiskProjectFileService, and wires additional providers such as chat, web search, web fetch, and docs lookup for use across the application.
+
+## Remarks
+By consolidating infrastructure registrations here, callers depend only on interfaces, enabling easier testing and swapping implementations. The ProjectFilesOptions binding and the DiskProjectFileService registration establish a disk-backed storage strategy for project files (Phase 8), ensuring a consistent path derived from the configured root and project IDs. The method also centralizes optional provider wiring, so cross-cutting concerns are configured in one place rather than scattered across startup code.
+
+## Notes
+- Production environments should supply a real database connection string; the fallback is intended for development only.
+- Disk-based project file storage writes to disk; ensure the application has write permissions to the configured root path.
+- If the ProjectFilesOptions section is missing, defaults are used; ensure necessary config is present if you rely on disk storage.
