@@ -1,30 +1,30 @@
-This public constant contains the identifier used to configure and retrieve the HttpClient instance dedicated to the DuckDuckGo search workflow. Developers should reference HttpClientName when registering a named HttpClient with IHttpClientFactory and when obtaining that client, rather than scattering the literal string across the codebase. This centralizes the client configuration and reduces the risk of typos or mismatched names.
+HttpClientName defines the canonical name used when registering and obtaining a named HttpClient for the DuckDuckGo web search integration. Use this constant to avoid hard-coded strings and keep all HttpClientFactory registrations and lookups in sync.
 
 ## Remarks
-This name acts as a contract between DI configuration and its consumers. It enables swapping the underlying HttpClient configuration (for example, to point to a mock or test server) without changing call sites. It also makes tests easier by allowing controlled substitution of the named client.
+This constant centralizes the client name so that multiple parts of the application don't drift apart in their DI usage. It aligns with the HttpClientFactory pattern and improves testability by making the dependency explicit and reusable across registration and consumption sites.
 
 ## Example
 ```csharp
-// Registration
-services.AddHttpClient(HttpClientName, client =>
-{
-    client.BaseAddress = new Uri("https://duckduckgo.com/");
-    // additional defaults (headers, timeouts, etc.)
+// Register a named HttpClient for DuckDuckGo-related calls
+services.AddHttpClient(HttpClientName, client => {
+    client.BaseAddress = new Uri("https://api.duckduckgo.com/");
+    // configure defaults (headers, timeouts, etc.) as needed
 });
 
-// Consumption
-public class DuckDuckGoService
+// Consume the named client via IHttpClientFactory
+public class DuckDuckGoSearcher
 {
     private readonly HttpClient _httpClient;
-    public DuckDuckGoService(IHttpClientFactory httpClientFactory)
+
+    public DuckDuckGoSearcher(IHttpClientFactory httpClientFactory)
     {
         _httpClient = httpClientFactory.CreateClient(HttpClientName);
     }
 
-    // use _httpClient for requests
+    // Use _httpClient to perform requests
 }
 ```
 
 ## Notes
-- Reference HttpClientName rather than the literal string to avoid typos; renaming the constant will propagate automatically.
-- Ensure the registration and usage both rely on the same HttpClientName; a mismatch would result in a missing client at runtime.
+- This is a compile-time constant; changing its value requires recompiling all referencing code.
+- Ensure consistent use of HttpClientName in both AddHttpClient registrations and CreateClient calls to avoid runtime misconfigurations.

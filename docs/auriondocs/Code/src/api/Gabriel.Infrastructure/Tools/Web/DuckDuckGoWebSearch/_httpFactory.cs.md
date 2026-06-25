@@ -1,8 +1,10 @@
-Holds the IHttpClientFactory used to create HttpClient instances for outbound HTTP calls (e.g., DuckDuckGo web search requests). Injected via DI and assigned once in the constructor, it lets you obtain configured HttpClient instances on demand (via CreateClient) rather than constructing HttpClient directly.
+This field holds a reference to the IHttpClientFactory used to create HttpClient instances for outbound HTTP calls made by this class. It is private and readonly, set once in the constructor and never reassigned, which makes HTTP client creation predictable and easier to reason about in tests. In the DuckDuckGoWebSearch workflow, the factory is used to obtain configured HttpClient instances rather than instantiating HttpClient directly.
 
 ## Remarks
-By abstracting HttpClient creation behind IHttpClientFactory, this field centralizes HTTP configuration, lifetimes, and resilience policies, reducing socket exhaustion and fragmentation. It also improves testability by allowing tests to inject a mock or stub factory that supplies controllable clients. When using multiple external endpoints, you can configure named clients (for example, 'DuckDuckGo') so each client carries tailored timeouts and base addresses without duplicating configuration at the call sites.
+
+HttpClientFactory centralizes HttpClient lifetimes, configuration, and resilience policies, reducing socket exhaustion and enabling named or typed clients. Keeping a factory reference in this field helps decouple HTTP concerns from business logic and makes the class easier to test by allowing injection of different client configurations or mocks.
 
 ## Notes
-- Do not hold onto HttpClient instances created by the factory; obtain a client per operation via _httpFactory.CreateClient(...) and dispose when appropriate.
-- Ensure HttpClientFactory is properly configured in DI (named or default client) so that CreateClient returns a correctly configured HttpClient.
+
+- Always obtain HttpClient via _httpFactory.CreateClient(...) instead of new HttpClient(...) to ensure proper pooling and lifetime management.
+- Prefer named or typed clients to reuse configuration; dispose of the returned HttpClient when finished with the operation.

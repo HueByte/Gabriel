@@ -1,9 +1,9 @@
-This private, nullable string field caches the User-Agent header used by the DuckDuckGo web search component during a session. It backs the header construction for HTTP requests, ensuring consistent identity across calls within the same session. It may be null if the session has not yet initialized a user agent; in that case, a default user agent is typically used.
+Stores the User-Agent string for the current session. The field is nullable to indicate that it may not be initialized yet and will be populated lazily when first needed. By caching the User-Agent, subsequent HTTP requests made by the DuckDuckGo web search functionality can reuse the same header, avoiding repeated computation or retrieval.
 
 ## Remarks
-Having a dedicated session User-Agent field centralizes header management and makes testing easier by allowing controlled injection of a known user agent. It also isolates the header value from the rest of the request-building logic, reducing duplication across HTTP request construction.
+This field implements a lazy-cache pattern: compute or obtain the User-Agent once and reuse it for the lifetime of the owning object. It helps ensure consistent request headers and reduces overhead compared to recomputing the UA for every request. If the instance may be accessed from multiple threads, ensure that initialization is thread-safe to prevent race conditions.
 
 ## Notes
-- Nullable: be prepared for null and provide a default or initialization path before issuing requests.
-- As an instance field, ensure thread-safety assumptions align with how the class is used; concurrent mutations may require synchronization or a single-threaded usage pattern.
-- Do not rely on this field being initialized by external callers since it is private.
+- Nullability: the value may be null; code that reads it should either initialize it first or handle nulls gracefully.
+- Thread-safety: lazy initialization, if used, should be synchronized to avoid race conditions.
+- Mutability: changing the value after initial assignment can lead to inconsistent behavior across requests; prefer a single initialization point.

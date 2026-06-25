@@ -1,1 +1,11 @@
-DetectAnomalyPage checks a raw HTML response for known anti-bot or CAPTCHA markers and returns true when such an anomaly page is detected, allowing the caller to fall back to an alternate endpoint or surface a diagnostic instead of treating the response as a normal result.\n\n## Remarks\nBy centralizing detection of multiple marker variants (anomaly_modal, anomaly-modal, anomaly.js, the Cloudflare \"Just a moment\" interstitial, cf-mitigated, cf-browser-verification, and __cf_chl_), this helper unifies the anti-bot-page detection logic. It uses StringComparison.Ordinal to perform exact, case-sensitive matching for performance and predictability, ensuring callers can reliably distinguish anomaly pages from real results. This abstraction reduces duplication and makes it easier to adapt to new pages by updating a single location.\n\n## Notes\n- Case-sensitive matching means variations in HTML casing could cause a miss.\n- Markers are heuristic and can become outdated as anti-bot pages evolve; update the code to include new markers as needed.
+Determin es whether a given HTML response is an anomaly page produced by bot-blocking services (such as Cloudflare interstitials) by searching for a curated set of markers. Callers can use this to surface a diagnostic or fall back to a sibling endpoint instead of treating the page as a normal result.
+
+## Remarks
+
+This predicate centralizes the detection logic for anti-bot / blocking pages, consolidating several brittle string checks into a single, reusable gate. It relies on ordinal (case-sensitive) string comparisons, minimizing culture-related surprises but making the checks sensitive to exact page fragments; updates may be needed if providers change their markers.
+
+## Notes
+
+- Null input will cause an exception; ensure the html argument is non-null before invoking.
+- Marker set may become outdated as anti-bot providers evolve—update the list of strings as needed.
+- This approach uses simple substring checks and may yield false positives or negatives on obfuscated or minified content; a more robust parser could improve reliability.

@@ -1,9 +1,14 @@
-Private constant that holds the DuckDuckGo homepage URL used by the web search logic to assemble requests. A developer would update this single value rather than changing multiple string literals spread through the class.
+Stores the canonical DuckDuckGo homepage URL as a private, compile-time constant used by the DuckDuckGoWebSearch implementation. By centralizing the endpoint in a single, immutable value, it avoids string duplication and typos when constructing requests or navigation logic inside the class.
 
 ## Remarks
-Centralizing the URL reduces duplication and the risk of inconsistent endpoints across request-building code. Because it is private, the detail remains an implementation concern, keeping the public API clean and ensuring callers cannot depend on the internal URL. The const nature also communicates that this value is fundamental to the class behavior and should remain unchanged at runtime.
+Private constants like this act as a small, self-contained configuration detail that the class relies on to form complete requests to the DuckDuckGo homepage. It helps keep the code readable by giving a named, obvious endpoint instead of scattering the literal URL across methods.
+
+## Example
+```csharp
+// Example: using the constant to create a request to the homepage
+var request = new HttpRequestMessage(HttpMethod.Get, Homepage);
+```
 
 ## Notes
-- Being const means the value is baked into the assembly; changing it requires recompiling the code that uses it.
-- If you ever need environment-specific endpoints, replace this with a configurable value rather than a const.
-- As it's private, external tests can't reference the value directly; validate behavior via public methods instead.
+- This value is baked into the consuming assembly; changing it requires recompilation of dependents.
+- Being private means external code cannot reference it directly; if you need sharing or testing access, consider exposing an internal or public accessor or injecting the value via configuration.

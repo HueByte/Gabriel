@@ -1,19 +1,9 @@
-HtmlTitleLinkRegex is a private static readonly Regex that encapsulates the HTML pattern used to locate the title link elements in DuckDuckGo search results. It matches anchor tags whose class attribute includes the word result__a, and it captures the link href and the displayed text into named groups href and text. The regex is compiled for performance and uses Singleline so the dot in the text portion can span newline characters; being static readonly ensures a single, immutable instance is reused.
+This private static readonly Regex consolidates the HTML pattern used to extract DuckDuckGo search result title links from the HTML returned by the search page. The pattern matches an anchor tag whose class contains result__a and captures two pieces of data: the destination URL from the href attribute (named group href) and the visible link text (named group text). The Regex is constructed with Singleline and Compiled options to perform a fast, shared parsing operation across the class.
 
 ## Remarks
-HtmlTitleLinkRegex centralizes the HTML-specific parsing pattern inside the DuckDuckGoWebSearch helper, reducing duplication and limiting the impact of HTML changes to a single place. The named groups href and text provide a stable extraction contract for downstream processing. The combination of Compiled and Singleline flags yields fast, one-time initialization and efficient scanning of multiple results.
-
-## Example
-```csharp
-// Inside the same class that defines HtmlTitleLinkRegex
-foreach (Match m in HtmlTitleLinkRegex.Matches(htmlFragment))
-{
-    string href = m.Groups["href"].Value;
-    string title = m.Groups["text"].Value;
-    // Process the extracted link and its displayed text
-}
-```
+Centralizes the knowledge of DuckDuckGo's result link markup in one place, enabling consistent extraction without duplicating the regex across methods. Because the HTML structure of search results can change, this implementation should be accompanied by tests and simple fallback handling if the pattern no longer matches.
 
 ## Notes
-- The pattern depends on DuckDuckGo's HTML structure; a markup change can break it.
-- Since the field is private, external callers should use the class's public API rather than attempting to reuse this Regex directly.
+- This regex assumes the presence of an href attribute and a non-empty link text; if the HTML deviates, matches may fail.
+- RegexOptions.Singleline makes the dot match newlines; ensure that HTML with line breaks doesn't break the pattern.
+- The static readonly instance is thread-safe for concurrent use after initialization and should not be replaced at runtime.

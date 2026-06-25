@@ -1,14 +1,14 @@
-Provides a strongly-typed, per-class logger for the DuckDuckGoWebSearch component. This private readonly field allows the class to emit diagnostic messages, tracing, and errors with a category tied to the DuckDuckGoWebSearch type, enabling easy filtration and correlation across logs. Typically injected via the application's DI container, the instance is assigned once in the constructor and then reused for the lifetime of the object to maintain consistent logging context.
+The _logger field is a strongly-typed logger for the DuckDuckGoWebSearch class. It enables emitting structured log messages that provide observability into DuckDuckGoWebSearch operations, such as initiating requests or handling responses; the field being private and readonly signals that logging is an intrinsic, unchanging part of the class's behavior, typically wired in via constructor dependency injection.
 
 ## Remarks
-ILogger<DuckDuckGoWebSearch> is a DI-provided logger; the generic type parameter yields a category named after the class, which helps filter logs per component and adds contextual structure to messages. This field is private and readonly to guarantee a stable logging context throughout the object's lifetime.
+ILogger<T> usage ties logs to the concrete class, which helps filter and correlate messages in diagnostics tools. By using dependency injection and a private readonly field, the class can emit meaningful diagnostics without introducing tight coupling to a concrete logging implementation. This abstraction supports testability, as a test can substitute a mock or in-memory logger to verify log emissions. It also encourages consistent logging practices across the codebase when used as a pattern for similar components.
 
 ## Example
 ```csharp
-_logger.LogInformation("Starting web search for query: {Query}", query);
+_logger.LogInformation("Fetching results from DuckDuckGo for query '{Query}'", query);
 ```
 
 ## Notes
-- Do not log sensitive user data (credentials, tokens, or personal information).
-- Avoid excessive logging in performance-critical paths; prefer lower log levels or guard verbose logs with appropriate checks.
-- If the class is renamed, the logger category changes accordingly; update tests or mocks that rely on the category name.
+- Do not log sensitive user data or credentials; apply redaction if needed.
+- Keep log messages lightweight and avoid expensive computations in message formatting.
+- Use appropriate log levels (Information, Warning, Error) to reflect the significance of events.

@@ -1,9 +1,9 @@
-Ensures the DuckDuckGo session is initialized by performing a lightweight GET to the homepage to obtain cookies and establish a stable User-Agent for subsequent requests. It runs once per session and uses a lock to prevent concurrent warm-ups; cookies from this request are scoped to .duckduckgo.com and apply to both html.* and lite.* subdomains.
+Ensures a DuckDuckGo session is established by performing a one-time GET to the homepage for the current session. The method acts as a lazy initializer: on the first call it acquires a lock, selects a stable User-Agent from the pool, sends a request to the homepage, and relies on the CookieContainer to capture session cookies. The body of the response is ignored; cookies set by the round trip are the signal that the session is ready for subsequent searches across html.* and lite.* subdomains. If the warm-up fails due to non-cancelled exceptions, the failure is logged but the actual search proceeds without the cookies; the session is marked as warmed to avoid repeated attempts.
 
 ## Remarks
-The method encapsulates a session warming step that prepares cookies and a consistent User-Agent for subsequent requests, mirroring a browser's initial navigation to the site. It is deliberately best-effort and idempotent; if the warm-up fails (other than cancellation), the real search will still be attempted, but without homepage cookies, and a warning is logged. The lock-guarded, one-time nature ensures only a single warm-up occurs per session, avoiding redundant round-trips when multiple callers race to initialize.
+The method centralizes the initial navigation effects (cookies, UA) so that subsequent search requests can assume a ready session. It helps mimic a real browser startup to reduce heuristics detection and keeps the one-time side effects isolated from higher-level search logic. The concurrency guard guarantees a single initialization per session even under concurrent invocations.
 
 ## Notes
-- Cancellation propagates: OperationCanceledException is not swallowed, so cancellation during warm-up will propagate to the caller.
-- No guarantee of cookies: if a non-cancellation failure occurs, cookies may not be established, but the actual search request will still be issued.
-- One-time per session: after the initial successful run, subsequent invocations return immediately thanks to _sessionWarmed.
+- Warm-up is best-effort: non-cancelled failures are swallowed after logging and do not abort the subsequent search.
+- Cookies collected during this round-trip are scoped to .duckduckgo.com and apply automatically to both html.* and lite.* subdomains via the CookieContainer.
+- A single initialization per session is enforced by the combination of the _sessionWarmed flag and the _sessionLock.

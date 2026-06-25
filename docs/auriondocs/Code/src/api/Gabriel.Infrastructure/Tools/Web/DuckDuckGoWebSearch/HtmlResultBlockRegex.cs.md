@@ -1,8 +1,17 @@
-HtmlResultBlockRegex is a private, static readonly Regex used to locate and capture the inner HTML of each search result block in the HTML returned by the DuckDuckGo web search endpoint. It matches a <div> element whose class attribute contains the word result and exposes the block content via the named capture group body, enabling the parser to enumerate titles, snippets, and URLs without re-parsing the full HTML.
+HtmlResultBlockRegex is a private, static Regex used to extract individual result blocks from the HTML endpoint response. It matches a div whose class contains the word 'result' and captures its inner content as the named group 'body', stopping before the next result block, the bottom spacing marker, or end-of-content.
 
 ## Remarks
-HtmlResultBlockRegex centralizes the HTML parsing logic for DuckDuckGo results. By keeping the pattern in one private field, changes to the server-side markup require updating only this location. The use of a compiled, singleline regex improves startup cost and per-match performance, and the named group body provides a stable handle for downstream extraction; if the server HTML changes such that no results can be matched, the caller will observe zero results and fall back to lite.
+Centralizes the HTML parsing pattern for search results behind a single, reusable symbol, reducing duplication and making future HTML structure changes easier to accommodate. The pattern uses Singleline and RegexOptions.Compiled to balance correctness across multi-line HTML and runtime performance. The accompanying comment notes a graceful fallback to zero results if the server surface changes, which guides callers to handle missing matches without crashing.
+
+## Example
+```csharp
+foreach (Match m in HtmlResultBlockRegex.Matches(html))
+{    
+    string body = m.Groups["body"].Value;
+    // Process blockHtml here
+}
+```
 
 ## Notes
-- Changes to the HTML structure (e.g., the removal or renaming of the result container) may cause this regex to fail to match any results.
-- Because HtmlResultBlockRegex is private, it cannot be reused directly from other classes; if reuse is needed, expose a proper API or encapsulate parsing logic accordingly.
+- The regex relies on the presence of a class containing the word 'result' in the HTML; if the markup changes (e.g., different class names or casing), the matches may be lost.
+- Because the field is static readonly and compiled, it initializes once per AppDomain and requires recompilation to reflect changes; consider dependencies on this behavior when evaluating hot-reload scenarios.
