@@ -21,6 +21,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `hash` | Codecs | none | Cryptographic hash digest of text (md5/sha1/sha256/sha512) as lowercase hex. |
 | `text_stats` | Strings | none | Count chars/words/lines/sentences/paragraphs + reading time + rough tokens. |
 | `text_transform` | Strings | none | Reshape text case/form (upper/lower/title/snake/camel/pascal/kebab/slug/trim). |
+| `json_format` | Data | none | Validate, pretty-print, or minify JSON (reports error location if invalid). |
 | `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
@@ -239,6 +240,12 @@ Returns a small block: characters (total and excluding whitespace), words, lines
 Schema: `{ "text": string, "op": "upper" | "lower" | "title" | "sentence" | "snake" | "camel" | "pascal" | "kebab" | "slug" | "trim" }`. No provider dependency, no I/O. Use it to reshape an identifier or label between conventions; returns the transformed text bare (no label).
 
 The programmer-case ops (`snake`/`camel`/`pascal`/`kebab`) share one word tokenizer: separators (`[^\p{L}\p{N}]`) break words, and so do camelCase humps and acronym seams (`HTMLParser userID` → `HTML Parser user ID` → `html_parser_user_id`). `upper`/`lower` are invariant-culture; `title` lowercases then title-cases; `sentence` lowercases then capitalizes the first letter; `trim` trims the ends and collapses internal whitespace runs to one space. `slug` is ASCII-only — it lowercases and replaces every non-`[a-z0-9]` run with a hyphen, dropping accented/non-Latin characters (e.g. `Héllo Wörld!` → `h-llo-w-rld`); the other ops preserve Unicode letters. Errors come back as observations for a missing/empty `text` or an unrecognised `op`; input capped at 100,000 chars.
+
+### `json_format`
+
+Schema: `{ "json": string, "mode"?: "pretty" | "minify" | "validate" = "pretty" }`. No provider dependency, no I/O. Use it to make JSON readable, compact it, or confirm a string parses.
+
+Parses with `JsonDocument`, then re-serialises: `pretty` (2-space indent), `minify` (one line), or `validate` (returns `Valid JSON (<kind>).` where kind is the root's `object`/`array`/`string`/…). Re-serialisation uses relaxed escaping (`UnsafeRelaxedJsonEscaping`), so Unicode and `< > &` stay literal rather than `\uXXXX` — output is for reading, not HTML embedding. When the payload doesn't parse, the observation pinpoints the spot: `Error: invalid JSON at line L, position P.` (the `JsonException` line/byte position, surfaced 1-based). Tool-argument problems (missing/empty `json`, bad `mode`) get their own observation. Input capped at 500,000 chars.
 
 ### `get_current_time`
 
