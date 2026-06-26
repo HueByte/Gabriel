@@ -20,6 +20,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `base64` | Codecs | none | Encode text to Base64 or decode Base64 to text (UTF-8; standard + URL-safe). |
 | `hash` | Codecs | none | Cryptographic hash digest of text (md5/sha1/sha256/sha512) as lowercase hex. |
 | `text_stats` | Strings | none | Count chars/words/lines/sentences/paragraphs + reading time + rough tokens. |
+| `text_transform` | Strings | none | Reshape text case/form (upper/lower/title/snake/camel/pascal/kebab/slug/trim). |
 | `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
@@ -232,6 +233,12 @@ Hashes the UTF-8 bytes via the in-box `System.Security.Cryptography` one-shots (
 Schema: `{ "text": string }`. No provider dependency, no I/O. Use it to answer "how long is this?" about a block of text instead of eyeballing it.
 
 Returns a small block: characters (total and excluding whitespace), words, lines, sentences, paragraphs, reading time, and a rough token estimate. Characters are counted as Unicode scalar values (`EnumerateRunes`), so an emoji or a CJK glyph counts as one — not the two UTF-16 units it occupies. Words are runs of non-whitespace; lines split on normalized newlines; sentences and paragraphs are heuristic (terminator runs `[.!?]` and blank-line breaks respectively, hence "approx") and floor at 1 when there's any text. Reading time assumes 200 wpm; the token estimate is `ceil(chars / 4)`, matching the repo's `NaiveTokenEstimator`. The only error paths are a missing/non-string or empty `text`; input is capped at 1,000,000 chars.
+
+### `text_transform`
+
+Schema: `{ "text": string, "op": "upper" | "lower" | "title" | "sentence" | "snake" | "camel" | "pascal" | "kebab" | "slug" | "trim" }`. No provider dependency, no I/O. Use it to reshape an identifier or label between conventions; returns the transformed text bare (no label).
+
+The programmer-case ops (`snake`/`camel`/`pascal`/`kebab`) share one word tokenizer: separators (`[^\p{L}\p{N}]`) break words, and so do camelCase humps and acronym seams (`HTMLParser userID` → `HTML Parser user ID` → `html_parser_user_id`). `upper`/`lower` are invariant-culture; `title` lowercases then title-cases; `sentence` lowercases then capitalizes the first letter; `trim` trims the ends and collapses internal whitespace runs to one space. `slug` is ASCII-only — it lowercases and replaces every non-`[a-z0-9]` run with a hyphen, dropping accented/non-Latin characters (e.g. `Héllo Wörld!` → `h-llo-w-rld`); the other ops preserve Unicode letters. Errors come back as observations for a missing/empty `text` or an unrecognised `op`; input capped at 100,000 chars.
 
 ### `get_current_time`
 
