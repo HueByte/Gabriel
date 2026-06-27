@@ -1,0 +1,9 @@
+A lightweight, no-API-key IWebSearch implementation that queries DuckDuckGo's public HTML endpoints. It prefers the richer html endpoint for snippets and metadata and falls back to the smaller lite endpoint if the primary response yields no parseable results; the component also pre-warms a session (cookies + a chosen browser User-Agent) to reduce bot-detection and anomaly pages.
+
+## Remarks
+This class exists to provide an out-of-the-box web-search backend that requires no API key or quota management. It intentionally trades the reliability guarantees of a paid API for zero-configuration availability: parsing is forgiving and regex-driven so failures produce an empty result set rather than throwing, and a session-level User-Agent (selected from a small pool) is held for the duration of the session to avoid per-request fingerprint noise. The implementation uses a short semaphore-guarded warmup step to populate the HttpClientHandler's CookieContainer and avoid duplicate concurrent warmups, and it targets absolute endpoint URLs so the html/ and lite/ hosts are hit explicitly.
+
+## Notes
+- Parsing failures are treated as "no results" rather than exceptions; callers should handle empty result sets as a possible normal outcome.
+- The chosen User-Agent is fixed for a session and only changes when the session is reset (e.g., after anomaly detection); the class does not rotate UAs per request.
+- The implementation attempts html/ first and only falls back to lite/ when the primary parse yields zero results; this fallback is deliberate to reduce false negatives when DDG serves an anomaly or rate-limited page on the richer endpoint.

@@ -1,0 +1,9 @@
+Configures an HttpStandardResilienceOptions instance for long-lived Grok SSE (server-sent events) chat streams by aligning the attempt and total timeouts and widening the circuit-breaker sampling window. Use this during dependency-injection or resilience pipeline setup when the default short per-attempt timeouts would prematurely terminate an in-progress stream; the caller typically supplies totalTimeout from Providers:Grok:TimeoutSeconds.
+
+## Remarks
+This method intentionally sets both AttemptTimeout and TotalRequestTimeout to the same provided totalTimeout so an individual attempt is allowed to run for the full request duration (common for streaming scenarios where tokens arrive over time). It also increases CircuitBreaker.SamplingDuration to twice the total timeout to satisfy the framework validation rule that sampling duration be at least twice the attempt timeout and to make circuit-breaker decisions meaningful over the longer streaming period. Retries are not modified here — they remain useful for failures that occur before the response stream begins but will not apply once streaming has started.
+
+## Notes
+- The method mutates the supplied HttpStandardResilienceOptions (opts) in place rather than returning a new instance.
+- Setting AttemptTimeout equal to TotalRequestTimeout means per-attempt time limits will not abort an active stream early; ensure this is desirable for your scenario.
+- The code computes the doubled sampling window using TimeSpan.FromTicks(totalTimeout.Ticks * 2); if totalTimeout is very large this multiplication could overflow — validate input bounds if callers might supply extreme values.

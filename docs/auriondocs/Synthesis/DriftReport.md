@@ -1,16 +1,16 @@
 # Drift Report — HueByte/Gabriel
 
-> 7 stale, 15 ambiguous, 234 ok since commit `4c9e5f5`.
+> 6 stale, 15 ambiguous, 232 ok since commit `36335bf`.
 
-**Drift score:** ![clean (2.7%)](https://img.shields.io/badge/drift-2.7%2525%20clean-brightgreen)
+**Drift score:** ![clean (2.4%)](https://img.shields.io/badge/drift-2.4%2525%20clean-brightgreen)
 
 | Status | Count |
 | --- | ---: |
 | 🔴 Broken | 0 |
-| 🟡 Stale | 7 |
+| 🟡 Stale | 6 |
 | 🟠 Ambiguous | 15 |
-| 🟢 OK | 234 |
-| **Total** | **256** |
+| 🟢 OK | 232 |
+| **Total** | **253** |
 
 ## Broken (0)
 
@@ -18,17 +18,16 @@ Docs that reference symbols the merge deleted. These must be regenerated or remo
 
 *None.*
 
-## Stale (7)
+## Stale (6)
 
 Docs whose underlying symbols changed in this merge. Targeted regeneration is in flight.
 
-- [`dependency-injection-and-composition.md`](../Code/dependency-injection-and-composition.md.md) — References 2 modified symbol(s)
 - [`src/api/Gabriel.Engine/DependencyInjection.cs`](../Code/src/api/Gabriel.Engine/DependencyInjection.cs.md) — References 1 modified symbol(s)
 - [`src/api/Gabriel.Infrastructure/DependencyInjection.cs`](../Code/src/api/Gabriel.Infrastructure/DependencyInjection.cs.md) — References 1 modified symbol(s)
 - [`src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs.md) — References 1 modified symbol(s)
 - [`src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs`](../Code/src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs.md) — References 1 modified symbol(s)
 - [`src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs.md) — References 1 modified symbol(s)
-- [`src/api/Gabriel.Engine/Tools/Calc/CalculateTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Calc/CalculateTool.cs.md) — New file — needs initial documentation
+- [`src/api/Gabriel.Engine/Tools/Codecs/Base64Tool.cs`](../Code/src/api/Gabriel.Engine/Tools/Codecs/Base64Tool.cs.md) — New file — needs initial documentation
 
 ## Ambiguous (15)
 
@@ -50,14 +49,15 @@ Docs that reference symbols the baseline cache doesn't know about — likely a s
 - [`src/webapp/src/api/conversationMode.ts`](../Code/src/webapp/src/api/conversationMode.ts.md) — References an unknown symbol — cache may be stale
 - [`src/webapp/src/components/Markdown.tsx`](../Code/src/webapp/src/components/Markdown.tsx.md) — References an unknown symbol — cache may be stale
 
-## OK (234)
+## OK (232)
 
 Docs the merge did not impact. No action required.
 
 <details>
-<summary>Show 234 unaffected doc(s)</summary>
+<summary>Show 232 unaffected doc(s)</summary>
 
 - [`index.md`](../Code/index.md.md)
+- [`README.md`](../Code/README.md.md)
 - [`Onboarding.md`](../Code/Onboarding.md.md)
 - [`Architecture.md`](../Code/Architecture.md.md)
 - [`prototype/run.js`](../Code/prototype/run.js.md)
@@ -70,7 +70,6 @@ Docs the merge did not impact. No action required.
 - [`Workflows/repository.md`](../Code/Workflows/repository.md.md)
 - [`src/webapp/src/main.tsx`](../Code/src/webapp/src/main.tsx.md)
 - [`src/webapp/vite.config.ts`](../Code/src/webapp/vite.config.ts.md)
-- [`observability-and-logging.md`](../Code/observability-and-logging.md.md)
 - [`src/webapp/src/vite-env.d.ts`](../Code/src/webapp/src/vite-env.d.ts.md)
 - [`src/api/Gabriel.API/Program.cs`](../Code/src/api/Gabriel.API/Program.cs.md)
 - [`src/webapp/src/api/streamChat.ts`](../Code/src/webapp/src/api/streamChat.ts.md)
@@ -78,8 +77,6 @@ Docs the merge did not impact. No action required.
 - [`src/webapp/src/components/Chat.tsx`](../Code/src/webapp/src/components/Chat.tsx.md)
 - [`src/webapp/src/pages/IndexPage.tsx`](../Code/src/webapp/src/pages/IndexPage.tsx.md)
 - [`src/webapp/src/pages/LoginPage.tsx`](../Code/src/webapp/src/pages/LoginPage.tsx.md)
-- [`tooling-and-tooling-integration.md`](../Code/tooling-and-tooling-integration.md.md)
-- [`authentication-and-authorization.md`](../Code/authentication-and-authorization.md.md)
 - [`src/webapp/src/components/Avatar.tsx`](../Code/src/webapp/src/components/Avatar.tsx.md)
 - [`src/api/Gabriel.Engine/Tools/ITool.cs`](../Code/src/api/Gabriel.Engine/Tools/ITool.cs.md)
 - [`src/webapp/src/api/authInterceptor.ts`](../Code/src/webapp/src/api/authInterceptor.ts.md)
@@ -89,7 +86,6 @@ Docs the merge did not impact. No action required.
 - [`src/webapp/src/layouts/MainLayout.tsx`](../Code/src/webapp/src/layouts/MainLayout.tsx.md)
 - [`src/webapp/src/pages/RegisterPage.tsx`](../Code/src/webapp/src/pages/RegisterPage.tsx.md)
 - [`src/webapp/src/routes/PublicRoute.tsx`](../Code/src/webapp/src/routes/PublicRoute.tsx.md)
-- [`configuration-and-secrets-management.md`](../Code/configuration-and-secrets-management.md.md)
 - [`src/api/Gabriel.Core/Entities/Message.cs`](../Code/src/api/Gabriel.Core/Entities/Message.cs.md)
 - [`src/api/Gabriel.Core/Entities/Project.cs`](../Code/src/api/Gabriel.Core/Entities/Project.cs.md)
 - [`src/api/Gabriel.Core/Personality/Mood.cs`](../Code/src/api/Gabriel.Core/Personality/Mood.cs.md)
@@ -152,7 +148,6 @@ Docs the merge did not impact. No action required.
 - [`src/api/Gabriel.Engine/Services/IAgentService.cs`](../Code/src/api/Gabriel.Engine/Services/IAgentService.cs.md)
 - [`src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs`](../Code/src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs.md)
 - [`src/api/Gabriel.Engine/Tools/Web/WebFetchTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/WebFetchTool.cs.md)
-- [`src/webapp/src/components/GalacticTypewriter.tsx`](../Code/src/webapp/src/components/GalacticTypewriter.tsx.md)
 - [`src/api/Gabriel.API/Contracts/Auth/JwtResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/JwtResponse.cs.md)
 - [`src/api/Gabriel.API/Controllers/AuthController.cs`](../Code/src/api/Gabriel.API/Controllers/AuthController.cs.md)
 - [`src/api/Gabriel.Core/Configuration/AuthOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/AuthOptions.cs.md)
@@ -177,6 +172,7 @@ Docs the merge did not impact. No action required.
 - [`src/api/Gabriel.Engine/Sequence/SequenceCatalog.cs`](../Code/src/api/Gabriel.Engine/Sequence/SequenceCatalog.cs.md)
 - [`src/api/Gabriel.Engine/Services/IMetricRecorder.cs`](../Code/src/api/Gabriel.Engine/Services/IMetricRecorder.cs.md)
 - [`src/api/Gabriel.Engine/Services/ITokenEstimator.cs`](../Code/src/api/Gabriel.Engine/Services/ITokenEstimator.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Calc/CalculateTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Calc/CalculateTool.cs.md)
 - [`src/api/Gabriel.Engine/Tools/Files/FileInfoTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/FileInfoTool.cs.md)
 - [`src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.cs`](../Code/src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.cs.md)
 - [`src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs`](../Code/src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs.md)
@@ -210,6 +206,7 @@ Docs the merge did not impact. No action required.
 - [`src/api/Gabriel.Engine/Providers/ChatProviderMessage.cs`](../Code/src/api/Gabriel.Engine/Providers/ChatProviderMessage.cs.md)
 - [`src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.cs.md)
 - [`src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Numbers/BaseConvertTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Numbers/BaseConvertTool.cs.md)
 - [`src/api/Gabriel.API/Configuration/InfisicalExtensions.cs`](../Code/src/api/Gabriel.API/Configuration/InfisicalExtensions.cs.md)
 - [`src/api/Gabriel.API/Controllers/DiagnosticsController.cs`](../Code/src/api/Gabriel.API/Controllers/DiagnosticsController.cs.md)
 - [`src/api/Gabriel.API/Middleware/GlobalExceptionHandler.cs`](../Code/src/api/Gabriel.API/Middleware/GlobalExceptionHandler.cs.md)
@@ -296,5 +293,5 @@ Docs the merge did not impact. No action required.
 
 ---
 
-*Generated by Aurion on 2026-06-09 07:40:27 UTC*
-*Commit range: `4c9e5f5` → `8784937`*
+*Generated by Aurion on 2026-06-24 23:46:03 UTC*
+*Commit range: `36335bf` → `9eeb601`*
