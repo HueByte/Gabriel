@@ -1,16 +1,16 @@
 # Drift Report — HueByte/Gabriel
 
-> no docs evaluated since commit `4d36dd6`.
+> 6 stale, 15 ambiguous, 241 ok since commit `4d36dd6`.
 
-**Drift score:** n/a (no docs evaluated)
+**Drift score:** ![clean (2.3%)](https://img.shields.io/badge/drift-2.3%2525%20clean-brightgreen)
 
 | Status | Count |
 | --- | ---: |
 | 🔴 Broken | 0 |
-| 🟡 Stale | 0 |
-| 🟠 Ambiguous | 0 |
-| 🟢 OK | 0 |
-| **Total** | **0** |
+| 🟡 Stale | 6 |
+| 🟠 Ambiguous | 15 |
+| 🟢 OK | 241 |
+| **Total** | **262** |
 
 ## Broken (0)
 
@@ -18,25 +18,289 @@ Docs that reference symbols the merge deleted. These must be regenerated or remo
 
 *None.*
 
-## Stale (0)
+## Stale (6)
 
 Docs whose underlying symbols changed in this merge. Targeted regeneration is in flight.
 
-*None.*
+- [`src/api/Gabriel.Engine/DependencyInjection.cs`](../Code/src/api/Gabriel.Engine/DependencyInjection.cs.md) — References 1 modified symbol(s)
+- [`src/api/Gabriel.Infrastructure/DependencyInjection.cs`](../Code/src/api/Gabriel.Infrastructure/DependencyInjection.cs.md) — References 1 modified symbol(s)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs.md) — References 1 modified symbol(s)
+- [`src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs`](../Code/src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs.md) — References 1 modified symbol(s)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs.md) — References 1 modified symbol(s)
+- [`src/api/Gabriel.Engine/Tools/Data/JsonFormatTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Data/JsonFormatTool.cs.md) — New file — needs initial documentation
 
-## Ambiguous (0)
+## Ambiguous (15)
 
 Docs that reference symbols the baseline cache doesn't know about — likely a stale cache rather than real drift.
 
-*None.*
+- [`prototype/palettes.js`](../Code/prototype/palettes.js.md) — References an unknown symbol — cache may be stale
+- [`prototype/patterns.js`](../Code/prototype/patterns.js.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/router.tsx`](../Code/src/webapp/src/router.tsx.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/pulse/rng.ts`](../Code/src/webapp/src/pulse/rng.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/models.ts`](../Code/src/webapp/src/api/models.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/lib/notify.ts`](../Code/src/webapp/src/lib/notify.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/memories.ts`](../Code/src/webapp/src/api/memories.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/sequence.ts`](../Code/src/webapp/src/api/sequence.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/lib/userPrefs.ts`](../Code/src/webapp/src/lib/userPrefs.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/pulse/palettes.ts`](../Code/src/webapp/src/pulse/palettes.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/pulse/patterns.ts`](../Code/src/webapp/src/pulse/patterns.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/authRefresh.ts`](../Code/src/webapp/src/api/authRefresh.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/auth/AuthContext.tsx`](../Code/src/webapp/src/auth/AuthContext.tsx.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/api/conversationMode.ts`](../Code/src/webapp/src/api/conversationMode.ts.md) — References an unknown symbol — cache may be stale
+- [`src/webapp/src/components/Markdown.tsx`](../Code/src/webapp/src/components/Markdown.tsx.md) — References an unknown symbol — cache may be stale
 
-## OK (0)
+## OK (241)
 
 Docs the merge did not impact. No action required.
 
-*None.*
+<details>
+<summary>Show 241 unaffected doc(s)</summary>
+
+- [`index.md`](../Code/index.md.md)
+- [`README.md`](../Code/README.md.md)
+- [`Onboarding.md`](../Code/Onboarding.md.md)
+- [`Architecture.md`](../Code/Architecture.md.md)
+- [`prototype/run.js`](../Code/prototype/run.js.md)
+- [`authentication.md`](../Code/authentication.md.md)
+- [`prototype/play.js`](../Code/prototype/play.js.md)
+- [`ai-tools-engine.md`](../Code/ai-tools-engine.md.md)
+- [`configuration-di.md`](../Code/configuration-di.md.md)
+- [`Workflows/service.md`](../Code/Workflows/service.md.md)
+- [`prototype/generate.js`](../Code/prototype/generate.js.md)
+- [`sequence-rendering.md`](../Code/sequence-rendering.md.md)
+- [`src/webapp/src/App.tsx`](../Code/src/webapp/src/App.tsx.md)
+- [`Workflows/agent-tool.md`](../Code/Workflows/agent-tool.md.md)
+- [`Workflows/controller.md`](../Code/Workflows/controller.md.md)
+- [`Workflows/repository.md`](../Code/Workflows/repository.md.md)
+- [`src/webapp/src/main.tsx`](../Code/src/webapp/src/main.tsx.md)
+- [`src/webapp/vite.config.ts`](../Code/src/webapp/vite.config.ts.md)
+- [`data-access-persistence.md`](../Code/data-access-persistence.md.md)
+- [`src/webapp/src/vite-env.d.ts`](../Code/src/webapp/src/vite-env.d.ts.md)
+- [`src/api/Gabriel.API/Program.cs`](../Code/src/api/Gabriel.API/Program.cs.md)
+- [`src/webapp/src/api/streamChat.ts`](../Code/src/webapp/src/api/streamChat.ts.md)
+- [`src/webapp/src/pages/ChatPage.tsx`](../Code/src/webapp/src/pages/ChatPage.tsx.md)
+- [`src/webapp/src/components/Chat.tsx`](../Code/src/webapp/src/components/Chat.tsx.md)
+- [`src/webapp/src/pages/IndexPage.tsx`](../Code/src/webapp/src/pages/IndexPage.tsx.md)
+- [`src/webapp/src/pages/LoginPage.tsx`](../Code/src/webapp/src/pages/LoginPage.tsx.md)
+- [`src/webapp/src/components/Avatar.tsx`](../Code/src/webapp/src/components/Avatar.tsx.md)
+- [`src/api/Gabriel.Engine/Tools/ITool.cs`](../Code/src/api/Gabriel.Engine/Tools/ITool.cs.md)
+- [`src/webapp/src/api/authInterceptor.ts`](../Code/src/webapp/src/api/authInterceptor.ts.md)
+- [`src/webapp/src/components/Mermaid.tsx`](../Code/src/webapp/src/components/Mermaid.tsx.md)
+- [`src/webapp/src/components/Sidebar.tsx`](../Code/src/webapp/src/components/Sidebar.tsx.md)
+- [`src/webapp/src/layouts/AuthLayout.tsx`](../Code/src/webapp/src/layouts/AuthLayout.tsx.md)
+- [`src/webapp/src/layouts/MainLayout.tsx`](../Code/src/webapp/src/layouts/MainLayout.tsx.md)
+- [`src/webapp/src/pages/RegisterPage.tsx`](../Code/src/webapp/src/pages/RegisterPage.tsx.md)
+- [`src/webapp/src/routes/PublicRoute.tsx`](../Code/src/webapp/src/routes/PublicRoute.tsx.md)
+- [`src/api/Gabriel.Core/Entities/Message.cs`](../Code/src/api/Gabriel.Core/Entities/Message.cs.md)
+- [`src/api/Gabriel.Core/Entities/Project.cs`](../Code/src/api/Gabriel.Core/Entities/Project.cs.md)
+- [`src/api/Gabriel.Core/Personality/Mood.cs`](../Code/src/api/Gabriel.Core/Personality/Mood.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/Frame.cs`](../Code/src/api/Gabriel.Engine/Sequence/Frame.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/Noise.cs`](../Code/src/api/Gabriel.Engine/Sequence/Noise.cs.md)
+- [`src/webapp/src/components/MemoryList.tsx`](../Code/src/webapp/src/components/MemoryList.tsx.md)
+- [`src/webapp/src/components/SkinPicker.tsx`](../Code/src/webapp/src/components/SkinPicker.tsx.md)
+- [`src/webapp/src/pages/DiagnosticsPage.tsx`](../Code/src/webapp/src/pages/DiagnosticsPage.tsx.md)
+- [`src/webapp/src/routes/ProtectedRoute.tsx`](../Code/src/webapp/src/routes/ProtectedRoute.tsx.md)
+- [`src/webapp/src/pages/UserSettingsPage.tsx`](../Code/src/webapp/src/pages/UserSettingsPage.tsx.md)
+- [`src/api/Gabriel.Engine/Sequence/Palette.cs`](../Code/src/api/Gabriel.Engine/Sequence/Palette.cs.md)
+- [`src/webapp/src/components/ContextStats.tsx`](../Code/src/webapp/src/components/ContextStats.tsx.md)
+- [`src/webapp/src/components/ModeSelector.tsx`](../Code/src/webapp/src/components/ModeSelector.tsx.md)
+- [`src/api/Gabriel.API/Identity/AuthCookies.cs`](../Code/src/api/Gabriel.API/Identity/AuthCookies.cs.md)
+- [`src/api/Gabriel.Core/DependencyInjection.cs`](../Code/src/api/Gabriel.Core/DependencyInjection.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/Patterns.cs`](../Code/src/api/Gabriel.Engine/Sequence/Patterns.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/RgbColor.cs`](../Code/src/api/Gabriel.Engine/Sequence/RgbColor.cs.md)
+- [`src/webapp/src/components/ModelSelector.tsx`](../Code/src/webapp/src/components/ModelSelector.tsx.md)
+- [`src/webapp/src/components/ProjectPicker.tsx`](../Code/src/webapp/src/components/ProjectPicker.tsx.md)
+- [`src/webapp/src/components/StreamingText.tsx`](../Code/src/webapp/src/components/StreamingText.tsx.md)
+- [`src/webapp/src/components/ThinkingPulse.tsx`](../Code/src/webapp/src/components/ThinkingPulse.tsx.md)
+- [`src/api/Gabriel.Core/Entities/GabrielMode.cs`](../Code/src/api/Gabriel.Core/Entities/GabrielMode.cs.md)
+- [`src/api/Gabriel.Core/Entities/MemoryEntry.cs`](../Code/src/api/Gabriel.Core/Entities/MemoryEntry.cs.md)
+- [`src/api/Gabriel.Core/Entities/MessageRole.cs`](../Code/src/api/Gabriel.Core/Entities/MessageRole.cs.md)
+- [`src/api/Gabriel.Core/Entities/MetricEntry.cs`](../Code/src/api/Gabriel.Core/Entities/MetricEntry.cs.md)
+- [`src/api/Gabriel.Core/Entities/ProjectFile.cs`](../Code/src/api/Gabriel.Core/Entities/ProjectFile.cs.md)
+- [`src/api/Gabriel.Core/Services/ChatService.cs`](../Code/src/api/Gabriel.Core/Services/ChatService.cs.md)
+- [`src/api/Gabriel.Engine/Tools/ToolRegistry.cs`](../Code/src/api/Gabriel.Engine/Tools/ToolRegistry.cs.md)
+- [`src/webapp/src/pages/ProjectSettingsPage.tsx`](../Code/src/webapp/src/pages/ProjectSettingsPage.tsx.md)
+- [`src/api/Gabriel.Core/Entities/Conversation.cs`](../Code/src/api/Gabriel.Core/Entities/Conversation.cs.md)
+- [`src/api/Gabriel.Core/Identity/ICurrentUser.cs`](../Code/src/api/Gabriel.Core/Identity/ICurrentUser.cs.md)
+- [`src/api/Gabriel.Core/Identity/RefreshToken.cs`](../Code/src/api/Gabriel.Core/Identity/RefreshToken.cs.md)
+- [`src/api/Gabriel.Core/Services/IChatService.cs`](../Code/src/api/Gabriel.Core/Services/IChatService.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/FrameLayer.cs`](../Code/src/api/Gabriel.Engine/Sequence/FrameLayer.cs.md)
+- [`src/api/Gabriel.Engine/Services/AgentEvent.cs`](../Code/src/api/Gabriel.Engine/Services/AgentEvent.cs.md)
+- [`src/api/Gabriel.Engine/Tools/IToolRegistry.cs`](../Code/src/api/Gabriel.Engine/Tools/IToolRegistry.cs.md)
+- [`src/webapp/src/components/MemoryQuickSave.tsx`](../Code/src/webapp/src/components/MemoryQuickSave.tsx.md)
+- [`src/api/Gabriel.API/Identity/IdentitySeeder.cs`](../Code/src/api/Gabriel.API/Identity/IdentitySeeder.cs.md)
+- [`src/api/Gabriel.Core/Configuration/LLMModel.cs`](../Code/src/api/Gabriel.Core/Configuration/LLMModel.cs.md)
+- [`src/api/Gabriel.Core/Configuration/ToolMode.cs`](../Code/src/api/Gabriel.Core/Configuration/ToolMode.cs.md)
+- [`src/api/Gabriel.Core/Services/MemoryService.cs`](../Code/src/api/Gabriel.Core/Services/MemoryService.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/PatternKind.cs`](../Code/src/api/Gabriel.Engine/Sequence/PatternKind.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/FindTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/FindTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/GrepTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/GrepTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Web/IWebSearch.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/IWebSearch.cs.md)
+- [`src/api/Gabriel.API/Mapping/ContractMappings.cs`](../Code/src/api/Gabriel.API/Mapping/ContractMappings.cs.md)
+- [`src/api/Gabriel.Core/Services/IMemoryService.cs`](../Code/src/api/Gabriel.Core/Services/IMemoryService.cs.md)
+- [`src/api/Gabriel.Core/Services/ProjectService.cs`](../Code/src/api/Gabriel.Core/Services/ProjectService.cs.md)
+- [`src/api/Gabriel.Engine/Services/AgentContext.cs`](../Code/src/api/Gabriel.Engine/Services/AgentContext.cs.md)
+- [`src/api/Gabriel.Engine/Services/AgentService.cs`](../Code/src/api/Gabriel.Engine/Services/AgentService.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Codecs/HashTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Codecs/HashTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Web/IUrlFetcher.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/IUrlFetcher.cs.md)
+- [`src/webapp/src/components/CompactingOverlay.tsx`](../Code/src/webapp/src/components/CompactingOverlay.tsx.md)
+- [`src/api/Gabriel.API/Contracts/Auth/MeResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/MeResponse.cs.md)
+- [`src/api/Gabriel.API/Contracts/Models/ModelDto.cs`](../Code/src/api/Gabriel.API/Contracts/Models/ModelDto.cs.md)
+- [`src/api/Gabriel.Core/Configuration/JwtOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/JwtOptions.cs.md)
+- [`src/api/Gabriel.Core/Entities/MemoryEntryType.cs`](../Code/src/api/Gabriel.Core/Entities/MemoryEntryType.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IUnitOfWork.cs`](../Code/src/api/Gabriel.Core/Repositories/IUnitOfWork.cs.md)
+- [`src/api/Gabriel.Core/Services/IProjectService.cs`](../Code/src/api/Gabriel.Core/Services/IProjectService.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ModelCatalog.cs`](../Code/src/api/Gabriel.Engine/Providers/ModelCatalog.cs.md)
+- [`src/api/Gabriel.Engine/Services/IAgentService.cs`](../Code/src/api/Gabriel.Engine/Services/IAgentService.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs`](../Code/src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Web/WebFetchTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/WebFetchTool.cs.md)
+- [`src/api/Gabriel.API/Contracts/Auth/JwtResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/JwtResponse.cs.md)
+- [`src/api/Gabriel.API/Controllers/AuthController.cs`](../Code/src/api/Gabriel.API/Controllers/AuthController.cs.md)
+- [`src/api/Gabriel.Core/Configuration/AuthOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/AuthOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/GrokOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/GrokOptions.cs.md)
+- [`src/api/Gabriel.Core/Identity/IJwtTokenService.cs`](../Code/src/api/Gabriel.Core/Identity/IJwtTokenService.cs.md)
+- [`src/api/Gabriel.Core/Identity/IUserPreferences.cs`](../Code/src/api/Gabriel.Core/Identity/IUserPreferences.cs.md)
+- [`src/api/Gabriel.Engine/Providers/IChatProvider.cs`](../Code/src/api/Gabriel.Engine/Providers/IChatProvider.cs.md)
+- [`src/api/Gabriel.Engine/Providers/IModelCatalog.cs`](../Code/src/api/Gabriel.Engine/Providers/IModelCatalog.cs.md)
+- [`src/api/Gabriel.Engine/Services/ContextMetrics.cs`](../Code/src/api/Gabriel.Engine/Services/ContextMetrics.cs.md)
+- [`src/api/Gabriel.Engine/Services/MetricRecorder.cs`](../Code/src/api/Gabriel.Engine/Services/MetricRecorder.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Codecs/Base64Tool.cs`](../Code/src/api/Gabriel.Engine/Tools/Codecs/Base64Tool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Docs/DocsListTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Docs/DocsListTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Docs/DocsReadTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Docs/DocsReadTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/ListDirTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/ListDirTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Web/WebSearchTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Web/WebSearchTool.cs.md)
+- [`src/webapp/src/components/GabrielSequenceView.tsx`](../Code/src/webapp/src/components/GabrielSequenceView.tsx.md)
+- [`src/api/Gabriel.API/Contracts/Auth/LoginRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/LoginRequest.cs.md)
+- [`src/api/Gabriel.Core/Configuration/AgentOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/AgentOptions.cs.md)
+- [`src/api/Gabriel.Core/Exceptions/DomainException.cs`](../Code/src/api/Gabriel.Core/Exceptions/DomainException.cs.md)
+- [`src/api/Gabriel.Engine/Providers/AvailableModel.cs`](../Code/src/api/Gabriel.Engine/Providers/AvailableModel.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ToolDescriptor.cs`](../Code/src/api/Gabriel.Engine/Providers/ToolDescriptor.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/GabrielSequence.cs`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequence.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/SequenceCatalog.cs`](../Code/src/api/Gabriel.Engine/Sequence/SequenceCatalog.cs.md)
+- [`src/api/Gabriel.Engine/Services/IMetricRecorder.cs`](../Code/src/api/Gabriel.Engine/Services/IMetricRecorder.cs.md)
+- [`src/api/Gabriel.Engine/Services/ITokenEstimator.cs`](../Code/src/api/Gabriel.Engine/Services/ITokenEstimator.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Calc/CalculateTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Calc/CalculateTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/FileInfoTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/FileInfoTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.cs`](../Code/src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.cs.md)
+- [`src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs`](../Code/src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs.md)
+- [`src/api/Gabriel.API/Controllers/ModelsController.cs`](../Code/src/api/Gabriel.API/Controllers/ModelsController.cs.md)
+- [`src/api/Gabriel.Core/Identity/IRefreshTokenStore.cs`](../Code/src/api/Gabriel.Core/Identity/IRefreshTokenStore.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/PaletteTemplates.cs`](../Code/src/api/Gabriel.Engine/Sequence/PaletteTemplates.cs.md)
+- [`src/api/Gabriel.API/Configuration/LogDateEnricher.cs`](../Code/src/api/Gabriel.API/Configuration/LogDateEnricher.cs.md)
+- [`src/api/Gabriel.Core/Configuration/IConfigSection.cs`](../Code/src/api/Gabriel.Core/Configuration/IConfigSection.cs.md)
+- [`src/api/Gabriel.Core/Configuration/ModelSelection.cs`](../Code/src/api/Gabriel.Core/Configuration/ModelSelection.cs.md)
+- [`src/api/Gabriel.Core/Exceptions/NotFoundException.cs`](../Code/src/api/Gabriel.Core/Exceptions/NotFoundException.cs.md)
+- [`src/api/Gabriel.Core/Services/IProjectFileService.cs`](../Code/src/api/Gabriel.Core/Services/IProjectFileService.cs.md)
+- [`src/api/Gabriel.API/Contracts/Auth/RegisterRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/RegisterRequest.cs.md)
+- [`src/api/Gabriel.API/Controllers/MemoriesController.cs`](../Code/src/api/Gabriel.API/Controllers/MemoriesController.cs.md)
+- [`src/api/Gabriel.API/Controllers/ProjectsController.cs`](../Code/src/api/Gabriel.API/Controllers/ProjectsController.cs.md)
+- [`src/api/Gabriel.API/Controllers/SequenceController.cs`](../Code/src/api/Gabriel.API/Controllers/SequenceController.cs.md)
+- [`src/api/Gabriel.Core/Personality/ConversationState.cs`](../Code/src/api/Gabriel.Core/Personality/ConversationState.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs`](../Code/src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs.md)
+- [`src/api/Gabriel.Engine/Tools/IToolExecutionContext.cs`](../Code/src/api/Gabriel.Engine/Tools/IToolExecutionContext.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Memory/MemoryListTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemoryListTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Strings/TextStatsTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Strings/TextStatsTool.cs.md)
+- [`src/api/Gabriel.API/Identity/HttpContextCurrentUser.cs`](../Code/src/api/Gabriel.API/Identity/HttpContextCurrentUser.cs.md)
+- [`src/api/Gabriel.Core/Configuration/InfisicalOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/InfisicalOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/LocalDocsOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/LocalDocsOptions.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IMemoryRepository.cs`](../Code/src/api/Gabriel.Core/Repositories/IMemoryRepository.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IMetricRepository.cs`](../Code/src/api/Gabriel.Core/Repositories/IMetricRepository.cs.md)
+- [`src/api/Gabriel.Engine/Services/NaiveTokenEstimator.cs`](../Code/src/api/Gabriel.Engine/Services/NaiveTokenEstimator.cs.md)
+- [`src/api/Gabriel.Core/Configuration/AgentToolsOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/AgentToolsOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/GitHubDocsOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/GitHubDocsOptions.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IProjectRepository.cs`](../Code/src/api/Gabriel.Core/Repositories/IProjectRepository.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/PromptKey.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/PromptKey.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ChatProviderMessage.cs`](../Code/src/api/Gabriel.Engine/Providers/ChatProviderMessage.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Numbers/BaseConvertTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Numbers/BaseConvertTool.cs.md)
+- [`src/api/Gabriel.API/Configuration/InfisicalExtensions.cs`](../Code/src/api/Gabriel.API/Configuration/InfisicalExtensions.cs.md)
+- [`src/api/Gabriel.API/Controllers/DiagnosticsController.cs`](../Code/src/api/Gabriel.API/Controllers/DiagnosticsController.cs.md)
+- [`src/api/Gabriel.API/Middleware/GlobalExceptionHandler.cs`](../Code/src/api/Gabriel.API/Middleware/GlobalExceptionHandler.cs.md)
+- [`src/api/Gabriel.Core/Configuration/BraveSearchOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/BraveSearchOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/LLMProviderOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/LLMProviderOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/PersonalityOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/PersonalityOptions.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ChatProviderToolCall.cs`](../Code/src/api/Gabriel.Engine/Providers/ChatProviderToolCall.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs`](../Code/src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/UnitOfWork.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/UnitOfWork.cs.md)
+- [`src/api/Gabriel.API/Contracts/Auth/RefreshTokenRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Auth/RefreshTokenRequest.cs.md)
+- [`src/api/Gabriel.API/Contracts/Messages/MessageResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Messages/MessageResponse.cs.md)
+- [`src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs.md)
+- [`src/api/Gabriel.API/Controllers/ProjectFilesController.cs`](../Code/src/api/Gabriel.API/Controllers/ProjectFilesController.cs.md)
+- [`src/api/Gabriel.Core/Configuration/ProjectFilesOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/ProjectFilesOptions.cs.md)
+- [`src/api/Gabriel.Core/Configuration/TavilySearchOptions.cs`](../Code/src/api/Gabriel.Core/Configuration/TavilySearchOptions.cs.md)
+- [`src/api/Gabriel.Engine/Providers/IChatProviderRegistry.cs`](../Code/src/api/Gabriel.Engine/Providers/IChatProviderRegistry.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Strings/TextTransformTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Strings/TextTransformTool.cs.md)
+- [`src/api/Gabriel.API/Controllers/ConversationsController.cs`](../Code/src/api/Gabriel.API/Controllers/ConversationsController.cs.md)
+- [`src/api/Gabriel.Engine/Personality/ISystemPromptBuilder.cs`](../Code/src/api/Gabriel.Engine/Personality/ISystemPromptBuilder.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/IGabrielSequenceService.cs`](../Code/src/api/Gabriel.Engine/Sequence/IGabrielSequenceService.cs.md)
+- [`src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs`](../Code/src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs.md)
+- [`src/api/Gabriel.Infrastructure/Identity/JwtTokenService.cs`](../Code/src/api/Gabriel.Infrastructure/Identity/JwtTokenService.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/AppDbContext.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/AppDbContext.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/HttpUrlFetcher.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/HttpUrlFetcher.cs.md)
+- [`src/api/Gabriel.API/Contracts/Diagnostics/MetricEntryDto.cs`](../Code/src/api/Gabriel.API/Contracts/Diagnostics/MetricEntryDto.cs.md)
+- [`src/api/Gabriel.Engine/Personality/ResponsePostProcessor.cs`](../Code/src/api/Gabriel.Engine/Personality/ResponsePostProcessor.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.cs`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.cs.md)
+- [`src/api/Gabriel.Infrastructure/Providers/GrokAuthHandler.cs`](../Code/src/api/Gabriel.Infrastructure/Providers/GrokAuthHandler.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/TavilyWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/TavilyWebSearch.cs.md)
+- [`src/api/Gabriel.API/Contracts/Messages/SendMessageRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Messages/SendMessageRequest.cs.md)
+- [`src/api/Gabriel.Core/Repositories/IConversationRepository.cs`](../Code/src/api/Gabriel.Core/Repositories/IConversationRepository.cs.md)
+- [`src/api/Gabriel.Engine/Personality/IResponsePostProcessor.cs`](../Code/src/api/Gabriel.Engine/Personality/IResponsePostProcessor.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.cs.md)
+- [`src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs`](../Code/src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Projects/ReadProjectFileTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Projects/ReadProjectFileTool.cs.md)
+- [`src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs`](../Code/src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Docs/LocalDocsLookup.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Docs/LocalDocsLookup.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.Modes.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Modes.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/IPromptRegistry.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/IPromptRegistry.cs.md)
+- [`src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.cs`](../Code/src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Docs/GitHubDocsLookup.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Docs/GitHubDocsLookup.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.Memory.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Memory.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/CompositeWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/CompositeWebSearch.cs.md)
+- [`src/api/Gabriel.Engine/Personality/IConversationStateUpdater.cs`](../Code/src/api/Gabriel.Engine/Personality/IConversationStateUpdater.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.FewShot.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.FewShot.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.Persona.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Persona.cs.md)
+- [`src/api/Gabriel.API/Configuration/GlobalRoutePrefixConvention.cs`](../Code/src/api/Gabriel.API/Configuration/GlobalRoutePrefixConvention.cs.md)
+- [`src/api/Gabriel.Engine/Personality/GabrielSystemPromptBuilder.cs`](../Code/src/api/Gabriel.Engine/Personality/GabrielSystemPromptBuilder.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Docs/CompositeDocsLookup.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Docs/CompositeDocsLookup.cs.md)
+- [`src/api/Gabriel.API/Configuration/InfisicalConfigurationSource.cs`](../Code/src/api/Gabriel.API/Configuration/InfisicalConfigurationSource.cs.md)
+- [`src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.cs.md)
+- [`src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.cs.md)
+- [`src/api/Gabriel.Infrastructure/Identity/UserPreferencesService.cs`](../Code/src/api/Gabriel.Infrastructure/Identity/UserPreferencesService.cs.md)
+- [`src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.cs`](../Code/src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.cs.md)
+- [`src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.cs`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.cs.md)
+- [`src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.cs`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallBlockParser.cs`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallBlockParser.cs.md)
+- [`src/api/Gabriel.API/Configuration/InfisicalConfigurationProvider.cs`](../Code/src/api/Gabriel.API/Configuration/InfisicalConfigurationProvider.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.cs.md)
+- [`src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallStreamSplitter.cs`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/ToolCallStreamSplitter.cs.md)
+- [`src/api/Gabriel.Engine/Personality/HeuristicConversationStateUpdater.cs`](../Code/src/api/Gabriel.Engine/Personality/HeuristicConversationStateUpdater.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/CreateConversationRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/CreateConversationRequest.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/UpdateConversationRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/UpdateConversationRequest.cs.md)
+- [`src/api/Gabriel.API/Contracts/Conversations/SetConversationModeRequest.cs`](../Code/src/api/Gabriel.API/Contracts/Conversations/SetConversationModeRequest.cs.md)
+- [`src/api/Gabriel.API/Contracts/Diagnostics/WebSearchDiagnosticsResponse.cs`](../Code/src/api/Gabriel.API/Contracts/Diagnostics/WebSearchDiagnosticsResponse.cs.md)
+- [`src/api/Gabriel.API/Middleware/RequireNonNullablePropertiesSchemaFilter.cs`](../Code/src/api/Gabriel.API/Middleware/RequireNonNullablePropertiesSchemaFilter.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/MemoryRepository.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/MemoryRepository.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/MetricRepository.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/MetricRepository.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/ProjectRepository.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/ProjectRepository.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/RefreshTokenStore.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/RefreshTokenStore.cs.md)
+- [`src/api/Gabriel.Infrastructure/Identity/IdentityServiceCollectionExtensions.cs`](../Code/src/api/Gabriel.Infrastructure/Identity/IdentityServiceCollectionExtensions.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/MessageConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/MessageConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Repositories/ConversationRepository.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/ConversationRepository.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/MemoryEntryConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/MemoryEntryConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/MetricEntryConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/MetricEntryConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectFileConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectFileConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/ConversationConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/ConversationConfiguration.cs.md)
+- [`src/api/Gabriel.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs`](../Code/src/api/Gabriel.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs.md)
+
+</details>
 
 ---
 
-*Generated by Aurion on 2026-06-26 17:50:25 UTC*
-*Commit range: `4d36dd6` → `4d36dd6`*
+*Generated by Aurion on 2026-06-27 20:53:51 UTC*
+*Commit range: `4d36dd6` → `03c8997`*
