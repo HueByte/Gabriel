@@ -1,8 +1,19 @@
-DependencyInjection is a static bootstrap that wires the engine’s services into the dependency injection container. Its AddEngineServices method binds configuration sections to strongly-typed options, registers core engine services (agent lifecycle, prompting, metrics, and sequencing), and registers the suite of tools that power the engine’s functionality. Callers typically invoke this during application startup to compose the runtime graph for the Gabriel engine, decoupling infrastructure concerns from engine logic by centralizing bindings in one place.
+# DependencyInjection
+
+> **File:** `src/api/Gabriel.Engine/DependencyInjection.cs`  
+> **Kind:** class
+
+```csharp
+public static class DependencyInjection
+```
+
+
+Configures the engine’s dependency graph by exposing AddEngineServices, an extension that wires the engine’s configuration and core services into the DI container. It binds the AgentOptions, PersonalityOptions, and AgentToolsOptions sections from configuration, registers the primary engine services (IAgentService, IToolRegistry, ITokenEstimator), the metrics surface (IMetricRecorder) and per-request context (IToolExecutionContext), and wires the system’s personality stack, prompt registry, system prompt builder, and post-processor. It also boots the Gabriel sequence: a stateless generator and a scoped service that resolves seed/state per conversation turn. Finally, it registers the full suite of tools (time, calculation, conversion, encoding, text analytics, transforms, JSON, WebSearch/WebFetch, docs, file/project tooling, and memory tools). Call this during startup to compose the engine runtime; transport concerns are handled by Gabriel.Infrastructure, while this class wires interfaces and lifetimes for the engine itself.
 
 ## Remarks
-This symbol serves as the primary DI bootstrap for the engine. It sits at the boundary between Gabriel.Infrastructure (which owns HTTP/transport concerns) and the engine’s operational surface (agents, tools, prompts, and sequence generation). By controlling lifetimes (singletons for stateless/shared services, scoped for per-turn contexts) it ensures per-request isolation while preserving global configuration. Extending or swapping tools or options is done here so all consumers pick up the same wiring.
+This class serves as the composition root for the Gabriel engine. It centralizes configuration, lifetime semantics, and the binding of cross-cutting concerns like metrics, prompts, and sequence resolution. While it orchestrates tool registration, the actual HTTP/transport providers live in Gabriel.Infrastructure; tool discovery relies on ToolRegistry via IEnumerable<ITool>.
 
 ## Notes
-- Assumes infrastructure providers (HTTP/transport) are registered elsewhere (Gabriel.Infrastructure) and that AddInfrastructure is invoked so dependencies resolve correctly.
-- Tools are registered as scoped; do not rely on tool instances persisting beyond a single turn. If introducing stateful tools, consider appropriate lifetime adjustments or moving state into the per-request context.
+- The MetricRecorder is registered as a singleton but bridges to per-request metrics via IServiceScopeFactory, enabling safe cross-request instrumentation.
+- Ensure AddEngineServices is invoked during startup before building the service provider; omissions will leave the engine unbootstrapped.
+- Be mindful of lifetime interactions: many tools are registered as scoped; avoid introducing new singletons that capture scoped services.
