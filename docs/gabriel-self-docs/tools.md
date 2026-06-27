@@ -22,6 +22,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `text_stats` | Strings | none | Count chars/words/lines/sentences/paragraphs + reading time + rough tokens. |
 | `text_transform` | Strings | none | Reshape text case/form (upper/lower/title/snake/camel/pascal/kebab/slug/trim). |
 | `json_format` | Data | none | Validate, pretty-print, or minify JSON (reports error location if invalid). |
+| `color_convert` | Colors | none | Convert a color between hex, rgb(), and hsl() (alpha preserved). |
 | `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
@@ -246,6 +247,12 @@ The programmer-case ops (`snake`/`camel`/`pascal`/`kebab`) share one word tokeni
 Schema: `{ "json": string, "mode"?: "pretty" | "minify" | "validate" = "pretty" }`. No provider dependency, no I/O. Use it to make JSON readable, compact it, or confirm a string parses.
 
 Parses with `JsonDocument`, then re-serialises: `pretty` (2-space indent), `minify` (one line), or `validate` (returns `Valid JSON (<kind>).` where kind is the root's `object`/`array`/`string`/…). Re-serialisation uses relaxed escaping (`UnsafeRelaxedJsonEscaping`), so Unicode and `< > &` stay literal rather than `\uXXXX` — output is for reading, not HTML embedding. When the payload doesn't parse, the observation pinpoints the spot: `Error: invalid JSON at line L, position P.` (the `JsonException` line/byte position, surfaced 1-based). Tool-argument problems (missing/empty `json`, bad `mode`) get their own observation. Input capped at 500,000 chars.
+
+### `color_convert`
+
+Schema: `{ "value": string, "to"?: "hex" | "rgb" | "hsl" }`. No provider dependency, no I/O. Use it to convert a color between notations instead of doing the channel math by hand.
+
+Input is auto-detected: `rgb`/`rgba(...)`, `hsl`/`hsla(...)`, or hex (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, with or without `#`; short forms are doubled). Everything is normalised to RGBA internally. With `to`, returns `value → converted`; without it, returns a three-line `hex/rgb/hsl` block. Alpha is preserved end to end — a sub-1 alpha yields `rgba(...)`, `hsla(...)`, and 8-digit hex. HSL output rounds hue to whole degrees and s/l to whole percents, so an `hsl → hex` round-trip can drift by a unit (HSL is lossy at integer precision). Errors come back as observations for an out-of-range channel/percentage/alpha, an unrecognised color, a bad `to`, or empty input. Named colors (`red`) are not supported. Input capped at 200 chars.
 
 ### `get_current_time`
 

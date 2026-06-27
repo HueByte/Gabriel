@@ -7,6 +7,7 @@ using Gabriel.Engine.Tools;
 using Gabriel.Engine.Tools.Docs;
 using Gabriel.Engine.Tools.Calc;
 using Gabriel.Engine.Tools.Codecs;
+using Gabriel.Engine.Tools.Colors;
 using Gabriel.Engine.Tools.Data;
 using Gabriel.Engine.Tools.Files;
 using Gabriel.Engine.Tools.Memory;
@@ -71,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<ITool, TextStatsTool>();
         services.AddScoped<ITool, TextTransformTool>();
         services.AddScoped<ITool, JsonFormatTool>();
+        services.AddScoped<ITool, ColorConvertTool>();
         services.AddScoped<ITool, WebSearchTool>();
         services.AddScoped<ITool, WebFetchTool>();
         services.AddScoped<ITool, DocsListTool>();
