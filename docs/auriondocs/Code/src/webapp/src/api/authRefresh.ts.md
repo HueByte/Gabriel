@@ -11,94 +11,105 @@
 ---
 
 ## postRefresh
-
 > **File:** `src/webapp/src/api/authRefresh.ts`  
 > **Kind:** function
 
-Sends a POST to the server endpoint that attempts to refresh the authentication session. The request includes credentials (cookies) and a JSON body containing an empty refreshToken field — the empty field is deliberate to satisfy the server's model validation so the server-side code can fall back to reading a refresh token from an HttpOnly cookie. Resolves to true when the HTTP response has a successful status (res.ok); returns false on network errors or when the response is not successful.
+```typescript
+async function postRefresh(): Promise<boolean>
+```
+
+**Returns:** `Promise<boolean>`
+
+
+Calls the server-side refresh endpoint to re-establish authentication by sending an empty refreshToken in the request body while including credentials. The function returns true when the HTTP response indicates success (res.ok) and false if the network call fails or an exception occurs. It relies on the server reading the actual token from an HttpOnly cookie; the body field exists solely to satisfy model validation on the controller, which requires a non-nullable string member in FromBody.
 
 ## Remarks
-This function is a minimal client-side trigger for the server-side refresh flow: it does not parse or return tokens. The server is expected to perform the actual token rotation (typically by reading a refresh token from an HttpOnly cookie and issuing new cookies or response state). The empty refreshToken property exists solely to satisfy the server's non-nullable request model so the cookie-based fallback runs.
+postRefresh encapsulates a cookie-based refresh-token flow behind a simple boolean API. It keeps callers from dealing with cookie management or API-controller validation intricacies, and centralizes the edge case where the refresh token lives in a server-side HttpOnly cookie. A successful refresh results in a truthy return value; a failure (due to missing cookie, network error, or server-side rejection) yields false, allowing the caller to decide whether to prompt re-authentication or take alternative action.
 
 ## Example
 ```typescript
-// attempt to silently refresh the session; if it fails, redirect to login
+// Most common usage: attempt to refresh session and branch accordingly
 const ok = await postRefresh();
-if (!ok) {
-  window.location.href = '/login';
+if (ok) {
+  // refresh succeeded, continue user flow
+} else {
+  // refresh failed — prompt user to re-authenticate or show login
 }
 ```
 
 ## Notes
-- The function swallows exceptions and returns false on errors — it never throws.
-- The request relies on credentials (cookies) being sent; for cross-origin scenarios the server must allow credentials and CORS accordingly.
-- The function returns only a boolean success indicator; any tokens set by the server are handled via cookies or separate endpoints and are not exposed here.
+- The function swallows exceptions and returns false on error; callers should not rely on exceptions for flow control.
+- It relies on credentials being included (credentials: 'include'); if cookies are blocked or cross-site requests are restricted, refresh may fail.
+- The body must include the refreshToken field, even if empty, because the server-side model requires a non-nullable string in the body; omitting or omitting the field can cause a 400 before the cookie-based fallback is considered.
 
 ---
 
 ## refreshSession
-
 > **File:** `src/webapp/src/api/authRefresh.ts`  
 > **Kind:** function
 
-Starts or returns an in-progress session refresh operation. If a refresh is already running, subsequent calls return the same `Promise<boolean>` instead of creating a new network request. Use this when you want to avoid parallel refresh requests (single-flight behavior) and share the result with multiple callers.
+```typescript
+export function refreshSession(): Promise<boolean>
+```
+
+**Returns:** `Promise<boolean>`
+
+
+refreshSession ensures only a single session refresh is in-flight at a time and returns a `Promise<boolean>` for the refresh result. Use it when you need to refresh authentication without spawning multiple concurrent refresh requests; if a refresh is already in progress, the function reuses the existing promise.
 
 ## Remarks
-This function is a lightweight single-flight wrapper around the underlying postRefresh() call. It stores a module-scoped Promise (refreshing) while a refresh is in progress and clears that state in a finally handler so a later call will start a new refresh. This prevents duplicate refresh requests (for example, simultaneous token refresh attempts) while keeping retry behavior simple: failures clear the in-flight marker so the next call will attempt again.
+Centralizes refresh logic to prevent duplicate network calls and race conditions during token renewal. It relies on a shared refreshing cache and a postRefresh() helper; the in-flight promise is cleared in a finally block, allowing subsequent refreshes to be started after completion. This pattern is useful anywhere multiple components may need a fresh session without coordinating refreshes themselves.
 
 ## Example
 ```typescript
-// Multiple callers during an in-progress refresh get the same Promise
-const p1 = refreshSession();
-const p2 = refreshSession();
-console.log(p1 === p2); // true
-
-// Typical usage
-try {
+// Only one actual refresh will be performed even if called from multiple places
+async function ensureSession() {
   const ok = await refreshSession();
-  if (ok) {
-    // session refreshed successfully
-  } else {
-    // refresh completed but indicated failure (depends on postRefresh semantics)
+  if (!ok) {
+    throw new Error("Session refresh failed");
   }
-} catch (err) {
-  // handle network/error case
+  // proceed with authenticated work
 }
+
+// Concurrent usage example
+const a = refreshSession();
+const b = refreshSession();
+const [okA, okB] = await Promise.all([a, b]);
 ```
 
 ## Notes
-- If postRefresh() rejects, the returned Promise rejects and the internal marker is cleared; subsequent calls will trigger a new refresh attempt.
-- There is no cancellation support: once started, the refresh will run to completion and all callers share its outcome.
-- The single-flight state is module-scoped; in environments with multiple module instances (e.g., different worker contexts or server processes) each instance manages its own in-flight flag.
-- Callers must handle Promise rejections; the function propagates errors from postRefresh().
+- If postRefresh rejects, the returned promise rejects, but the finally block clears the in-flight flag so future calls can retry.
+- The in-flight cache (refreshing) must be initialized (to null/undefined) so the first call can start a refresh.
+- Do not rely on the value of postRefresh beyond the boolean it returns; refreshSession merely propagates that result to callers and manages concurrency.
+
 
 ---
 
 ## signalSessionExpired
-
 > **File:** `src/webapp/src/api/authRefresh.ts`  
 > **Kind:** function
 
-Dispatches a plain DOM Event named by SESSION_EXPIRED_EVENT on the global window object. Use this function when the application detects an expired user session and needs to notify any subscribers (UI components, services, or other modules) without creating direct dependencies.
+```typescript
+export function signalSessionExpired(): void
+```
+
+**Returns:** `void`
+
+
+Dispatches a browser Event signaling that the current user session has expired. Call this function when your authentication logic determines the token is no longer valid, so that any part of the app listening for SESSION_EXPIRED_EVENT can respond in a centralized way (e.g., redirecting to login, clearing user data, or prompting a token refresh). It provides a single, observable signal and hides the exact event name behind a small API surface, reducing duplication of window.dispatchEvent calls across the codebase.
 
 ## Remarks
-This function centralizes the "session expired" notification as a window-level event so multiple, independently authored parts of the app can react without importing the auth module or calling into it directly. It emits a plain Event (no payload), keeping the signal lightweight and decoupled from any particular handler implementation.
+This helper encapsulates cross-cutting session-expiration signaling. By emitting a window-level Event, it enables decoupled subscribers to react without the signaling code needing to know about who handles the expiration. Tests can spy on window.dispatchEvent, and consumers can attach listeners anywhere in the app that has access to the window object.
 
 ## Example
 ```typescript
-// Subscribe somewhere in your application startup or a component
-window.addEventListener(SESSION_EXPIRED_EVENT, () => {
-  // e.g. show a login modal, clear sensitive state, redirect
-  showLoginModal();
-});
-
-// Trigger the notification when you detect session expiry
+// Trigger a global session-expired signal
 signalSessionExpired();
 ```
 
 ## Notes
-- The dispatched Event has no payload — listeners cannot read extra data from the event object.
-- The Event created with new Event(...) is not cancelable and does not bubble by default.
-- Dispatching is synchronous: listeners run immediately during the dispatch call.
+- The event is a plain Event with type SESSION_EXPIRED_EVENT and carries no payload by design.
+- Listeners should register via window.addEventListener(SESSION_EXPIRED_EVENT, handler) before the signal is dispatched; remember to remove listeners to avoid leaks.
+- If you need to convey extra information about the expiration, consider using a CustomEvent instead of Event.
 
 ---

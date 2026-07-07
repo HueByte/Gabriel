@@ -3,45 +3,35 @@
 > **File:** `src/api/Gabriel.API/Controllers/MemoriesController.cs`  
 > **Kind:** class
 
-Provides an authenticated HTTP CRUD surface over IMemoryService for managing "memories" used by the settings UI and the agent. Use this controller when you need an HTTP endpoint for listing, creating/updating (upsert), retrieving or deleting memory entries; call IMemoryService directly when you are already inside server-side code and do not need the HTTP layer.
+```csharp
+[ApiController]
+[Authorize]
+[Route("memories")]
+public class MemoriesController : ControllerBase
+```
+
+
+MemoriesController exposes a RESTful API surface for managing memory entries through IMemoryService. It supports listing memories (with an optional scope filter), retrieving a single memory by ID, upserting memories via a single idempotent POST, and deleting memories by ID. The controller validates input, converts domain entities to MemoryDto objects, and returns conventional HTTP responses.
 
 ## Remarks
-This controller centralizes the memory-related HTTP behavior and applies consistent validation and idempotency rules so both the UI and the agent use the same endpoint. The POST action is an upsert: the natural key is (UserId, ProjectId, Name) so repeating the same save request updates the existing entry's UpdatedAt rather than creating duplicates. The List endpoint supports a scope query parameter: omitting projectId returns user-scoped entries, providing a projectId returns that project's entries, and passing the literal string "all" for scope merges user-scope and project entries (the same view the agent sees for a conversation). All endpoints require an authenticated user ([Authorize]).
+As the HTTP façade over the memory domain, this controller centralizes memory-management concerns for both the settings UI and agent integrations. All write-paths funnel through the same Save endpoint, enabling consistent idempotent upserts keyed by UserId, ProjectId, and Name, while reads are shaped by the scope parameter to produce user-only, project-scoped, or merged views.
 
 ## Example
 ```csharp
-// Common usage from a C# client using HttpClient
-using System.Net.Http.Json;
-
-var client = new HttpClient { BaseAddress = new Uri("https://api.example.com/") };
-client.DefaultRequestHeaders.Authorization =
-    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "<token>");
-
-// List memories merged for a project
-var projectId = Guid.Parse("11111111-2222-3333-4444-555555555555");
-var list = await client.GetFromJsonAsync<List<MemoryDto>>($"memories?scope=all&projectId={projectId}");
-
-// Upsert (save) a memory
-var saveRequest = new {
+// Common usage: upsert a memory (idempotent)
+var req = new SaveMemoryRequest
+{
     ProjectId = projectId,
-    Type = "project",
-    Name = "ImportantFact",
-    Description = "Short description",
-    Body = "Detailed memory body"
+    Type = "user",
+    Name = "Onboarding notes",
+    Description = "Guidance for onboarding users",
+    Body = "Remember to collect feedback from new users and update the process."
 };
-var saveResp = await client.PostAsJsonAsync("memories", saveRequest);
-saveResp.EnsureSuccessStatusCode();
-var saved = await saveResp.Content.ReadFromJsonAsync<MemoryDto>();
 
-// Get by id
-var single = await client.GetFromJsonAsync<MemoryDto>($"memories/{saved.Id}");
-
-// Delete
-var deleteResp = await client.DeleteAsync($"memories/{saved.Id}");
-if (deleteResp.IsSuccessStatusCode) Console.WriteLine("Deleted");
+// POST to /memories
+var response = await httpClient.PostAsJsonAsync("memories", req);
 ```
 
 ## Notes
-- The POST request validates Type against the MemoryEntryType enum (case-insensitive). Allowed values are: user, feedback, project, reference; invalid values produce a BadRequest with an explanatory error.
-- Name, Description, and Body must be non-empty; otherwise the endpoint returns BadRequest.
-- GET by id returns 404 when not found; DELETE returns 204 NoContent on success or 404 when the id does not exist. CancellationToken passed to each action is forwarded to the IMemoryService calls.
+- Upsert validation: Name, Description, and Body must be non-empty; Type must be one of: user, feedback, project, reference; otherwise returns 400 with a specific error.
+- Delete endpoint returns NoContent on success, NotFound if the ID does not exist; List supports scope filtering with an 'all' option to merge user-scope and project entries.

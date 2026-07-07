@@ -3,35 +3,30 @@
 > **File:** `src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs`  
 > **Kind:** class
 
-Streams a simple, canned LLM-like reply token-by-token (word-by-word) for development and testing. Use this provider when you need an offline substitute to exercise the streaming event flow and the agent/tool-calling loop (for example in UI/dev builds where a real LLM provider is not configured). The provider also demonstrates a single automated ToolCallReadyEvent on the first user turn if any tools are registered.
+```csharp
+public class MockChatProvider : IChatProvider
+```
+
+
+MockChatProvider is a test implementation of IChatProvider that streams a canned, deterministic reply to simulate a live chat provider without invoking a real LLM. It yields the reply word-by-word to exercise the streaming path, and on the first user turn (if any tools are registered) it emits a ToolCallReadyEvent for the first tool to demonstrate the ReAct loop, then completes the interaction with a FinishEvent indicating ToolCalls. Use this mock during development to validate the UI, streaming, and tool-invocation wiring without credentials or real model usage.
 
 ## Remarks
-This class exists purely as a development/testing shim: it exposes a "mock" model in the catalog so the UI picker can show a provider, uses a small context window (8,000 tokens) for compact behavior, and is intentionally not marked active by default. Its StreamAsync implementation either (a) emits a ToolCallReadyEvent followed immediately by a FinishEvent with FinishReason.ToolCalls when the conversation has no prior tool results and registered tools exist, or (b) emits incremental TextDeltaEvent values for a canned, formatted reply and then a FinishEvent with FinishReason.Stop. The streaming is simulated by splitting the reply on spaces and yielding each word with a short delay to exercise consumers that expect deltas over time.
+By design, this provider is not intended for production; it exists to exercise end-to-end flow in isolation. It uses the same event types as the real provider (TextDeltaEvent, ToolCallReadyEvent, FinishEvent), so consuming code can be tested without depending on a real model. The embedded mock's small context window (8k tokens) and the note that it is not IsDefault (the real provider wins bootstrap when configured) help keep dev scenarios lightweight while preserving the real provider selection semantics.
 
 ## Example
 ```csharp
-// Consume the mock provider's stream and handle the most common events.
-await foreach (var ev in mockProvider.StreamAsync(history, tools, "mock-default", cancellationToken))
+// Example: consuming the mock stream
+var provider = new MockChatProvider();
+var history = new List<ChatProviderMessage>();
+var tools = new List<ToolDescriptor> { new ToolDescriptor { Name = "FakeTool" } };
+
+await foreach (var ev in provider.StreamAsync(history, tools, "mock-default"))
 {
-    switch (ev)
-    {
-        case ToolCallReadyEvent call:
-            Console.WriteLine($"Tool requested: {call.Name}, args: {call.ArgumentsJson}");
-            // Invoke the tool and append its result to the conversation history.
-            break;
-
-        case TextDeltaEvent delta:
-            Console.Write(delta.Content); // delta.Content contains a word + trailing space
-            break;
-
-        case FinishEvent finish:
-            Console.WriteLine($"\nFinished: {finish.Reason}");
-            break;
-    }
+    // handle events as they arrive (TextDeltaEvent, ToolCallReadyEvent, FinishEvent, etc.)
+    // e.g., accumulate TextDeltaEvent.Text, react to ToolCallReadyEvent, etc.
 }
 ```
 
 ## Notes
-- The provider ignores the modelName parameter and always uses the same canned behavior.
-- A ToolCallReadyEvent is emitted only once per conversation if there are no prior MessageRole.Tool entries in history and tools.Count > 0; in that case the stream finishes immediately with FinishReason.ToolCalls.
-- Replies are constructed from the last user message (truncated to 80 characters) and split on spaces; each yielded TextDeltaEvent contains a single word plus a trailing space and is emitted with a small delay. CancellationToken is honored during the delays.
+- The Templates array in the snippet uses square brackets; in valid C# initialization, braces should be used (e.g., new string[] { ... }). This is the minimal syntactic correction needed for compilation.
+- The mock emits a ToolCallReadyEvent on the first turn when tools are provided, which intentionally exercises the tool-invocation path of the host application. If there are no tools, the mock will proceed to stream a canned reply and finish.

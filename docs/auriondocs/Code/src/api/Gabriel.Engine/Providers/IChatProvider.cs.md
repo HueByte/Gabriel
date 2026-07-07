@@ -3,24 +3,31 @@
 > **File:** `src/api/Gabriel.Engine/Providers/IChatProvider.cs`  
 > **Kind:** interface
 
-An abstraction for chat-capable LLM providers that emits a stream of incremental events (text deltas, tool-call completions, finish signals) so callers can react as the model produces output. Use this when you need a provider-agnostic, per-call model selection and incremental output delivery — for example in interactive UIs or ReAct-style agent loops where blocking for a full response would hurt responsiveness.
+```csharp
+public interface IChatProvider
+```
+
+
+IChatProvider defines a streaming contract for chat providers that can yield incremental events to the agent loop. Implementations expose StreamAsync, which returns an async stream (IAsyncEnumerable) of ChatProviderEvent objects as history, tools, and a per-call modelName are processed. This enables incremental UI updates and responsive ReAct-style flows, since text deltas, tool results, and finish signals can be observed as they arrive. The provider is stateless with respect to the chosen model; the caller resolves the user’s PreferredModel (or the config default) to a concrete model name and passes it in per call.
 
 ## Remarks
-IChatProvider separates model selection from provider implementation: callers resolve a PreferredModel into a concrete modelName and pass it to StreamAsync, while implementations remain stateless with respect to that choice. The interface exposes a stable Name (used by the provider registry and stored on user preferences) and a Models catalog for UI discovery; a provider may intentionally leave Models empty to opt out of being shown in pickers. StreamAsync returns an `IAsyncEnumerable<ChatProviderEvent>` so consumers can process partial output and tool events incrementally and cancel via CancellationToken.
+By abstracting away the concrete provider from the agent orchestration, this interface enables easy swapping, testing, and mock implementations while keeping model selection at the call site. It also centralizes streaming semantics (how deltas and results are surfaced) so the rest of the system can react uniformly to provider events regardless of provider.
 
 ## Example
 ```csharp
-// Consume incremental events from a provider (simplified)
-IAsyncEnumerable<ChatProviderEvent> stream = provider.StreamAsync(history, tools, modelName, ct);
-await foreach (var evt in stream.WithCancellation(ct))
+// Example: consuming streamed events from a provider
+IChatProvider provider = GetProvider("Mock");
+IReadOnlyList<ChatProviderMessage> history = GetHistory();
+IReadOnlyList<ToolDescriptor> tools = GetTools();
+string modelName = "gpt-4";
+
+await foreach (ChatProviderEvent ev in provider.StreamAsync(history, tools, modelName))
 {
-    // Handle different event kinds (text delta, tool call, finish) here.
-    // This lets the UI render partial text and react to tool invocations
-    // without waiting for the provider to produce a final response.
+    // Handle ev (e.g., delta text, tool invocation, or completion)
 }
 ```
 
 ## Notes
-- StreamAsync is incremental: callers must use await foreach (or otherwise enumerate the IAsyncEnumerable) to receive partial output rather than expecting a single completed response.
-- An empty Models list is a signal that the provider should not be advertised in model pickers; Name remains the canonical identifier for resolution and user preferences.
-- Honor the CancellationToken: providers and callers should respect cancellation to avoid UI hangs or leaked operations.
+- Honor CancellationToken; implementers should stop streaming when ct is canceled.
+- Ensure modelName corresponds to a model in provider.Models; mismatches should be handled gracefully.
+- Providers with an empty Models collection should still be implemented gracefully; the UI should not present such providers in the model picker.

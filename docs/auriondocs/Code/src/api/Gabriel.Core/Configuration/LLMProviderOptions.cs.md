@@ -3,25 +3,20 @@
 > **File:** `src/api/Gabriel.Core/Configuration/LLMProviderOptions.cs`  
 > **Kind:** class
 
-Shared configuration object for a single LLM provider. Use this type when binding provider-specific configuration from JSON (or other configuration sources) so provider-level concerns — base URL, authentication key, request timeout, sampling defaults, and the provider's model catalog — are centralized and validated in one place.
-
-## Remarks
-This abstract class consolidates settings that are common across LLM vendors so each concrete provider can remain a thin subclass (typically only setting its SectionName). The JSON configuration section path is used as the binder-time discriminator; the runtime identity of a provider (its human-friendly name like "Grok" or "OpenAI") lives on the IChatProvider implementation and is used by registries at runtime. The Models list is the provider-level catalog surfaced to the UI; the selected model is persisted on ApplicationUser.PreferredModel.
-
-## Example
 ```csharp
-// Inspecting provider options at runtime
-LLMProviderOptions opts = GetBoundProviderOptions();
-LLMModel? defaultModel = opts.GetDefaultModel();
-LLMModel? specific = opts.FindModel("gpt-4-x");
-
-if (defaultModel != null)
-{
-    Console.WriteLine($"Default model: {defaultModel.Name}");
-}
+public abstract class LLMProviderOptions
 ```
 
-## Notes
-- BaseUrl must include a trailing slash so relative HttpClient paths resolve correctly; missing the slash can produce incorrect request URLs.
-- ApiKey should never be committed to source control — supply via environment variables, secrets storage, or a secret manager (e.g., Infisical).
-- FindModel uses an ordinal (case-sensitive) string comparison and GetDefaultModel returns the first model with IsActive==true; both can return null if no match or no active model is present.
+
+LLMProviderOptions is the shared base configuration for all LLM provider implementations. It consolidates provider-wide concerns—authentication, transport, sampling, and the model catalog—so each concrete provider can remain a thin subclass that only sets its SectionName. The provider’s identity (for example, Grok/OpenAI/Anthropic) is expressed by the IChatProvider implementation; the JSON section path serves as the discriminator at bind time, while the provider’s Name acts as the runtime discriminator in the IChatProviderRegistry.
+
+Its members configure how to talk to a provider:
+- BaseUrl: must end with a trailing slash so relative HttpClient paths resolve correctly.
+- ApiKey: never committed. Supplying via environment variables (`PROVIDERS__<Name>`__APIKEY), user secrets, or a secret store ensures credentials are kept secure.
+- TimeoutSeconds: total HTTP budget for a single chat call; streaming responses can last longer, so this generous default (900 seconds) helps avoid mid-generation cancellation.
+- Temperature and TopP: sampling controls. These are optional and are applied at the provider level across the catalog; per-model overrides may be supported by specific providers.
+- Models: the catalog of models exposed by this provider. The UI uses this list to present choices; the selected model is persisted to the user's PreferredModel.
+- GetDefaultModel(): returns the first model marked as IsActive, or null if none are active.
+- FindModel(string name): searches the catalog for a model with the given name using ordinal comparison.
+
+These facilities together enable a consistent configuration surface across providers while allowing per-provider specialization through thin subclasses.

@@ -3,29 +3,29 @@
 > **File:** `src/api/Gabriel.API/Contracts/Messages/SendMessageRequest.cs`  
 > **Kind:** record
 
-Represents the request DTO for sending a message and carries the message text in the Content property. Use this record when accepting or sending message payloads over the Gabriel API (for example as an action parameter or the body of an HTTP POST).
+```csharp
+public record SendMessageRequest(string Content)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Content` | `string` | — |
+
+
+SendMessageRequest is a simple, immutable record that represents the payload required to send a message. It carries a single property, Content, which holds the text of the message to be delivered.
 
 ## Remarks
-This is a positional record with a single string property, Content. It is intended as a simple, immutable contract between clients and the API: it provides value-based equality, Deconstruct, and supports the record `with` expression to create modified copies. Keep it as a focused transport type and avoid adding business logic to the record.
+Being a record, SendMessageRequest provides value-based equality and immutable semantics, making it easy to compare and create variants with a with-expression. It serves as a clean contract between the client and the messaging API, separating message content from transport concerns. If future API changes require more fields (such as recipient or metadata), introduce a dedicated request type rather than expanding this one.
 
 ## Example
 ```csharp
-// Creating the request
 var request = new SendMessageRequest("Hello, world!");
-
-// ASP.NET Core controller action example
-[HttpPost("/messages")]
-public IActionResult SendMessage([FromBody] SendMessageRequest request)
-{
-    // use request.Content
-    return Ok();
-}
-
-// Sending with HttpClient
-await httpClient.PostAsJsonAsync("/messages", request);
+// You can create a modified copy with 'with':
+var next = request with { Content = "Hello again!" };
 ```
 
 ## Notes
-- The record is immutable by design: set values at construction time and use the `with` expression to produce modified copies.
-- If nullable reference types are enabled in the project, Content is non‑nullable; otherwise it may be null at runtime—validate as needed on input.
-- Serialization behavior (property name casing) depends on the configured JSON serializer settings.
+- Content is provided via the constructor and is non-nullable in nullable-enabled contexts; ensure you supply a non-null value.
+- This type is immutable; to produce a variation, use the with-expression to create a new instance.

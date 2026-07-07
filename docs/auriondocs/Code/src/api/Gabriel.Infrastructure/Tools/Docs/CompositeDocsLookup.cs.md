@@ -3,30 +3,29 @@
 > **File:** `src/api/Gabriel.Infrastructure/Tools/Docs/CompositeDocsLookup.cs`  
 > **Kind:** class
 
-Composes multiple IDocsLookup implementations into a single lookup that consults sources in a defined priority order. The first source in the provided sequence is treated as primary (its entries are listed first and its reads win); subsequent sources act as fallbacks and are consulted only when earlier sources don't provide an answer. Use this when you want a single logical docs provider backed by multiple physical stores (for example, local disk first, then remote GitHub).
+```csharp
+public sealed class CompositeDocsLookup : IDocsLookup
+```
+
+
+CompositeDocsLookup delegates to an ordered list of inner IDocsLookup sources, treating the first as the primary and consulting later sources only when earlier ones don’t provide an answer. It merges results in a way that preserves each source’s ordering while favoring the primary source for duplicate paths.
 
 ## Remarks
-This class preserves the registration order of the provided sources by materializing the IEnumerable into a list at construction time; ordering is significant — the first source is the highest priority. For listing, entries from multiple sources are merged by Path using a case-insensitive comparison so that duplicates from lower-priority sources are suppressed. Read operations consult each source in order and return the first non-null result. Transient failures from an individual source are logged and do not by themselves fail the overall operation, allowing other sources to answer; however, ListAsync records the last transient exception and will rethrow it if every source either returned no entries or threw, ensuring callers see a real underlying cause (rate limit, 5xx, DNS) instead of a generic empty result.
+
+Materializes the input sources into a list so registration order is preserved and the underlying IEnumerable isn’t re-enumerated on every call. ListAsync merges entries by relative path using a case-insensitive comparison and deduplicates duplicates across sources, with primary source entries winning when paths collide. If a source throws during ListAsync, the error is logged and the source is skipped; if all sources fail or return no docs, the last transient exception is rethrown to surface the root cause (e.g., rate limits, 5xx, DNS). ReadAsync, on the other hand, queries sources in order and returns the first non-null hit; input-validation or argument exceptions are surfaced immediately, while other exceptions are logged and cause the search to continue.
 
 ## Example
+
 ```csharp
-// Typical wiring: primary first, then fallback(s)
-IDocsLookup local = new LocalDocsLookup("./docs");
-IDocsLookup github = new GitHubDocsLookup("my-org", "repo");
-ILogger<CompositeDocsLookup> logger = loggerFactory.CreateLogger<CompositeDocsLookup>();
-
-var composite = new CompositeDocsLookup(new[] { local, github }, logger);
-
-// List merged entries (local entries appear first; duplicate paths from github are ignored)
-var list = await composite.ListAsync(CancellationToken.None);
-
-// Read a specific doc; returns the first non-null content from local then github
-var content = await composite.ReadAsync("guides/getting-started.md", CancellationToken.None);
+// Example wiring: primary on-disk docs and fallback to GitHub-hosted docs
+var composite = new CompositeDocsLookup(
+    new IDocsLookup[] { localDocs, githubDocs },
+    logger
+);
 ```
 
 ## Notes
-- Ordering matters: always pass the primary (highest-priority) source first. The class does not reorder sources.
-- Entry uniqueness is determined by DocsEntry.Path using a case-insensitive comparer; lower-priority duplicates are skipped.
-- ListAsync will rethrow a transient exception only when the merged result is empty and at least one source threw; otherwise transient errors are logged and skipped.
-- ReadAsync propagates OperationCanceledException and ArgumentException from inner sources immediately; other exceptions are logged and treated as transient (the source is skipped).
-- The CompositeDocsLookup itself is effectively immutable after construction, but thread-safety depends on the thread-safety of the supplied IDocsLookup implementations.
+
+- ListAsync uses a union-by-path with case-insensitive matching; duplicates across sources are collapsed with priority to earlier sources.
+- If every source returns no docs and at least one source threw, the last exception is rethrown to aid diagnosis.
+- Composite has no internal caching; repeated ListAsync/ReadAsync calls will query sources anew.

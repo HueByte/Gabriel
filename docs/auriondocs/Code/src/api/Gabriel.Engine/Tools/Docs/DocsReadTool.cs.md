@@ -3,22 +3,17 @@
 > **File:** `src/api/Gabriel.Engine/Tools/Docs/DocsReadTool.cs`  
 > **Kind:** class
 
-Reads a single canonical Gabriel internal documentation page by path and returns a plain-text, authoritative wrapper around the page contents. Use this tool when you need Gabriel-specific, ground-truth documentation (it prefers LLM-native self-docs and falls back to GitHub docs) rather than external or third-party sources; if you don't know available paths call docs_list first.
-
-## Remarks
-This class encapsulates the policy for resolving and returning Gabriel's official docs in a form that downstream components (especially LLMs) should treat as the canonical source of truth. It delegates actual retrieval to an IDocsLookup implementation, handles errors and not-found cases, and always wraps successful results with explicit begin/end markers and a source tag (local-llm-native or github) so consumers can tell which form they received.
-
-## Example
 ```csharp
-// Common usage: call ExecuteAsync with a JSON object specifying the path.
-var tool = new DocsReadTool(docsLookup); // docsLookup implements IDocsLookup
-string args = "{\"path\": \"README.md\"}";
-string result = await tool.ExecuteAsync(args, CancellationToken.None);
-Console.WriteLine(result); // prints the authoritative wrapper and page content
+public sealed class DocsReadTool : ITool
 ```
 
+
+DocsReadTool is a dedicated retrieval tool that fetches a single official Gabriel document by its path. It first resolves the requested path against the self-hosted LLM-native documentation and falls back to the GitHub-hosted Gabriel.Engine docs, returning the content wrapped with explicit authority markers to preserve its status as ground truth. Developers reach for it when they need a canonical answer about Gabriel's architecture, agent loop, or internal APIs without risking mixing in external sources; pass the desired path via JSON and rely on the tool to surface a single, authoritative page.
+
+## Remarks
+By isolating doc reads behind a specialized ITool, this abstraction enforces a single canonical source of truth for Gabriel docs within the agent's reasoning. The wrapping markers (BEGIN OFFICIAL GABRIEL DOC: path (source: X)) ensure downstream components treat the returned text as authoritative and not blend with surrounding context. It also centralizes how documentation is fetched, so any changes to path resolution or source preference are localized to the tool implementation. The content carries a source tag (local-llm-native or github) to inform consumers about the provenance of the material.
+
 ## Notes
-- The input JSON must contain a string "path" property; missing or non-string values produce an error message returned as a string.
-- If the underlying IDocsLookup throws, ExecuteAsync catches the exception and returns an error message containing the exception text; it does not propagate exceptions.
-- A null result from IDocsLookup yields a not-found message prompting the caller to use docs_list to discover valid paths.
-- The returned payload is plain text with explicit markers and a source tag — it is not structured JSON.
+- The input is a JSON with a 'path' string; missing or non-string yields an error message.
+- The response includes explicit BEGIN/END marker blocks; account for them when displaying to end users.
+- If the doc cannot be found, the response is a plain not-found message.

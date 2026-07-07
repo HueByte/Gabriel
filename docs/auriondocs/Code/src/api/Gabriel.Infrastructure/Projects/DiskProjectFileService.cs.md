@@ -3,34 +3,79 @@
 > **File:** `src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.cs`  
 > **Kind:** class
 
-Stores project files on local disk and keeps file metadata in the ProjectFiles database table. Use this service when you need persistent file storage scoped per-project on the server's filesystem (files are placed under {Root}/{ProjectId:N}/{filename}) while still retaining metadata and access control in the database. It performs authorization checks, enforces allowed extensions and filename sanitization, and defends against path-traversal by resolving and verifying final paths before opening any file handles.
+*Figure: How DiskProjectFileService works.*
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'background':'#faf7ef','primaryColor':'#f0e2c2','primaryTextColor':'#1f2840','primaryBorderColor':'#8a7548','secondaryColor':'#d9efec','secondaryBorderColor':'#1d8a80','secondaryTextColor':'#1f2840','tertiaryColor':'#f2ebd8','tertiaryBorderColor':'#8a7548','tertiaryTextColor':'#1f2840','lineColor':'#1d8a80','titleColor':'#1f2840','fontSize':'14px','edgeLabelBackground':'#faf7ef','clusterBkg':'#f2ebd8','clusterBorder':'#8a7548','actorBkg':'#f0e2c2','actorBorder':'#8a7548','actorTextColor':'#1f2840','actorLineColor':'#8a7548','signalColor':'#1d8a80','signalTextColor':'#1f2840','activationBkgColor':'#d9efec','activationBorderColor':'#1d8a80','noteBkgColor':'#f2ebd8','noteBorderColor':'#8a7548','noteTextColor':'#1f2840','labelBoxBkgColor':'#f0e2c2','labelBoxBorderColor':'#8a7548','labelTextColor':'#1f2840','transitionColor':'#1d8a80','transitionLabelColor':'#1f2840','stateLabelColor':'#1f2840','altBackground':'#f2ebd8'}}}%%
+flowchart TB
+start["Start: DiskProjectFileService.ReadTextAsync"]
+auth["Authorize via IProjectRepository and ICurrentUser"]
+dbQuery["AppDbContext: query ProjectFiles for ProjectFile by fileId & projectId"]
+found{"ProjectFile exists?"}
+notFound["Throw NotFoundException(nameof(ProjectFile), fileId)"]
+getFile["Got ProjectFile metadata (ProjectFile)"]
+resolve["Resolve file path using ProjectFilesOptions.Root; verify path is inside project dir"]
+existsDisk{"Disk file exists?"}
+warnNotFound["Log warning; Throw NotFoundException(ProjectFile,fileId)"]
+open["Open FileStream (FileMode.Open, FileAccess.Read, FileShare.Read)"]
+isText{"IsTextLike(ProjectFile.ContentType)?"}
+readLoop["Read up to min(maxBytes, file.SizeBytes) in loop from stream"]
+returnText["Return UTF8 string"]
+returnNull["Return null (not text-like)"]
+done["Done"]
+
+start --> auth
+auth --> dbQuery
+dbQuery --> found
+found -- "No" --> notFound
+notFound --> done
+found -- "Yes" --> getFile
+getFile --> resolve
+resolve --> existsDisk
+existsDisk -- "No" --> warnNotFound
+warnNotFound --> done
+existsDisk -- "Yes" --> open
+open --> isText
+isText -- "No" --> returnNull
+returnNull --> done
+isText -- "Yes" --> readLoop
+readLoop --> returnText
+returnText --> done
+```
+
+```csharp
+public sealed class DiskProjectFileService : IProjectFileService
+```
+
+
+Stores and serves project file content on the local filesystem while keeping file metadata in the application's database. Use this implementation when you want a simple, predictable on-disk layout for project files (root/{ProjectId:N}/{filename}) and prefer local disk storage instead of a remote blob service. All operations perform authorization checks and validate filesystem paths to prevent path-traversal.
 
 ## Remarks
-DiskProjectFileService is an implementation of IProjectFileService that combines on-disk storage for file contents with relational metadata in AppDbContext.ProjectFiles. It centralizes concerns common to project-scoped file storage: access control (AuthorizeAsync is invoked on public operations), filename sanitization and extension whitelisting, collision-resistant naming (a short suffix is appended when needed), and a path-verification step that ensures every file access stays within the project's directory. The class intentionally returns file streams for callers to consume (caller disposes the stream), and provides convenience helpers such as ReadTextAsync for small textual reads.
+This class separates file content (on-disk) from metadata (ProjectFiles table in the DbContext). It enforces a number of safety and consistency rules that are easy to miss when implementing custom file services: filenames are sanitized and restricted by allowed extensions, every resolved path is checked to ensure it lives inside the project's directory (mitigating path-traversal), and the upload path selection uses a suffix-collision policy so concurrent uploads result in distinct final filenames.
 
 ## Example
 ```csharp
 // List files
 var files = await diskService.ListAsync(projectId, ct);
 
-// Open a file stream and ensure disposal
+// Open a file stream for reading (caller must dispose)
 var (meta, stream) = await diskService.OpenAsync(projectId, fileId, ct);
 using (stream)
 {
-    // read or copy the stream
+    // read from stream
 }
 
-// Read up to 64KB of text content (returns null for non-text types)
-string? preview = await diskService.ReadTextAsync(projectId, fileId, 64 * 1024, ct);
-if (preview != null)
-{
-    Console.WriteLine(preview);
-}
+// Read small text content, null if not a text-like content type
+string? text = await diskService.ReadTextAsync(projectId, fileId, maxBytes: 16_384, ct);
+
+// Upload a file stream
+using var uploadStream = File.OpenRead("localfile.bin");
+var newFile = await diskService.UploadAsync(projectId, "report.txt", "text/plain", uploadStream, ct);
 ```
 
 ## Notes
-- OpenAsync returns a FileStream that the caller is responsible for disposing; failing to dispose will keep file handles open.
-- ReadTextAsync returns null when the stored ContentType is not considered "text-like." It reads at most maxBytes and also respects the file's SizeBytes; very large files are truncated to fit an int-sized buffer (uses int.MaxValue guard).
-- If metadata exists but the disk file is missing, the service logs a warning and throws NotFoundException.
-- Filename collision resolution appends a short suffix to produce a final filename; this makes concurrent uploads less likely to collide but does not replace explicit transactional coordination if strict atomicity is required.
-- Several helper methods (e.g. SanitizeFilename, EnsureExtensionAllowed, ResolveFilePath, EnsureWithinProjectDir, PickAvailableNameAsync, AuthorizeAsync) are used internally to enforce policies and path-safety; their behavior governs security and validation rules seen by callers.
+- OpenAsync returns an open FileStream; the caller is responsible for disposing it to avoid file handles leaking.
+- ReadTextAsync returns null if the file's content type is not considered "text-like"; it also caps the read to the provided maxBytes and decodes bytes as UTF-8.
+- If metadata exists but the underlying disk file is missing, OpenAsync logs a warning and throws NotFoundException.
+- UploadAsync sanitizes filenames and enforces allowed extensions; its collision policy appends a short suffix so concurrent uploads to the same sanitized name do not clobber each other.
+- All public operations perform an authorization check (via AuthorizeAsync) before accessing metadata or disk; callers must ensure the current principal has the required project permissions.

@@ -3,34 +3,22 @@
 > **File:** `src/api/Gabriel.Core/Entities/MemoryEntryType.cs`  
 > **Kind:** enum
 
-Represents the category assigned to a stored memory entry. Use this enum to classify memories so agent logic, retrieval, display and retention policies can treat user facts, corrective feedback, project context, and external references differently.
-
-## Remarks
-This enum mirrors Claude Code's auto-memory schema to keep the agent's mental model aligned with common conventions. The category is intended to drive different handling paths — for example, applying Feedback to change behaviour, using User entries to personalize tone, surfacing Project entries in context-aware responses, and showing Reference entries as external pointers.
-
-## Example
 ```csharp
-// Filter behaviour based on memory category
-MemoryEntryType type = MemoryEntryType.Feedback;
-
-switch (type)
+public enum MemoryEntryType
 {
-    case MemoryEntryType.User:
-        // tailor response tone or personalization
-        break;
-    case MemoryEntryType.Feedback:
-        // incorporate correction into future decision-making
-        break;
-    case MemoryEntryType.Project:
-        // surface deadlines or constraints when relevant
-        break;
-    case MemoryEntryType.Reference:
-        // display links or pointers to external resources
-        break;
+    User = 0,
+    Feedback = 1,
+    Project = 2,
+    Reference = 3,
 }
 ```
 
+
+MemoryEntryType is an enumeration that labels the category of a memory entry used by the agent's memory system. It defines four categories—User, Feedback, Project, and Reference—so memory can be categorized consistently and retrieved with a clear intent. Use MemoryEntryType when creating a memory record to indicate what kind of information is being stored: User captures facts about the person the agent is interacting with (role, expertise, preferences); Feedback records corrections or validations that should influence future behavior; Project stores information about ongoing work constraints, deadlines, or stakeholder considerations; Reference points to external information sources such as dashboards, ticket systems, Slack channels, or docs. The explicit mapping (User = 0, Feedback = 1, Project = 2, Reference = 3) helps with deterministic serialization across components.
+
+## Remarks
+MemoryEntryType unifies memory classification and enables targeted retrieval and behavior tuning. By isolating these categories behind a single enum, the system can route memory entries to the appropriate subsystems (personalization, feedback loop, project planning, or external references) and extend the taxonomy in one place without touching business logic everywhere.
+
 ## Notes
-- The enum values are explicit integers and stable; do not reorder or renumber members once persisted, as stored data or serialized representations depend on these numeric values.
-- The default (zero) value is User — a newly default-initialized MemoryEntryType will be MemoryEntryType.User.
-- When integrating with external memory schemas, ensure mapping remains consistent to avoid semantic mismatches.
+- Be careful to classify content in the most specific category to avoid confusing retrieval.
+- If interop with other languages or services relies on numeric values, keep the explicit assignments in sync to prevent serialization drift.

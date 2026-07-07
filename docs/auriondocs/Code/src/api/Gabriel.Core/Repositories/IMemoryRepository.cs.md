@@ -3,31 +3,35 @@
 > **File:** `src/api/Gabriel.Core/Repositories/IMemoryRepository.cs`  
 > **Kind:** interface
 
-Abstraction for storing and retrieving MemoryEntry objects that are scoped to a user and optionally to a project. Use this repository when implementing persistence for agent or user memories; it exposes listing and lookup operations (including a convenience method that returns all entries an agent should "see" for a conversation), plus methods to add, update, and remove entries.
+```csharp
+public interface IMemoryRepository
+```
+
+
+An abstraction over storage for MemoryEntry objects that exposes scoped CRUD operations. Use this interface when application logic or an agent needs to list, retrieve, create, update or remove memory entries without depending on a particular persistence technology; it encapsulates the notion of user-scope (projectId = null) and optional project-scoped memories.
 
 ## Remarks
-This interface follows the repository pattern to separate storage concerns from business logic. ListForAgentAsync is a convenience that returns the union of user-scoped memories and, when a projectId is provided, the project-scoped memories so an agent can get everything visible in a single call. FindByNameAsync uses the (userId, projectId, name) tuple because the name (slug) is unique within its scope and is intended to let callers decide between creating a new memory or updating an existing one.
+IMemoryRepository centralizes access rules and scoping for memories: callers supply a userId and an optional projectId to indicate the scope. Implementations are free to map these operations to any backing store (database, in-memory cache, etc.). The FindByNameAsync method assumes the provided name/slug is unique within the specified scope and is intended for the common create-or-update decision the agent performs. Some concrete implementations may use change-tracking semantics where Update and Remove operate on tracked entities and require an explicit commit/save outside this interface—check the actual implementation for persistence guarantees.
 
 ## Example
 ```csharp
 // Typical create-or-update flow used by an agent's memory_save tool
-var existing = await repo.FindByNameAsync(userId, projectId, name, ct);
+var existing = await repo.FindByNameAsync(userId, projectId, slug, ct);
 if (existing == null)
 {
-    var newEntry = new MemoryEntry { Id = Guid.NewGuid(), UserId = userId, ProjectId = projectId, Name = name, Value = value };
-    await repo.AddAsync(newEntry, ct);
+    var entry = new MemoryEntry { Id = Guid.NewGuid(), UserId = userId, ProjectId = projectId, Name = slug, Value = value };
+    await repo.AddAsync(entry, ct);
 }
 else
 {
     existing.Value = value;
-    repo.Update(existing); // synchronous update; persistence semantics depend on implementation
+    repo.Update(existing);
 }
 
-// Get everything the agent should see for a conversation
-var visible = await repo.ListForAgentAsync(userId, projectId, ct);
+// Note: some implementations may require an additional commit/save step after Update/Add.
 ```
 
 ## Notes
-- Pass projectId = null to operate in the user scope (project-agnostic memories).
-- Name/slug uniqueness is scoped to (userId, projectId); FindByNameAsync is the intended way to detect existing entries.
-- AddAsync is asynchronous; Update and Remove are synchronous on the interface — concrete implementations may treat these as tracked changes that require an explicit save/commit step or may persist immediately. Include CancellationToken when calling async methods to support cancellation.
+- Pass projectId = null to operate in the user's global scope; passing a projectId limits operations to that project's scope.
+- FindByNameAsync treats name as unique within the (userId, projectId) scope — callers use it to decide between create and update.
+- AddAsync and the query methods are asynchronous; Update and Remove are synchronous and may rely on change tracking or an external unit-of-work. Verify persistence behavior in the concrete repository implementation.

@@ -10,76 +10,84 @@
 ---
 
 ## IJwtTokenService
-
 > **File:** `src/api/Gabriel.Core/Identity/IJwtTokenService.cs`  
 > **Kind:** interface
 
-Issues short-lived JWT access tokens and long-lived, server-backed refresh tokens. Use this abstraction when you want stateless access tokens (validated by signature) together with rotatable, revocable refresh tokens so you can safely revoke or detect theft without making access tokens stateful.
+```csharp
+public interface IJwtTokenService
+```
+
+
+IJwtTokenService defines the contract for issuing and revoking JWT-based tokens used in the authentication workflow. It issues short-lived access tokens and long-lived, rotatable refresh tokens; access tokens are stateless and validated by signature, while refresh tokens are stored server-side to support revocation and theft detection. Typical usage: after a user authenticates, IssueAsync returns a TokenPair; use RefreshAsync to rotate tokens when needed; RevokeAsync to sign out from a single device; RevokeAllForUserAsync for sign-out-everywhere scenarios.
 
 ## Remarks
-This interface separates concerns between short-lived access tokens and long-lived refresh tokens: access tokens remain stateless for fast validation, while refresh tokens are stored and managed server-side so they can be rotated and revoked. RefreshAsync performs rotation and is expected to detect reuse (a theft signal) and trigger revocation of the refresh-token family for the affected user. The service is typically used by authentication endpoints (login, token refresh, sign-out) and integrates with secure client-side storage (HttpOnly cookies or secure stores) for refresh tokens.
+This abstraction separates token lifecycle concerns from business logic, enabling consistent security behavior across clients and services. It centralizes refresh-token rotation and theft handling; a reused or compromised token triggers a revoke-all for the user, limiting potential damage.
 
 ## Example
 ```csharp
-// During initial sign-in (session already validated):
-TokenPair pair = await jwtService.IssueAsync(userId, email, ct);
-// store pair.AccessToken in Authorization header for API calls
-// store pair.RefreshToken in an HttpOnly, Secure cookie
+// Common usage pattern
+var tokens = await _jwtTokenService.IssueAsync(user.Id, user.Email, ct);
 
-// When access token expires, exchange refresh token for a new pair:
-TokenPair newPair = await jwtService.RefreshAsync(refreshTokenFromCookie, ct);
-// replace stored refresh token with newPair.RefreshToken and use newPair.AccessToken
+// Later, refresh on token rotation
+var newTokens = await _jwtTokenService.RefreshAsync(tokens.RefreshToken, ct);
 
-// Sign out from single device:
-await jwtService.RevokeAsync(refreshTokenFromCookie, ct);
+// Sign out from a single device
+await _jwtTokenService.RevokeAsync(tokens.RefreshToken, ct);
 
-// Sign out everywhere / after suspected compromise:
-await jwtService.RevokeAllForUserAsync(userId, ct);
+// Sign out everywhere after credential compromise
+await _jwtTokenService.RevokeAllForUserAsync(user.Id, ct);
 ```
 
 ## Notes
-- Treat refresh tokens as highly sensitive: store them in HttpOnly, Secure cookies or a similarly protected client storage; never expose them to JavaScript.
-- Revoking refresh tokens does not immediately invalidate already-issued access tokens (they are stateless and valid until expiry); consider short access-token lifetimes or a token blacklist if immediate invalidation is required.
-- Rotation introduces a concurrency pitfall: simultaneous refresh requests can look like reuse. Implementations must handle concurrent refresh attempts carefully to avoid false-positive theft detection and unintended revocations.
+- Refresh tokens are rotated on each successful RefreshAsync call; reuse or theft of a refresh token is detected and triggers a revoke-all for the user.
+- RevokeAsync invalidates a single refresh token (e.g., sign-out on one device); use RevokeAllForUserAsync to terminate all sessions for a user.
+- TokenPair is the payload returned by issuance/refresh operations and should be treated as sensitive material; store and transmit it securely.
+
 
 ---
 
 ## TokenPair
-
 > **File:** `src/api/Gabriel.Core/Identity/IJwtTokenService.cs`  
 > **Kind:** record
 
-Represents a pair of JWT tokens — an access token and a refresh token — together with their expiration timestamps. Reach for this record when producing or returning both tokens from an authentication or token service so callers get the token strings and the exact times they expire.
+```csharp
+public record TokenPair(
+    string AccessToken,
+    DateTimeOffset AccessExpiresAt,
+    string RefreshToken,
+    DateTimeOffset RefreshExpiresAt)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `AccessToken` | `string` | — |
+| `AccessExpiresAt` | `DateTimeOffset` | — |
+| [`RefreshToken`](RefreshToken.cs.md) | `string` | — |
+| `RefreshExpiresAt` | `DateTimeOffset` | — |
+
+
+TokenPair is an immutable value object that groups an access token and its expiry alongside a refresh token and its expiry, allowing callers to transport both tokens and their lifetimes as a single unit. Use TokenPair when a token response provides both an access and a refresh token together, so you can pass around a single, strongly-typed value instead of separate strings and expiry dates.
 
 ## Remarks
-This is a compact, immutable DTO (C# record) intended to be returned by JWT/token services (for example implementations of IJwtTokenService). It encodes both token values and their expiry instants as DateTimeOffset so callers can make correct decisions about refresh timing. Being a record, it provides value equality, deconstruction, and convenient copy-with semantics.
+- TokenPair uses C# record semantics to provide value-based equality; two pairs with identical fields compare equal and can be deconstructed in a pattern-based style.
+- Being a record, it is effectively immutable: create a new TokenPair to reflect updated tokens or expiries rather than mutating an existing instance.
+- It encapsulates related authentication data (tokens and their expiries) to reduce surface area and improve type-safety in authentication and token-refresh workflows.
 
 ## Example
 ```csharp
-// Constructing a TokenPair after issuing tokens
-var accessExpires = DateTimeOffset.UtcNow.AddMinutes(15);
-var refreshExpires = DateTimeOffset.UtcNow.AddDays(30);
-var pair = new TokenPair(
-    AccessToken: "eyJhbGci...",
-    AccessExpiresAt: accessExpires,
-    RefreshToken: "b1f2c3...",
-    RefreshExpiresAt: refreshExpires);
-
-// Deconstructing
-var (access, accessExp, refresh, refreshExp) = pair;
-Console.WriteLine($"Access expires at: {accessExp}");
-
-// Returning from a service method
-public TokenPair CreateTokens(User user)
-{
-    // ... generate tokens and compute expirations ...
-    return pair;
-}
+var tokenPair = new TokenPair(
+    AccessToken: accessToken,
+    AccessExpiresAt: DateTimeOffset.UtcNow.AddMinutes(15),
+    RefreshToken: refreshToken,
+    RefreshExpiresAt: DateTimeOffset.UtcNow.AddDays(7)
+);
 ```
 
 ## Notes
-- Prefer using UTC (DateTimeOffset.UtcNow) for the expiry values to avoid timezone surprises when comparing instants.
-- Treat token strings as sensitive secrets: do not log them in plain text and avoid including them in error messages.
-- The record is a simple container — it does not perform validation or token generation itself; those responsibilities belong to the issuing service.
+- Do not log or serialize tokens to logs or user-facing responses; treat them as sensitive data.
+- Prefer UTC-based timestamps (DateTimeOffset with UTC) to avoid timezone-related bugs when comparing expiries.
+- If you need to change any token or expiry, construct a new TokenPair instance; the existing one remains unchanged.
 
 ---

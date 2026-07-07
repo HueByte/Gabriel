@@ -3,12 +3,25 @@
 > **File:** `src/api/Gabriel.Engine/Sequence/PatternKind.cs`  
 > **Kind:** enum
 
-Represents the five primitive visual patterns the renderer can produce. Use this enum to select or pin a specific visual motif for a Project or Conversation; when no explicit choice is provided the generator's seed picks one automatically.
+```csharp
+public enum PatternKind
+{
+    Plasma,
+    Waves,
+    Spiral,
+    Pulse,
+    Shimmer,
+}
+```
+
+
+PatternKind is an enumeration that lists the five primitive visual patterns the generator can render: Plasma, Waves, Spiral, Pulse, and Shimmer. Each member corresponds to a distinct animation grammar defined in Patterns.cs, enabling the rendering engine to switch between discrete pattern strategies at runtime. A seed determines which pattern is chosen by default when no explicit override is set on the owning Project or Conversation, while explicit overrides let a user pin a specific look without re-rolling for it.
 
 ## Remarks
-Each member corresponds to a distinct animation grammar (see Patterns.cs) implemented by the rendering/generation pipeline. The seed-based selection yields a consistent look when no override is set on the owning Project or Conversation; conversely, setting an explicit PatternKind forces that visual style so the appearance remains stable across re-runs.
+
+PatternKind serves as a clean abstraction that decouples the rendering policies from the rest of the system. By centralizing the allowed visual primitives, the code that configures defaults or user overrides can reference a single type rather than multiple ad-hoc constants. It also makes it straightforward to extend visuals by adding new kinds in Patterns.cs and PatternKind, with minimal ripple effects across callers.
 
 ## Notes
-- These enum values may be persisted or serialized by callers; avoid reordering or renumbering existing members to preserve compatibility.
-- Adding new values can change the distribution of seed-chosen patterns; expect different seeds to map to different visuals after extension.
-- Consumers should map each enum member to the corresponding implementation in Patterns.cs rather than relying on string/int names directly.
+
+- If you extend PatternKind with new values, ensure the dispatch logic covers the new cases to avoid unexpected fallbacks.
+- When changing the seed/default mapping, update the corresponding documentation and tests to reflect the new default visual.

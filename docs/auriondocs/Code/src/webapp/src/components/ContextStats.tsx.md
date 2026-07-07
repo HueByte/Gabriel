@@ -13,79 +13,52 @@
 ---
 
 ## ContextStatsProps
-
 > **File:** `src/webapp/src/components/ContextStats.tsx`  
 > **Kind:** interface
 
-Props for the ContextStats component. Provide the conversationId for which context statistics should be displayed; optionally pass a numeric refreshKey that the parent increments to force the component to re-fetch or update its displayed metrics after a chat turn or other external change.
+```typescript
+interface ContextStatsProps
+```
+
+
+ContextStatsProps defines the shape of the props expected by the ContextStats UI component. It requires conversationId to identify the conversation whose statistics are displayed and exposes an optional refreshKey that, when incremented, triggers a refresh of the context statistics to reflect the latest state.
 
 ## Remarks
-This interface keeps the component API minimal: conversationId identifies the conversation to inspect, while refreshKey serves only as a change signal (not as data to be displayed). Use refreshKey when the parent knows the underlying context changed and needs to force the child to refresh its data.
+ContextStatsProps is a small, focused data contract that separates rendering concerns from data refresh logic. Using the refreshKey avoids introducing a dedicated refresh callback in the component, instead leveraging React's dependency tracking to re-run data fetches whenever the key changes. This makes it easier to synchronize the UI with chat events without mutating internal component state.
 
 ## Example
 ```typescript
-// Parent component that increments a counter after each chat turn
-function ChatContainer() {
-  const [turn, setTurn] = useState(0);
-  const conversationId = "conv-123";
-
-  function onUserSend() {
-    // send message...
-    // then bump the refreshKey so ContextStats refetches
-    setTurn(t => t + 1);
-  }
-
-  return (
-    <>
-      <ChatWindow conversationId={conversationId} onSend={onUserSend} />
-      <ContextStats conversationId={conversationId} refreshKey={turn} />
-    </>
-  );
-}
+<ContextStats conversationId="conv-123" refreshKey={refreshCounter} />
 ```
 
 ## Notes
-- The numeric value of refreshKey is irrelevant except that it changes; incrementing an integer is the common pattern.
-- If refreshKey is omitted, the component will not receive an explicit external refresh signal and may only update based on its own internal events or conversationId changes.
-- Avoid passing a new value each render unless you want to force a refetch on every render (this will cause extra network/load work).
+- refreshKey is optional; omit it when you don't need an explicit refresh trigger.
+- Changing refreshKey to a new value will trigger a refresh; repeated values do not.
+- conversationId should identify the exact conversation; passing a different ID will reflect a different dataset.
+
 
 ---
 
 ## Category
-
 > **File:** `src/webapp/src/components/ContextStats.tsx`  
-> **Kind:** type
+> **Kind:** type alias
 
-Represents a category wrapper object whose sole property, `key`, is restricted to one of six literal identifiers: 'system', 'project', 'memory', 'summary', 'tools', or 'conversation'. Use this when a component or function expects a category described as an object with a named `key` field instead of a bare string.
-
-## Remarks
-Using an object with a `key` property (rather than a plain string union type) makes the shape easy to extend later with additional metadata (labels, icons, counts) and serves as a simple discriminant when writing switches or type guards.
-
-## Example
 ```typescript
-const c1: Category = { key: 'system' };
-function handleCategory(cat: Category) {
-  switch (cat.key) {
-    case 'system':
-      // handle system
-      break;
-    case 'project':
-      // handle project
-      break;
-    // ...other cases
-  }
-}
+type Category =
 ```
 
-## Notes
-- Category is not a plain string; checks must inspect the `key` property (e.g. `cat.key === 'memory'`).
-- The allowed values are exact literals (lowercase); adding new categories requires updating the type definition and any switch/case handling.
 
+Category is a type describing a small object that carries a single restricted field named key. The key is a union of six string literals: 'system', 'project', 'memory', 'summary', 'tools', and 'conversation'. Use this type when tagging items in the UI context (as in ContextStats) to ensure only one of the predefined categories is assigned, catching typos at compile time instead of at runtime.
+
+## Remarks
+By modeling the category as a literal-union on a property, code that consumes Category can perform exhaustive checks by switch on value, and editors get better autocomplete. It serves as a lightweight abstraction that groups related contextual items under a finite set of labels. If new categories are needed, they must be added to the union and all dependent logic should be updated accordingly.
+
+## Notes
+- This type defines only the key property; if your data shape includes additional fields for Category-tagged items, they must be added to the type or wrapped with an interface that extends Category.
 
 ---
 
 ## ContextStats
-
 > **File:** `src/webapp/src/components/ContextStats.tsx`  
 > **Kind:** function
 
@@ -94,83 +67,54 @@ export function ContextStats(
 ```
 
 
-Renders context-related statistics for a specific conversation. Use this component in a conversation view or header when you need a compact display of per-conversation context metrics; the parent can force an update by changing the refreshKey prop.
-
-## Remarks
-This component accepts a conversation identifier and an optional numeric refreshKey (default 0). The refreshKey exists so a parent can trigger the component to refresh its displayed information without remounting it — update the numeric value (for example by incrementing) to request a refresh.
-
-## Example
-```typescript
-// Basic usage in a conversation view
-<ContextStats conversationId={conversation.id} />
-
-// Force an update from a parent by changing refreshKey
-const [refreshKey, setRefreshKey] = useState(0);
-return (
-  <>
-    <button onClick={() => setRefreshKey(k => k + 1)}>Refresh stats</button>
-    <ContextStats conversationId={conversation.id} refreshKey={refreshKey} />
-  </>
-);
-```
-
-## Notes
-- If conversationId is absent or falsy the component may not display meaningful data; provide a valid identifier.
-- refreshKey is a simple numeric token intended to signal "please refresh"; use a stable incrementing value rather than a new object each render.
-- The exact update/fetch behavior is implemented inside the component; consumers should rely on refreshKey for explicit refresh requests rather than internal implementation details.
+ContextStats is a UI helper that renders contextual statistics for a given conversation. It takes a conversationId to determine which conversation's metrics to display and an optional refreshKey that can be used to re-fetch or recompute the statistics when the surrounding context changes (for example, when the user performs an action that would alter the data being shown). Use this component when you need to surface a compact, contextual snapshot of a conversation's state—such as message counts, last activity, participant activity, or other derived metrics—without embedding the statistical logic directly in the page or parent component. This abstraction centralizes the logic for computing and presenting context-specific metrics, making it easier to maintain consistency across the UI and to reuse the same statistics rendering in multiple places where a conversation context is shown. If you need the exact fields shown or the data fetching strategy, refer to the implementation details within ContextStats in the file src/webapp/src/components/ContextStats.tsx.
 
 ---
 
 ## buildGridCells
-
 > **File:** `src/webapp/src/components/ContextStats.tsx`  
 > **Kind:** function
 
-Creates a fixed-length array of GRID_CELLS entries that map contiguous grid positions to category keys (or null) based on the token counts in the provided ContextMetricsResponse. Use this when preparing a compact, visual representation of how different context categories occupy the model's token window (e.g., a small bar or grid where each cell represents a slice of the context window).
-
-## Remarks
-The function computes the effective context window (at least 1 token) and determines how many tokens each grid cell represents. It iterates CATEGORIES in order and assigns each category a contiguous block of cells sized proportionally to its token count, but always at least one cell for any category with >0 tokens. Because counts are rounded up, earlier categories can consume more cells and the loop stops once GRID_CELLS are filled; any remaining unassigned cells remain null (the "free" bucket).
-
-## Example
 ```typescript
-// Given some ContextMetricsResponse `metrics` (from the runtime) call:
-const cells = buildGridCells(metrics);
-// `cells` is an array of length GRID_CELLS where each entry is either a category key
-// (Category['key']) or null for unassigned/free cells. You can then render these
-// as a compact visualization (e.g. a horizontal grid where each cell is colored
-// by its category key).
-console.log(cells.length); // === GRID_CELLS
-console.log(cells); // e.g. [ 'system', 'system', 'prompt', null, null, ... ]
+function buildGridCells(metrics: ContextMetricsResponse): (Category['key'] | null)[]
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `metrics` | [`ContextMetricsResponse`](../../../api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.cs.md) | — |
+
+
+Computes a fixed-length grid representation of category token distribution from a ContextMetricsResponse. It splits the context window into GRID_CELLS segments and allocates consecutive cells to each category based on its token count, ensuring every non-empty category gets at least one cell. The result is an array of GRID_CELLS elements where each entry is either the corresponding Category['key'] or null, suitable for compact visual summaries in the UI; if capacity runs out, later categories are truncated.
+
+## Remarks
+This abstraction centralizes the logic for mapping token-based category weights into a fixed-size grid, decoupling layout from metric computation and enabling consistent rendering across the UI. It relies on the ordering of CATEGORIES and their tokens(...) calculations to determine allocation, and uses a trailing "free" bucket behavior when the grid cannot accommodate all categories.
+
 ## Notes
-- The allocation is order-dependent: CATEGORIES earlier in the list have priority and may consume cells before later categories are considered.
-- Non-zero token categories always receive at least one cell due to the Math.max(1, Math.ceil(...)) behavior; this can cause slight over-allocation which is absorbed by filling up to GRID_CELLS and leaving trailing nulls if any remain.
-- The function protects against a zero context window by using Math.max(1, metrics.contextWindowTokens), so tokensPerCell is never Infinity or division-by-zero.
+- If all categories report zero tokens, the returned grid consists entirely of nulls.
+- Non-zero categories are guaranteed at least one cell, which can cause slight over-allocation due to rounding up.
+- When GRID_CELLS is insufficient for all positive-token categories, later categories are not represented in the result.
 
 ---
 
 ## formatTokens
-
 > **File:** `src/webapp/src/components/ContextStats.tsx`  
 > **Kind:** function
 
-Return a compact, human-friendly string for a token count: numbers below 1,000 are returned as-is, while values >= 1,000 are abbreviated with a "k" suffix. Use this when displaying token or item counts in a UI where a short, readable format is preferred over the full numeric value.
-
-## Remarks
-This function intentionally shows one decimal place for values in the thousands (e.g. "12.4k") to preserve some precision for smaller thousands, but drops the decimal for larger values (>= 100k) using whole-number rounding (e.g. "187k"). It is a small, presentation-focused helper — it does not localize number formatting or handle negative-abbreviation semantics.
-
-## Example
 ```typescript
-console.log(formatTokens(999));     // "999"
-console.log(formatTokens(1000));    // "1.0k"
-console.log(formatTokens(12400));   // "12.4k"
-console.log(formatTokens(187000));  // "187k"
+function formatTokens(n: number): string
 ```
 
-## Notes
-- toFixed(1) always emits one decimal, so values like 1000 become "1.0k" (not "1k").
-- Rounding of the decimal form can push values to the next magnitude: e.g., 99_999 -> k = 99.999 -> toFixed(1) -> "100.0k".
-- The function does not perform localization (decimal separator is ".") and does not abbreviate negative numbers (negative values < 1000 are returned as their full string).
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `n` | `number` | — |
+
+**Returns:** `string`
+
+
+Formats a non-negative numeric token count into a concise, human-readable string using a trailing 'k' to denote thousands. For values below 1000 it returns the plain number as a string. For 1000 and above it converts to thousands, showing one decimal place when the thousands value is less than 100 (e.g., 12400 -> '12.4k'), and dropping the decimal for 100000 and above (e.g., 123000 -> '123k'). This behavior is implemented by dividing by 1000 to get k, then conditionally rounding or fixing one decimal depending on k. The helper is intended for UI scenarios (such as ContextStats) where large counts should be compact without obscuring the magnitude.
 
 ---

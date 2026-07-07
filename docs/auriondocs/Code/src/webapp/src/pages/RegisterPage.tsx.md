@@ -3,12 +3,16 @@
 > **File:** `src/webapp/src/pages/RegisterPage.tsx`  
 > **Kind:** function
 
-Renders the registration page: a form with email, password, an avatar preview that can be rerolled, and client-side handling of account creation via the app's useAuth.register function. Use this component as the register route or page when you want a full registration UX that disables inputs while a request is in-flight and navigates to the app root on success.
+```typescript
+export function RegisterPage()
+```
+
+
+RegisterPage is a React function that renders the user registration screen and wires the form controls to local UI state. It presents email and password inputs, a live avatar preview with a seed that can be rerolled, and a password visibility toggle, while handling submission via the authentication context and routing on success. It guards against duplicate submissions with a busy flag and surfaces server or client errors inline.
 
 ## Remarks
-This is a small, self-contained page component that wires UI state (email, password, password visibility, avatar seed, busy/error states) to the authentication layer via useAuth(). It visually rerolls a preview avatar on each mount and when the user clicks the reroll button, but the comment in-source notes that the final avatar seed for the created account is assigned server-side. The component prevents duplicate submissions by using a busy flag, shows errors returned from the register call, and redirects with react-router's navigate on successful registration.
+RegisterPage encapsulates the sign-up UX and delegates authentication to a shared context, keeping API details out of the UI. The avatar seed is purely visual—server-side account avatar generation occurs after registration—so the reroll on each visit is a user-experience flourish rather than a identity cue. The component uses navigate with replace to prevent returning to the registration screen after a successful sign-up and disables inputs while processing to avoid duplicate requests.
 
 ## Notes
-- The password input enforces a minLength in the browser but that is client-side only; server-side validation is still required.
-- Error text shown comes from the thrown value's message when it is an Error; non-Error rejections produce a generic "Registration failed." message.
-- The password visibility toggle sets tabIndex={-1}, which prevents keyboard users from tab-focusing that control — review if keyboard accessibility is required.
+- The avatar seed is visual only; the real avatar seed is assigned server-side during registration.
+- This component relies on the presence of the auth context providing a register function; without it, registration cannot complete.

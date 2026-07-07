@@ -3,23 +3,20 @@
 > **File:** `src/api/Gabriel.API/Controllers/DiagnosticsController.cs`  
 > **Kind:** class
 
-Exposes read-only operational diagnostics derived from the application's metric event log. The controller is an authenticated API surface (not admin-restricted) intended for users or tooling to verify whether services — notably the `web_search` provider — are functioning: it queries recent metric rows, aggregates outcomes (success, empty, error), computes latencies and last-seen timestamps, and returns provider-level summaries.
-
-## Remarks
-This controller intentionally performs aggregation on the read side by querying the metric repository with a system prefix (e.g., "web_search.") and a bounded window. That design keeps event ingestion simple (write-only) and lets callers request different lookback windows for short- or long-term views. The endpoints parse per-row JSON lazily and only inspect a few well-known fields (outcome, latency_ms, query, error_message), which reduces coupling to the full metric schema while still producing actionable health signals.
-
-## Example
 ```csharp
-// Request a 500-row snapshot of web-search diagnostics and deserialize the response.
-using var client = new HttpClient { BaseAddress = new Uri("https://api.example.com/") };
-client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "<token>");
-var resp = await client.GetAsync("diagnostics/web-search?windowSize=500");
-resp.EnsureSuccessStatusCode();
-var payload = await resp.Content.ReadFromJsonAsync<WebSearchDiagnosticsResponse>();
-// payload now contains provider-level stats such as success/error counts, avg latency, and last failure info.
+[ApiController]
+[Authorize]
+[Route("diagnostics")]
+public class DiagnosticsController : ControllerBase
 ```
 
+
+DiagnosticsController provides a read-only diagnostics surface over the generic metric event log. Its WebSearch endpoint returns a per-provider health snapshot for the web_search metrics by aggregating the most recent entries and exposing key counts and latency, so developers and operators can quickly verify that their web-search tooling is functioning without exposing sensitive data.
+
+## Remarks
+The endpoint pulls the latest metrics with the "web_search." prefix, groups results by system name, and computes per-provider aggregates (total requests, successes, errors, and empty results, plus latency). Per-row JSON is parsed lazily, touching only the fields needed for the stats. A "empty" outcome is treated as a successful call with latency included. The windowSize parameter governs how many recent rows are considered and is clamped to 10–5000 to protect against large reads; use a larger window for longer-tail views if needed.
+
 ## Notes
-- The controller requires authentication; callers must present valid credentials even though the surface is not admin-gated.
-- The windowSize query parameter is clamped (10–5000). Results reflect only the most recent rows returned by the repository (rows are enumerated newest-first).
-- Per-row metric JSON is parsed with JsonDocument. Malformed metric payloads could throw during parsing and surface as an error for the entire request.
+- windowSize is clamped to 10–5000; outside values are coerced.
+- Only metrics with the "web_search." prefix are included in the snapshot.
+- Latency and failure data are read from the metric JSON when present; missing fields are tolerated.

@@ -3,29 +3,17 @@
 > **File:** `src/api/Gabriel.Engine/Services/NaiveTokenEstimator.cs`  
 > **Kind:** class
 
-Provides a very small, dependency-free token estimator that approximates token counts by treating ~4 characters as one token and adding a fixed per-message overhead. Use this class when you need a fast, lightweight context-window or budget estimate in development or prototype scenarios and you do not want to ship a full tokenizer/vocabulary.
-
-## Remarks
-This estimator is intentionally coarse: it favors simplicity and zero external dependencies over accuracy. It exists to give quick, conservative budgeting for message payloads (counts message content plus two tool-related fields and a small per-message fixed overhead) and is designed to be replaced by a proper BPE/tokenizer-based estimator when exact token accounting matters.
-
-## Example
 ```csharp
-var estimator = new NaiveTokenEstimator();
-
-// Single text estimate
-int tokensForText = estimator.EstimateText("Hello, world!");
-
-// Messages estimate
-var messages = new[]
-{
-    new Message { Content = "User prompt", ToolCallsJson = null, ToolCallId = null },
-    new Message { Content = "Assistant reply", ToolCallsJson = "[]", ToolCallId = "t1" }
-};
-int totalTokens = estimator.EstimateMessages(messages);
+public class NaiveTokenEstimator : ITokenEstimator
 ```
 
+
+NaiveTokenEstimator provides a coarse token count for text and messages using a simple 4-char-per-token heuristic plus a small per-message overhead, intended for rough context-window budgeting in development or prototype settings. It is not a substitute for real BPE tokenization; switch to a proper tokenizer if token-level accuracy matters.
+
+## Remarks
+This abstraction exists to enable quick, deterministic budgeting without shipping a full tokenizer. It centralizes a minimal token-counting strategy that complements the integration with a language model by offering predictable, fast estimates. It is especially useful during early development or exploratory UI work where exact counts are unnecessary.
+
 ## Notes
-- The estimator uses a simple ceil(length / 4) rule (implemented as (length + 3) / 4) so 1–4 characters -> 1 token, 5–8 -> 2 tokens, etc.
-- Real BPE/tokenization can differ substantially (roughly 30–50% different in typical text); do not rely on this for billing or strict token limits.
-- Each message adds a fixed overhead of 8 tokens (for role markers/separators), so many short messages will have higher relative overhead.
-- EstimateText returns 0 for null or empty input; EstimateMessages calls EstimateText for Content, ToolCallsJson and ToolCallId, so nulls are handled.
+- It is intentionally approximate; do not rely on it for billing or quotas.
+- Per-message overhead is fixed (8 characters) and may not reflect your exact protocol/serialization.
+- Counts are based on string lengths; non-ASCII or multi-byte characters may affect actual token counts.

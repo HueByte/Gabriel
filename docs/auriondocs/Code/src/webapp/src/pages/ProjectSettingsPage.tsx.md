@@ -10,53 +10,57 @@
 ---
 
 ## ProjectSettingsPage
-
 > **File:** `src/webapp/src/pages/ProjectSettingsPage.tsx`  
 > **Kind:** function
 
-Renders a project settings page and manages the UI and network interactions for viewing and editing a single project's metadata and files. The component loads project data from ProjectsService, exposes editable fields (name, description, system prompt), lets the user upload and delete project files, and saves changes back to the API. Reach for this component when you need a full settings/edit page for a project (typically mounted on a route like /projects/:projectId/settings) rather than managing individual fields or file uploads manually.
+```typescript
+export function ProjectSettingsPage()
+```
+
+
+The ProjectSettingsPage component renders the user interface for editing a project's metadata and managing its files. It reads the projectId from the route, loads the project data on mount, and initializes local form state (name, description, systemPrompt) from the server. Users can modify these fields and save; the save operation PATCHes only the fields that have changed to avoid overwriting other metadata, and it provides immediate feedback via toasts. The page also supports uploading new files to the project, listing current files, and deleting files with confirmation, updating the UI as changes succeed or fail. Separate loading flags (saving, uploading, skinSaving) ensure actions do not race with each other, and an AbortController cancels in-flight requests when the route changes, preventing stale data.
 
 ## Remarks
-This component centralizes client-side form state separate from the loaded ProjectResponse so it can easily detect "dirty" changes and support cancel vs save semantics. It uses an AbortController to cancel in-flight project loads when the component unmounts or the projectId changes. API interactions are delegated to ProjectsService and ProjectFilesService; errors are routed through a shared notifyError helper and successes display toast notifications.
+This component acts as a thin view-model that ties together UI state and server persistence for a project's settings. By computing a precise dirty state and performing a partial PATCH, it prevents unintended data loss while minimizing payloads. It also centralizes concerns around project metadata and asset management, delegating actual persistence to dedicated services (ProjectsService and ProjectFilesService) to improve testability and future reuse.
 
 ## Example
 ```typescript
-// Typical usage as a route component
-import { Route } from 'react-router-dom';
-
+// Usage within router
 <Route path="/projects/:projectId/settings" element={<ProjectSettingsPage />} />
 ```
 
 ## Notes
-- Dirty checking compares the local form fields to the original project values (uses null-coalescing for optional fields) — clearing a field is explicitly detected and sent as an update only when changed.
-- The file input value is reset after selection so re-selecting the same file triggers onChange again.
-- Deleting a file prompts with window.confirm; callers should be aware this is a synchronous blocking prompt.
-- Skin changes are saved immediately and guarded by a `skinSaving` flag to avoid concurrent PUT races.
-- The loader uses an AbortController; callers should expect loadProject to be cancellable when the component unmounts or projectId changes.
+- Deleting a file prompts the user for confirmation before performing the API call.
+- After selecting a file for upload, the input value is reset to allow re-uploading the same file if needed.
+- The patch payload includes only fields that have changed; unchanged fields are omitted to avoid unintended resets.
 
 ---
 
 ## formatBytes
-
 > **File:** `src/webapp/src/pages/ProjectSettingsPage.tsx`  
 > **Kind:** function
 
-Convert a byte count into a short, human-readable string using binary (1024) units — B, KB, MB, or GB. Use this helper when displaying file or data sizes in a UI where compact, easy-to-read units are preferred; the function picks the largest unit that keeps the numeric value below the next threshold and formats it with a small number of decimal places.
-
-## Remarks
-The function uses 1024 as the unit step (binary units). It returns raw ASCII digits and a unit suffix (no localization of decimal separator or digit grouping). Rounding is chosen to keep the output compact: bytes are shown as an integer, KB and MB use one decimal place, and GB uses two decimal places. The implementation intentionally stops at GB — values larger than or equal to 1 TB will still be presented in GB with a large numeric value.
-
-## Example
 ```typescript
-console.log(formatBytes(500));           // "500 B"
-console.log(formatBytes(1536));          // "1.5 KB"  (1536 / 1024 = 1.5)
-console.log(formatBytes(1048576));       // "1.0 MB"  (1024 * 1024)
-console.log(formatBytes(1073741824));    // "1.00 GB" (1024^3)
+function formatBytes(bytes: number): string
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `bytes` | `number` | — |
+
+**Returns:** `string`
+
+
+Converts a numeric byte count into a human-friendly string for display, using binary units. It selects B, KB, MB, or GB based on the magnitude of the input and applies specific decimal precision: values under 1024 are shown as an integer with a ' B' suffix; values under a megabyte are shown in kilobytes with one decimal place; values under a gigabyte are shown in megabytes with one decimal place; and larger values are shown in gigabytes with two decimal places. This utility is commonly used when presenting file sizes in the UI to ensure consistent, readable formatting across the application.
+
+## Remarks
+This function centralizes size formatting to avoid duplicating the same logic across components. By using 1024-based thresholds and fixed decimal precision, it provides predictable, readable output that remains consistent across the UI. If you anticipate sizes above a gigabyte, consider extending the function (e.g., adding a TB branch) or adding a separate formatter for very large values.
+
 ## Notes
-- Non-finite or non-number inputs (NaN, undefined) will produce strings containing "NaN"; callers should validate numeric input when necessary.
-- Negative byte counts are formatted with a leading minus sign (the function does not special-case negatives).
-- If you need SI units (1000-based), localization, or support for larger units (TB, PB), extend or replace this helper accordingly.
+- This implementation uses 1024-based boundaries, so KB/MB/GB reflect binary sizes rather than decimal prefixes.
+- KB and MB are shown with one decimal place; GB is shown with two decimal places.
+- There is no explicit TB branch; extremely large values will still render as GB (with two decimals), which may be misleading for very large datasets.
 
 ---

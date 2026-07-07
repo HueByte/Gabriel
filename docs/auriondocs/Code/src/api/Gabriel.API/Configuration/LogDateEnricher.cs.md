@@ -10,60 +10,43 @@
 ---
 
 ## LogDateEnricher
-
 > **File:** `src/api/Gabriel.API/Configuration/LogDateEnricher.cs`  
 > **Kind:** class
 
-Adds a "LogDate" property to every Serilog LogEvent containing the event's local date formatted as MM-dd-yyyy. Use this enricher when you want to route or write logs to files named with an arbitrary date pattern (for example via Serilog.Sinks.Map), since Serilog.Sinks.File only supports its built-in yyyyMMdd rolling-period format.
-
-## Remarks
-This enricher produces a simple, deterministic string property (named "LogDate") that downstream sinks can use for routing or filename composition. It's intentionally minimal and stateless: it formats the LogEvent.Timestamp using the event's LocalDateTime and CultureInfo.InvariantCulture so the resulting value is consistent across environments. The typical scenario is pairing this enricher with Serilog.Sinks.Map to create files whose names follow a custom date pattern.
-
-## Example
 ```csharp
-// Register the enricher and use Map to route events into files named by LogDate
-var logger = new LoggerConfiguration()
-    .Enrich.With(new LogDateEnricher())
-    .WriteTo.Map("LogDate", (logDate, wt) => wt.File($"logs/{logDate}.log"))
-    .CreateLogger();
-
-logger.Information("This event will be routed into a file named like 06-08-2026.log");
+public sealed class LogDateEnricher : ILogEventEnricher
 ```
 
+
+Adds a LogDate property to every log event. The value is derived from the event's timestamp in local time and formatted as MM-dd-yyyy using invariant culture, then attached as a string property named `LogDate`. This enables downstream sinks (such as Serilog.Sinks.Map) to route each event to a file named after the date, since Serilog.Sinks.File is limited to its built-in yyyyMMdd rolling format.
+
+## Remarks
+This enricher centralizes the date extraction logic and exposes a single LogDate property per event, enabling date-based routing across sinks without embedding date logic in each sink configuration. It uses AddOrUpdateProperty to assign the date, overwriting any existing LogDate for the event, which keeps the value consistent with the current event; the class is sealed to avoid inheritance-related changes to its behavior.
+
 ## Notes
-- The enricher uses logEvent.Timestamp.LocalDateTime (server local timezone). If you require UTC-based filenames, replace with UtcDateTime or provide a UTC-based enricher.
-- The property name is exactly "LogDate"; Map or other sinks must reference this name to route correctly.
-- The date is formatted with CultureInfo.InvariantCulture and the MM-dd-yyyy pattern; that pattern does not sort lexicographically for chronological ordering (use yyyy-MM-dd if lexicographic sort of filenames is needed).
+- The LogDate is derived from the event's LocalDateTime, so it reflects the host's time zone; for cross-location consistency, consider using UTC or a standardized time zone.
+- The property name is hard-coded as `LogDate`; changing it would require modifying the enricher and recompiling.
+- The enricher performs no shared-state mutation and is thread-safe with respect to Serilog's event pipeline.
 
 ---
 
 ## LogDateEnricherExtensions
-
 > **File:** `src/api/Gabriel.API/Configuration/LogDateEnricher.cs`  
 > **Kind:** class
 
-Exposes a Serilog enrichment extension that registers the LogDateEnricher. Use this when configuring Serilog (programmatically or via configuration) to add the LogDateEnricher into the logger pipeline; the method is surfaced as Enrich.WithLogDate so it can also be referenced by name from appsettings.Serilog.Enrich.
-
-## Remarks
-This static adapter exists to connect the concrete LogDateEnricher type with Serilog's extension-based enrichment API. By providing WithLogDate as an extension on LoggerEnrichmentConfiguration the enricher can be added fluently in code and can be discovered by Serilog's configuration system when enrichment entries are specified by name.
-
-## Example
 ```csharp
-// Programmatic registration
-var logger = new LoggerConfiguration()
-    .Enrich.WithLogDate()
-    .WriteTo.Console()
-    .CreateLogger();
-
-// Configuration-based registration (appsettings.json)
-// "Serilog": {
-//   "Enrich": [ "WithLogDate" ]
-// }
+public static class LogDateEnricherExtensions
 ```
 
+
+Extends Serilog's enrichment configuration with a named helper that wires the LogDateEnricher into the enrichment pipeline. WithLogDate() is surfaced as Enrich.WithLogDate() so it can be referenced by name from appsettings.Serilog.Enrich, enabling configuration-driven enrichment without hard-coding the enricher type. It delegates to enrich.`With<LogDateEnricher>`() and returns the fluent LoggerConfiguration to allow further configuration via the standard Serilog chaining.
+
+## Remarks
+This extension encapsulates the concept of applying a log date field without leaking the concrete logic into consumer code. It provides a stable, discoverable entry point for enabling log-date enrichment from both code and configuration, and it participates in Serilog's established pattern of Enrich extensions, pairing the enrichment type with a name that can be used in settings.
+
 ## Notes
-- Ensure the assembly containing this extension (and LogDateEnricher) is referenced when relying on configuration-based enrichment; Serilog must be able to find the extension by name at runtime.
-- The method is a thin factory: it registers LogDateEnricher and returns the LoggerConfiguration for chaining; there are no additional options exposed here.
-- This extension is stateless and safe to call multiple times, but calling it repeatedly will register multiple instances of the enricher unless Serilog deduplicates enrichers at pipeline construction.
+- Relies on a parameterless constructor or a resolvable factory for LogDateEnricher; otherwise registration may fail at runtime.
+- Calling WithLogDate() multiple times may register duplicate enrichers; prefer a single invocation per logger configuration.
+- If your configuration uses appsettings to enable enrichment, ensure the Serilog.Enrich path matches the recognized name (WithLogDate).
 
 ---

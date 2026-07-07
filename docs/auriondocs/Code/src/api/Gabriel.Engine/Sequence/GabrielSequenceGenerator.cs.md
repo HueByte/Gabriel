@@ -3,23 +3,38 @@
 > **File:** `src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.cs`  
 > **Kind:** class
 
-Generates a deterministic 64-frame GabrielSequence (four 16-frame layers: DNA, Traits, Context, Live) from a numeric seed, optional ConversationState and optional pattern/palette overrides. Use this when you need a reproducible visual personality — including palette, animated primitive, and live-state modulation — seeded from a fingerprint and optionally influenced by runtime conversation state or explicit overrides.
+```csharp
+public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
+```
+
+
+GabrielSequenceGenerator is a sealed class that implements IGabrielSequenceGenerator and is responsible for generating a deterministic GabrielSequence by combining a chosen palette with a selected pattern, then evolving that identity across four layered time windows. Given a seed, optional patternOverride and paletteOverride values, it deterministically builds a 64-frame sequence (16 frames per layer across four layers: DNA Core, Traits, Context, and Live) where each layer shares the same base palette and pattern but applies distinct timing, palette ranges, and intensity. The paletteOverride takes precedence when provided; otherwise the seed drives the palette via PaletteTemplates.Pick. The Live layer additionally consults the ConversationState to modulate the palette window and intensity, giving the last layer a state-aware character. This class is what you reach for when you need reproducible, parameter-driven visual sequences that maintain a coherent identity across layers while still offering per-layer variation.
+
+## Dependencies
+- IGabrielSequenceGenerator
+- Size
+- ConversationState
+- DateTimeOffset
+- Random
+- SequenceMetadata
+- GabrielSequence
+- PatternBundle
 
 ## Remarks
-This sealed generator composes a visual "personality" by selecting a palette template and a pattern primitive, expanding that template into a 16-entry palette, and rendering four time-offset layers that share the same palette and pattern but differ in phase, palette window and intensity. Palette selection prefers an explicit override name but falls back to a seed-derived family when the override is unknown or null. The concrete per-pattern parameters are derived from a folded seed (XOR + cast to int) via a Random instance; pinning the pattern kind with patternOverride fixes the primitive but not the seed-fingerprinted parameters.
+GabrielSequenceGenerator centralizes the process of mapping a numeric seed into a visually distinct GabrielSequence by layering four perspectives of the same pattern and palette. It encapsulates palette selection, pattern selection, and per-layer timing, ensuring a cohesive identity while still enabling variety through overrides and Live state modulation. It serves as the production mean for generating testable, deterministic sequences across sessions, personas and live states.
 
 ## Example
 ```csharp
 var generator = new GabrielSequenceGenerator();
-long seed = 1234567890L;
-ConversationState? state = null; // or a real ConversationState instance
-// Optional: pin a known pattern or palette by name (unknown names fall back to seed-derived)
-var sequence = generator.Generate(seed, state, patternOverride: null, paletteOverride: "aurora");
-// sequence.Frames contains 64 rendered frames; sequence.Metadata records seed and generation time
+var seq = generator.Generate(
+    seed: 123456789L,
+    state: null,
+    patternOverride: "plasma",
+    paletteOverride: "heat"
+);
 ```
 
 ## Notes
-- Determinism: for the same seed, pattern/palette override inputs and ConversationState, the generated frames are deterministic. However, GeneratedAt in metadata uses DateTimeOffset.UtcNow and will differ between runs.
-- patternOverride pins the primitive BUT per-pattern numeric parameters (e.g., frequencies, offsets) remain derived from the seed; this allows the same primitive to look different across seeds.
-- Unknown paletteOverride names are accepted but ignored (the implementation falls back to the seed-picked template). Validate names with PaletteTemplates if you need strict control.
-- The parameter RNG is seeded by casting a folded 64-bit seed into a 32-bit int (unchecked). Very large or adversarially chosen seeds can collide after the cast, reducing entropy compared with a full 64-bit RNG seed.
+- The GeneratedAt timestamp is wall-clock time at generation, so results differ across runs even with the same seed.
+- Pinning the primitive via patternOverride does not fully freeze per-pattern parameters; those remain fingerprinted to the seed.
+- The Live layer uses ConversationState; if state is null, LiveStateProfile.From(null, Size) yields a default modulation.

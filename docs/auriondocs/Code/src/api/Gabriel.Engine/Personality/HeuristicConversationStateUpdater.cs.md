@@ -3,24 +3,28 @@
 > **File:** `src/api/Gabriel.Engine/Personality/HeuristicConversationStateUpdater.cs`  
 > **Kind:** class
 
-Updates conversation-level metadata using deterministic, micro‑cost heuristics rather than invoking an LLM. Use this implementation when you need predictable, very low-latency per-turn updates (token counts, a simple mood classification, recent-topic tracking and other lightweight signals) and are willing to accept some classification errors in exchange for zero runtime cost and full determinism.
+```csharp
+public sealed class HeuristicConversationStateUpdater : IConversationStateUpdater
+```
+
+
+A lightweight, deterministic updater that derives conversational metrics from a single user message using pure heuristics (no LLM calls). Use this when you need a very fast, zero-cost per-turn update to ConversationState — for example to maintain turn counts, an exponential moving average of user token length, and a coarse mood/topic signal — and you can tolerate occasional mis‑classifications.
 
 ## Remarks
-This class implements IConversationStateUpdater with a purely heuristic approach: it estimates token counts via an injected ITokenEstimator, updates exponential moving averages for user token length, and classifies simple conversational signals (short/long message, task/detail cues, playfulness/seriousness, venting) using small, compiled regular expressions and an emoji presence check. It exists as a fast, predictable alternative to an LLM-backed updater and is intentionally conservative — the heuristics prioritize stability and performance over exhaustive language understanding so the downstream system can swap in a more sophisticated (LLM) updater later without changing the surrounding code.
+This class implements a minimal, predictable alternative to an LLM-backed state updater. It applies a set of small, English-oriented regular expressions and simple token-based rules (short-message threshold, task/detail cues, please-suffix detection, playful/serious cues, a small negative-affect lexicon, and emoji presence) to classify user intent/mood and update conversation-level metrics. Because it avoids external calls it is extremely cheap (microsecond-scale per turn) and deterministic, making it suitable for high-throughput or privacy-sensitive scenarios where cost and latency matter more than perfect accuracy. The implementation is intentionally conservative: it prefers simplicity and predictability over coverage, and is designed so an LLM-based updater can be swapped in later while keeping the same interface.
 
 ## Example
 ```csharp
-// Assume `tokens` implements ITokenEstimator and is supplied by your DI container.
-var tokens = /* ITokenEstimator instance */ null!;
+// Create with any implementation of ITokenEstimator, then call Update each turn.
+ITokenEstimator tokens = new MyTokenEstimator();
 var updater = new HeuristicConversationStateUpdater(tokens);
 ConversationState state = ConversationState.Initial();
-string userMessage = "Can you write a quick function that sorts a list, please?";
-state = updater.Update(state, userMessage);
-// state now has updated TurnCount, LastUserTokenCount, AvgUserTokenCount, Mood, etc.
+state = updater.Update(state, "Can you explain how bubble sort works?");
+// state now has updated TurnCount, AvgUserTokenCount, LastUserTokenCount and a heuristic Mood
 ```
 
 ## Notes
-- This implementation is intentionally heuristic: mood and intent classifications can be misclassified, especially on ambiguous or sarcastic input.
-- Emoji detection is lightweight and conservative (checks high surrogates and a Unicode range); it does not guarantee coverage of every emoji or symbol.
-- Several Regexes are compiled for performance; the matching is case-insensitive and word-boundary anchored to reduce false positives but still remains a best‑effort heuristic.
-- Thread-safety: the updater itself holds immutable state except for the injected ITokenEstimator. Concurrent calls are safe only if the provided ITokenEstimator.EstimateText implementation is thread-safe; otherwise callers should synchronize access to the estimator.
+- The heuristics are English-centric and rely on fixed regex patterns; they may miss or mis-classify non-English input or idiomatic phrasing.
+- Emoji detection is implemented via surrogate checks and a Unicode range; some emoji or symbol edge-cases may not be recognized.
+- The short-message token threshold and regexes were tuned for typical tokenization assumptions (roughly 4 chars/token); different tokenizers or languages may yield different behavior.
+- This component is deterministic and thread-safe from its visible surface (no shared mutable state other than readonly dependencies), but callers should manage shared ConversationState instances according to their concurrency model.

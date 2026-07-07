@@ -12,118 +12,106 @@
 ---
 
 ## IDocsLookup
-
 > **File:** `src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs`  
 > **Kind:** interface
 
-A minimal abstraction for reading Gabriel's internal documentation from any backing source. Use this interface when your code needs to enumerate available documentation entries or read the contents of a specific document without depending on the concrete storage (local files, GitHub, or a composite of multiple sources).
-
-## Remarks
-This interface separates consumers of documentation from the mechanics of how documents are stored or retrieved. Concrete implementations (for example a local on-disk lookup, a GitHub-backed lookup, or a composite that queries multiple inner lookups in order) provide the I/O and resolution logic; callers use ListAsync to discover available entries and ReadAsync to obtain the content for a given path.
-
-## Example
 ```csharp
-// Example: list all entries and read the first document if present
-async Task PrintFirstDocAsync(IDocsLookup docsLookup, CancellationToken ct)
-{
-    var entries = await docsLookup.ListAsync(ct);
-    if (entries.Count == 0) return;
-
-    var first = entries[0];
-    var content = await docsLookup.ReadAsync(first.Path, ct);
-    if (content != null)
-    {
-        Console.WriteLine(content.Text);
-    }
-}
+public interface IDocsLookup
 ```
 
+
+IDocsLookup abstracts access to Gabriel's official internal documentation from multiple sources, exposing a single façade for listing docs and reading their content. Implementations include LocalDocsLookup (disk-based, the primary source) and GitHubDocsLookup (GitHub-hosted, the fallback); a CompositeDocsLookup composes several inner sources behind the same interface.
+
+## Remarks
+This abstraction decouples callers from storage specifics and enables graceful fallbacks between local and remote sources behind a single interface. The asynchronous methods (ListAsync and ReadAsync) with CancellationToken support allow integration into broader async workflows and enable cooperative cancellation. The composition model (CompositeDocsLookup) provides a deterministic order for trying multiple inner sources, presenting a consistent surface to tooling.
+
 ## Notes
-- ReadAsync may return null when the requested path does not exist or cannot be resolved by the implementation; callers must handle a null result.
-- Both methods are asynchronous and may perform I/O; respect the provided CancellationToken to allow prompt cancellation.
-- Implementations can surface I/O or network exceptions — callers should handle or propagate exceptions according to their needs.
+- ReadAsync may return null if the requested path isn’t found in any configured source; callers should handle null before using the content.
+- Always pass a CancellationToken to support cancellation of long-running lookups and to cooperate with higher-level cancellation policies.
+
 
 ---
 
 ## DocsSources
-
 > **File:** `src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs`  
 > **Kind:** class
 
-Shared string identifiers for documentation sources used across the docs lookup and retrieval code. Use these constants instead of hard-coded literals when selecting a documentation source (for example, when calling a lookup or loader), to avoid typos and keep source names consistent.
-
-## Remarks
-This static holder centralizes the canonical keys for known documentation sources (for example, a local LLM-backed source and GitHub). It exists to provide a single place to reference those identifiers so callers and implementors remain consistent; the class contains only compile-time constants and has no behavior.
-
-## Example
 ```csharp
-// Use a named source identifier instead of a raw string literal
-var source = DocsSources.GitHub;
-var docs = docsLookup.GetDocumentation(source, "owner/repo", "docs/usage.md");
-
-// or
-var local = DocsSources.LocalLlmNative;
-var result = docsLookup.GetDocumentation(local, "model-name", "prompt-id");
+public static class DocsSources
 ```
 
+
+DocsSources is a static helper class that centralizes the textual identifiers used to represent documentation sources. It exposes two compile-time constants: LocalLlmNative and GitHub. LocalLlmNative corresponds to the string `local-llm-native`, while GitHub corresponds to `github`. Consumers reference these constants instead of embedding literal strings, ensuring consistency across the Docs lookup workflow.
+
+## Remarks
+This class serves as the stable source of truth for documentation source identifiers. By exposing constants instead of scattered literals, it reduces typos and drift and makes updates in one place. It collaborates with the Docs lookup subsystem to route requests to the appropriate backend (local LLM-native or GitHub) without consumers needing to know the exact string values.
+
 ## Notes
-- These fields are consts, which means their values are inlined at compile time; changing a constant's value requires recompiling any assemblies that reference it.
-- The class only defines identifiers — it does not imply any particular capabilities or configuration for a source. Match these keys with the code that registers or resolves doc sources.
+- Because the fields are const, their values are baked into referencing assemblies at compile time; changing them requires recompilation of dependents.
+- The class is static and has no instance state; treat it purely as a constant-collection utility.
+- Ensure external doc backends use matching identifiers; a mismatch will result in failed lookups.
 
 ---
 
 ## DocsContent
-
 > **File:** `src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs`  
 > **Kind:** record
 
-Represents the content returned by a docs lookup operation (for example, the result of ReadAsync). It holds the source-specific path, the file's full text content, an optional canonical URL intended for citations/links, and a short identifier of the source that produced the content.
+```csharp
+public sealed record DocsContent(string Path, string Content, string? CanonicalUrl, string Source)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Path` | `string` | — |
+| `Content` | `string` | — |
+| `CanonicalUrl` | `string?` | — |
+| `Source` | `string` | — |
+
+
+DocsContent is an immutable record that represents the result of ReadAsync for a documentation entry, bundling both the text and its metadata. Use it when you need to render a doc and also know where it came from and how to cite it—the canonical URL for citations, the path within the source, and the original source identifier.
 
 ## Remarks
-Produced by an IDocsLookup implementation, this record is used by consumers that need both the raw text and metadata useful for linking or indexing documentation (the CanonicalUrl and Source). Because it is a C# record, instances are immutable value objects with structural equality, making them suitable for use as keys or for simple comparisons in tests.
+DocsContent serves as a stable carrier for a documentation entry, pairing its text with provenance data. It decouples retrieval from rendering and citation, so consumers can display the content and still preserve a trustworthy link. The CanonicalUrl is intended for citations; if it is unavailable, Path and Source provide fallback references.
 
 ## Example
 ```csharp
-// Typical use: a docs lookup returns the content of a documentation file
-var doc = new DocsContent(
-    Path: "src/Features/Parsing.md",
-    Content: "# Parsing\nThis document explains parsing...",
-    CanonicalUrl: "https://github.com/example/repo/blob/main/src/Features/Parsing.md",
-    Source: "github"
-);
-
-Console.WriteLine(doc.Path);         // "src/Features/Parsing.md"
-Console.WriteLine(doc.CanonicalUrl); // a URL suitable for citations or linking
+// Most common usage: obtain the text and metadata for display and citation
+DocsContent doc = await docsLookup.ReadAsync("docs/intro.md");
+Console.WriteLine(doc.Content);
+Console.WriteLine($"Permanent link: {doc.CanonicalUrl ?? "none"}");
 ```
 
 ## Notes
-- CanonicalUrl is nullable; a provider may omit it when no stable external URL exists. The value is not validated by this type (it may be a file:// URI, an HTTP(s) blob URL, or any provider-specific URI).
-- Content is stored as a single string in memory. Large files will increase memory usage; consumers that need streaming should use a different API.
-- Path and Source are provider-specific: Path is the identifier the source uses for the document (not necessarily an absolute filesystem path), and Source indicates which lookup produced the content (e.g., "local", "github").
+- CanonicalUrl may be null if the source doesn't expose a stable URL.
+- Content may contain Markdown or other markup; render accordingly.
+- Path is relative to the documentation root for the current source; if you need an absolute path, combine with Source.
 
 ---
 
 ## DocsEntry
-
 > **File:** `src/api/Gabriel.Engine/Tools/Docs/IDocsLookup.cs`  
 > **Kind:** record
 
-Represents a single documentation entry discovered or returned by the docs lookup subsystem. It holds the file path, an optional human-friendly title (if available), and a source tag that identifies where the entry originated — use this type when returning or aggregating documentation references from an IDocsLookup implementation.
-
-## Remarks
-This is a compact, positional sealed record intended as a simple DTO: it provides value-based equality, immutability, deconstruction, and a concise ToString implementation inherited from records. Title is nullable to indicate that some documentation files may not have a discoverable title; Path and Source are non-nullable by declaration but the record performs no runtime validation, so callers should ensure paths and source tags are normalized before creating instances if that matters.
-
-## Example
 ```csharp
-var entry = new DocsEntry("README.md", "Project README", "local-llm-native");
-Console.WriteLine(entry.Path); // "README.md"
-var (path, title, source) = entry; // deconstruction
+public sealed record DocsEntry(string Path, string? Title, string Source)
 ```
 
-## Notes
-- Title may be null when a human-friendly title cannot be determined.
-- The record is sealed and immutable; equality is by value (all three properties).
-- No input validation is performed — callers are responsible for ensuring Path and Source meet any required format or constraints.
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Path` | `string` | — |
+| `Title` | `string?` | — |
+| `Source` | `string` | — |
+
+
+Represents a documentation entry with a file path, an optional title, and a source identifier. This record is typically used to encapsulate metadata about documentation files, allowing consumers to reference the location, display title, and origin of the documentation content.
+
+## Remarks
+This record serves as a simple, immutable data container that facilitates the organization and lookup of documentation resources within the system. By including an optional title, it supports cases where the documentation may or may not have a defined heading, while the source string helps track the provenance or context of the documentation entry.
 
 
 ---

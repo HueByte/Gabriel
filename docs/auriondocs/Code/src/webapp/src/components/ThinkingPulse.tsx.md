@@ -12,41 +12,27 @@
 ---
 
 ## PulseState
-
 > **File:** `src/webapp/src/components/ThinkingPulse.tsx`  
 > **Kind:** interface
 
-Represents the state needed to render a single "thinking" pulse: the selected color palette, the pulse pattern, and any pattern-specific parameters. Use this interface when constructing, passing, or updating the pulse configuration consumed by the ThinkingPulse rendering logic.
-
-## Remarks
-This type consolidates three pieces of data that are commonly passed together into the ThinkingPulse component or its helper functions: Palette selects colors, Pattern describes the animation/shape behavior, and params carries any extra configuration that a particular Pattern implementation might require. Keeping them in one object simplifies prop passing and makes it straightforward to swap or serialize the whole pulse state.
-
-## Example
 ```typescript
-// Example placeholders — replace with real Palette/Pattern instances
-const myPalette: Palette = /* ... */;
-const myPattern: Pattern = /* ... */;
-const myParams = { speed: 1.2, intensity: 0.8 };
-
-const state: PulseState = {
-  palette: myPalette,
-  pattern: myPattern,
-  params: myParams
-};
-
-// Pass into a renderer or component
-// <ThinkingPulse state={state} />
+interface PulseState
 ```
 
+
+PulseState is a compact interface that describes the configuration for the ThinkingPulse visualization. It encapsulates the color scheme (palette), the animation pattern (pattern), and a generic params bag used by rendering logic to adjust behavior at render time.
+
+## Remarks
+PulseState acts as a presentation-focused state contract that decouples styling (Palette) and animation configuration (Pattern) from the rendering implementation. By aggregating these concerns, it lets ThinkingPulse.tsx swap palettes or patterns without changing its rendering code, and enables easier testing and reuse across different pulse variants.
+
 ## Notes
-- params is typed as unknown by design: callers must narrow or validate its shape before using it (type guards or runtime checks). 
-- Palette and Pattern objects may be shared; avoid mutating them in-place if they are reused elsewhere — treat them as immutable or clone when needed.
-- If you need stronger typing for params for a specific pattern, create a union or a pattern-specific state type that refines params to the expected shape.
+- Treat params as an opaque bag; do not rely on runtime structure unless validated.
+- Changes to Palette or Pattern definitions may require updates to consumers of PulseState.
+- If PulseState is shared across components, prefer immutable usage to avoid unnecessary re-renders.
 
 ---
 
 ## Bars
-
 > **File:** `src/webapp/src/components/ThinkingPulse.tsx`  
 > **Kind:** function
 
@@ -55,65 +41,92 @@ function Bars(
 ```
 
 
-Bars is a function declared in ThinkingPulse.tsx that accepts a single object parameter with properties `seed` and `paletteStops`. The provided source contains only the parameter list; the function body, return type and concrete behavior are not available in the supplied code.
+Bars is a React functional component that renders a small collection of animated vertical bars as part of the ThinkingPulse visualization. It receives a seed prop to drive deterministic animation behavior and a paletteStops prop to derive bar colors from a color ramp. Use Bars when you want the bar-based visual element encapsulated as a reusable UI fragment within ThinkingPulse, rather than inlining the rendering logic in the container component.
 
 ## Remarks
-This symbol appears to be a small, purpose-specific abstraction that takes a randomness or determinism seed and a set of color/palette stops — likely to drive some visual output (for example, a bar visualization) inside the ThinkingPulse component. Because the implementation is missing, callers should consult the component's definition or its usages to confirm expected prop types and rendering behavior.
-
-## Notes
-- The implementation and return value are not present in the provided source; documentation cannot assert whether this is a React component, utility function, or something else.
-- Prop types are unknown; reasonable guesses are that `seed` is a number or string used to seed deterministic visuals and `paletteStops` is an array describing color stops, but these are assumptions and should be verified in the full source.
-- Check call sites in ThinkingPulse.tsx (or repository-wide usages) to determine lifecyle, prop validation, and side effects before relying on this symbol.
+Bars encapsulates a single visual primitive used by the ThinkingPulse UI. It isolates concerns, allowing the bar animation and color mapping to be developed, tested, and reused independently from the surrounding layout. By accepting a seed, the component can produce repeatable animation patterns for the same seed, which is helpful for consistent visuals in demos or tests. The paletteStops parameter enables easy theming by swapping color ramps without changing the rendering logic.
 
 ---
 
 ## ThinkingPulse
-
 > **File:** `src/webapp/src/components/ThinkingPulse.tsx`  
 > **Kind:** function
 
-A React functional component exported from src/webapp/src/components/ThinkingPulse.tsx that accepts a props object with the keys `seed` and `paletteStops`.
+```typescript
+export function ThinkingPulse(
+```
+
+
+ThinkingPulse is a compact React function that renders a pulsing indicator used to convey an ongoing thinking or processing state. It accepts a seed value and an array of paletteStops to drive deterministic variation in the pulse timing and color progression, enabling consistent visuals across renders and themes without relying on external state.
 
 ## Remarks
-The provided source is incomplete, so the concrete behavior, return value (JSX shape), prop types, and side effects are not available in this snippet. From the prop names alone: `seed` is likely used to control deterministic randomness and `paletteStops` to supply color/gradient configuration, but callers should consult the component implementation or its type definitions to confirm expected types and semantics.
+Encapsulating the pulse as its own component isolates animation concerns from layout and business logic, promoting reuse wherever a lightweight loading indicator is needed. The seed parameter enables per-instance uniqueness while remaining deterministic, which is helpful when rendering multiple indicators in a single view. paletteStops lets you tailor the color ramp to the active theme without altering the component implementation.
 
 ## Example
-```typescript
-// Example usage — adapt types/shapes according to the component's actual implementation
-<ThinkingPulse seed={12345} paletteStops={[{ offset: 0, color: '#fff' }, { offset: 1, color: '#000' }]} />
+```tsx
+// Example usage showing common case
+import { ThinkingPulse } from './ThinkingPulse';
+
+export function App() {
+  return (
+    <div>
+      <ThinkingPulse seed={42} paletteStops={['#6366f1', '#8b5cf6', '#f472b6']} />
+    </div>
+  );
+}
 ```
 
 ## Notes
-- Implementation and prop type information were not provided in the source snippet; verify the exact prop shapes in src/webapp/src/components/ThinkingPulse.tsx before using.
-- If `seed` controls deterministic animation or randomness, changing it frequently may force visual resets or re-renders.
-- The shape and expected entries of `paletteStops` are unknown here — commonly this is an array of color-stop objects or tuples; passing an unexpected shape may cause runtime errors or no visible effect.
+- If the indicator is purely decorative, consider marking it as aria-hidden or otherwise provide an accessible live region if it communicates status (e.g., role="status", aria-live="polite").
+- Changing the seed will restart or reseed the pulse; keep seed stable if you want a consistent look for a given view.
+- Ensure the values in paletteStops are valid color strings with sufficient contrast for accessibility.
+
 
 ---
 
 ## buildState
-
 > **File:** `src/webapp/src/components/ThinkingPulse.tsx`  
 > **Kind:** function
 
-Constructs a deterministic PulseState from a numeric seed and an optional sequence palette. Use this when you need the same visual pattern that the legacy Avatar generator would produce for a given seed, but optionally want to replace the palette with server-provided Gabriel Sequence color stops.
+```typescript
+function buildState(seed: number, paletteStops?: readonly RGB[]): PulseState
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `seed` | `number` | — |
+| `paletteStops` | `readonly RGB[]` | — |
+
+**Returns:** `PulseState`
+
+
+It creates a deterministic PulseState from a numeric seed and an optional set of color stops. The RNG order mirrors Avatar.tsx (palette, then pattern, then params) so that the same seed yields the same visual outcome as the old procedural avatar. If paletteStops are provided (and non-empty), the function uses a server-driven Gabriel Sequence palette by constructing a sequence palette with those stops; otherwise it falls back to a locally generated seed palette. The RNG is initialized with mulberry32(seed), a palette is selected via pickPalette(rng), a pattern via pickPattern(rng), and the pattern parameters are initialized with picked.def.init(BARS, rng). The returned PulseState contains the chosen palette, the selected pattern, and the generated params. 
 
 ## Remarks
-This function mirrors Avatar.tsx's RNG ordering (palette, then pattern, then params) so the same numeric seed yields the same pattern as the old procedural avatar generator. When paletteStops is provided and non-empty, those stops replace the locally chosen palette so the component's colors can follow a server-driven Gabriel Sequence while still keeping pattern determinism. The paletteStops array is shallow-copied into the returned Palette to avoid directly exposing the provided array reference.
+
+This function centralizes the creation of ThinkingPulse state from a seed, enabling reproducible visuals across sessions. By allowing an optional paletteStops, it supports server-driven color schemes without changing the underlying pattern-selection logic, ensuring consistency between server-provided palettes and local rendering. The explicit RNG ordering provides predictable results that align with the legacy Avatar behavior while remaining flexible for testing and server-driven customization.
 
 ## Example
-```typescript
-// Use the default palette derived from the seed
-const stateA = buildState(123456);
 
-// Override the palette with server-provided RGB stops
-const sequenceStops = [ { r: 255, g: 0, b: 0 }, { r: 0, g: 128, b: 255 } ];
-const stateB = buildState(123456, sequenceStops);
+```typescript
+// Basic usage with just a seed
+const state = buildState(12345);
+
+// With explicit color stops (server-driven Gabriel Sequence palette)
+const stops: RGB[] = [
+  { r: 255, g: 0, b: 0 },
+  { r: 0, g: 255, b: 0 },
+  { r: 0, g: 0, b: 255 }
+];
+const stateWithStops = buildState(12345, stops);
 ```
 
 ## Notes
-- Passing an empty array ([]) as paletteStops will cause the function to fall back to the seed-derived palette; only a non-empty array triggers the override.
-- The provided paletteStops array is shallow-copied (spread) into the returned Palette; the copy prevents direct mutation of the original reference but does not deep-clone nested objects.
-- The RNG used (mulberry32) is deterministic but not cryptographically secure; use it only for reproducible visuals, not for security-sensitive randomness.
-- seed should be a numeric value; identical seeds produce identical returned PulseState objects (assuming the same code/path).
+
+- If you pass an empty array for paletteStops, the function ignores it and uses the seed-generated palette.
+- paletteStops is shallow-copied when constructing the sequence palette to avoid mutating the original stops array.
+- The function relies on mulberry32, pickPalette, pickPattern, and the pattern's init function (def.init) to produce the final params; changes to these helpers may affect determinism.
 
 ---

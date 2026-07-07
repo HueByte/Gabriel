@@ -13,155 +13,195 @@
 ---
 
 ## CreateProjectRequest
-
 > **File:** `src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs`  
 > **Kind:** record
 
-Represents the data sent to the API to create a new project. Use this DTO when calling the create-project endpoint or when binding incoming request bodies; Name is required (non-null), while Description and SystemPrompt are optional and may be null.
-
-## Remarks
-This is a simple, immutable C# record used as an API contract/DTO. It carries only the minimal fields needed to create a project and relies on the receiving endpoint or service to perform validation (for example, to ensure Name is not empty) and to map the values into the domain model or persistence layer. Because it is a positional record, equality is value-based and properties are init-only.
-
-## Example
 ```csharp
-// Constructing the request directly
-var req = new CreateProjectRequest(
-    Name: "Research Assistant",
-    Description: "Project for academic literature summarization",
-    SystemPrompt: "You are a helpful research assistant."
-);
-
-// Typical use in an ASP.NET controller action (model binding)
-[HttpPost]
-public IActionResult CreateProject([FromBody] CreateProjectRequest request)
-{
-    // validate request.Name, create domain entity, persist, return response
-}
+public record CreateProjectRequest(string Name, string? Description, string? SystemPrompt)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| [`Name`](../../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+| `Description` | `string?` | — |
+| `SystemPrompt` | `string?` | — |
+
+
+CreateProjectRequest is a data contract used to request the creation of a new project through the Gabriel API. It encapsulates the required project name and two optional pieces of metadata: Description and SystemPrompt. Use this record whenever you need to send a strongly-typed payload to the CreateProject endpoint, instead of assembling a raw JSON object by hand. The immutability of records helps ensure the payload remains consistent across layers.
+
+## Remarks
+Because this is a C# record, instances are immutable value objects with structural equality, making them safe to pass across layers and use in caches or comparisons. The SystemPrompt field seeds the initial behavior for AI workflows associated with the project, while Description provides human-friendly context. If you need a modified payload, use the with-expression to produce a new CreateProjectRequest rather than mutating an existing instance.
+
 ## Notes
-- The record does not perform validation: callers should ensure Name is provided and meets any length/format rules expected by the API.
-- Description and SystemPrompt are nullable; their absence should be handled by the server (e.g., use defaults or leave fields empty).
-- As a record, instances are immutable after creation and use value-based equality, which is convenient for testing and DTO comparisons.
+- Description and SystemPrompt are optional and may be null; server-side code should handle nulls gracefully.
+- Name is non-nullable and should be provided with a meaningful value; empty strings may be rejected by the API.
+- Be mindful of SystemPrompt length and sensitive content; avoid logging the prompt in logs or telemetry.
 
 ---
 
 ## ProjectFileResponse
-
 > **File:** `src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs`  
 > **Kind:** record
 
-Represents metadata for a file attached to a project. Use this record when returning file details from API endpoints or serializing project file lists—it's a lightweight, value-based DTO that conveys identity, name, size, content type, and upload timestamp.
-
-## Remarks
-This record is part of the API contract surface for project-related endpoints and is intended as a read-only data transfer shape. It emphasizes value semantics (records compare by value) and immutability, making it convenient for returning file metadata from services without exposing internal storage details.
-
-## Example
 ```csharp
-var file = new ProjectFileResponse(
-    Id: Guid.NewGuid(),
-    Name: "design-specs.pdf",
-    SizeBytes: 184_320,
-    ContentType: "application/pdf",
-    UploadedAt: DateTimeOffset.UtcNow);
-
-// returning as part of a project response
-var files = new[] { file };
-return Ok(new { ProjectId = projectId, Files = files });
+public record ProjectFileResponse(
+    Guid Id,
+    string Name,
+    long SizeBytes,
+    string ContentType,
+    DateTimeOffset UploadedAt)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Id` | `Guid` | — |
+| [`Name`](../../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+| `SizeBytes` | `long` | — |
+| `ContentType` | `string` | — |
+| `UploadedAt` | `DateTimeOffset` | — |
+
+
+Represents the information returned for a single project file in API responses. This record provides a compact, serializable payload that conveys the file's identity, name, size, MIME type, and upload timestamp so clients can display or validate project files after operations like upload or listing.
+
+## Remarks
+This symbol acts as a stable, serializable data contract that decouples API responses from internal storage models. By using a record, it benefits from value-based equality and immutability, making it safe to pass around as a simple data carrier across endpoints. The chosen fields (Id, Name, SizeBytes, ContentType, UploadedAt) cover identification, presentation, and temporal context needed by clients.
+
 ## Notes
-- SizeBytes is measured in bytes (useful for display or quota calculations).
-- ContentType is expected to be a MIME type (e.g., "image/png", "application/pdf").
-- UploadedAt is a DateTimeOffset so callers receive the timestamp together with its offset; the record is immutable and uses value-based equality (use with-expressions to produce modified copies).
+- SizeBytes is the file size in bytes; use this value to format human-friendly sizes on the client.
+- UploadedAt uses DateTimeOffset to preserve the exact point in time in a consistent offset; consumers should consider time zone handling when displaying.
+- ContentType should reflect the MIME type of the file; if unknown, default to "application/octet-stream" and validate before use.
 
 ---
 
 ## ProjectResponse
-
 > **File:** `src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs`  
 > **Kind:** record
 
-Represents a project returned by the API — a read-only data-transfer object carrying project identity, metadata, optional presentation overrides, timestamps, and an optional list of associated files. Reach for this type when consuming project information from project-related endpoints (it is the shape returned by the API), rather than using domain entities directly.
+```csharp
+public record ProjectResponse(
+    Guid Id,
+    string Name,
+    string? Description,
+    string? SystemPrompt,
+    long AvatarSeed,
+    bool IsDefault,
+    string? PatternOverride,
+    string? PaletteOverride,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<ProjectFileResponse>? Files)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Id` | `Guid` | — |
+| [`Name`](../../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+| `Description` | `string?` | — |
+| `SystemPrompt` | `string?` | — |
+| `AvatarSeed` | `long` | — |
+| `IsDefault` | `bool` | — |
+| `PatternOverride` | `string?` | — |
+| `PaletteOverride` | `string?` | — |
+| `CreatedAt` | `DateTimeOffset` | — |
+| `UpdatedAt` | `DateTimeOffset` | — |
+| `Files` | `IReadOnlyList<ProjectFileResponse>?` | — |
+
+
+ProjectResponse is the API-facing data contract that bundles a project's core metadata and its related files into a single, serializable object. It serves as a stable, value-based transfer object used when returning project data from the Gabriel API, including identity (Id), display data (Name, Description), optional AI system prompt (SystemPrompt), UI customization hooks (AvatarSeed, PatternOverride, PaletteOverride), lifecycle timestamps (CreatedAt, UpdatedAt), and the collection of file details (Files).
 
 ## Remarks
-This is a positional C# record intended as an API contract: it exposes immutable, init-only properties and implements value-based equality so two instances with the same data compare equal. Files is typed as an `IReadOnlyList<ProjectFileResponse>`? to signal that the file collection is provided for read-only consumption and may be absent (null) when no files are included.
+ProjectResponse exists to provide a stable API-facing envelope around a project's metadata and its files, decoupling the contract from domain entities so it can evolve without leaking internal details. The Files property leverages ProjectFileResponse to surface file-level information while keeping project metadata and file data as distinct concerns.
 
 ## Example
 ```csharp
-var project = new ProjectResponse(
+var sample = new ProjectResponse(
     Id: Guid.NewGuid(),
-    Name: "Demo Project",
-    Description: "A short description",
-    SystemPrompt: null,
-    AvatarSeed: 42L,
-    IsDefault: false,
+    Name: "Core Platform",
+    Description: "Main platform project",
+    SystemPrompt: "Be concise and helpful.",
+    AvatarSeed: 42,
+    IsDefault: true,
     PatternOverride: null,
     PaletteOverride: null,
-    CreatedAt: DateTimeOffset.UtcNow,
+    CreatedAt: DateTimeOffset.UtcNow.AddDays(-7),
     UpdatedAt: DateTimeOffset.UtcNow,
-    Files: Array.Empty<ProjectFileResponse>()
+    Files: new List<ProjectFileResponse>()
 );
 ```
 
 ## Notes
-- Files may be null; check for null before iterating.
-- As a positional record, properties are init-only and instances are effectively immutable after construction.
-- Equality is value-based: two records with identical property values are considered equal.
+- Description and SystemPrompt may be null; handle accordingly.
+- Files may be null; if so, treat as an empty list to simplify consumption.
 
 ---
 
 ## SetSkinRequest
-
 > **File:** `src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs`  
 > **Kind:** record
 
-A compact DTO used to set or clear a project's visual skin by specifying catalog identifiers for a pattern and a palette. Use this record when sending a skin update request to the API; providing null for a field removes any override and returns that dimension to seed-derived behavior.
+```csharp
+public record SetSkinRequest(string? Pattern, string? Palette)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| [`Pattern`](../../../../webapp/src/pulse/patterns.ts.md) | `string?` | — |
+| `Palette` | `string?` | — |
+
+
+SetSkinRequest is a lightweight payload used to apply per-dimension overrides to a project's skin configuration. Both Pattern and Palette are optional; each call includes these fields. If a field is null, that dimension's override is cleared and the system falls back to the seed-derived value for that aspect; the controller validates the provided identifiers against the SequenceCatalog.
 
 ## Remarks
-This record follows PUT-style semantics: both Pattern and Palette are expected to be supplied on each call. Passing null for either property clears any existing override for that dimension so the project falls back to the seed-derived value. The string values are catalog identifiers; actual validation of those identifiers is performed at the controller layer against the SequenceCatalog.
+SetSkinRequest isolates client intent from the domain logic that builds a skin from seeds and catalog-provided options. It enables partial updates and a clear contract for how overrides are applied on each request. By using null to clear, it ensures callers can revert to the default behavior without resending full configuration.
 
 ## Example
 ```csharp
-// Set both pattern and palette by catalog id
-var req = new SetSkinRequest("pattern-123", "palette-azure");
+// Clear the Pattern override, keep using seed-derived Palette
+var req = new SetSkinRequest(null, "Sunset");
 
-// Clear only the palette override (pattern remains set)
-var clearPalette = new SetSkinRequest("pattern-123", null);
-
-// Clear both overrides (revert both to seed-derived behavior)
-var clearBoth = new SetSkinRequest(null, null);
+// Apply both overrides
+var req2 = new SetSkinRequest("Stripes", "Aurora");
 ```
 
 ## Notes
-- The record does not validate catalog ids itself; the API controller validates against SequenceCatalog and will reject unknown identifiers.
-- Clients should send both fields on each update (even if unchanged) because omission is not treated differently from sending null.
-- Null has semantic meaning (clear override) — an empty string is not the same and will be treated as a literal identifier.
+- Ensure the JSON serializer emits null values so that clearing an override is conveyed. 
+- When binding, both fields must be provided in the payload; omitting a field may be treated as a no-op depending on serializer configuration.
+
 
 ---
 
 ## UpdateProjectRequest
-
 > **File:** `src/api/Gabriel.API/Contracts/Projects/ProjectResponse.cs`  
 > **Kind:** record
 
-A simple data-transfer object used to carry updated project metadata from a client to the server. Each property is nullable so callers can supply only the fields they intend to change (commonly used with a PATCH-like update endpoint).
-
-## Remarks
-This positional record serves as the API contract for updating a project's mutable fields (name, description and the system prompt). Making the properties nullable allows the API to distinguish between "no change" (null) and an explicit update (including an empty string). The record is intentionally minimal — validation and merge semantics are handled by the update endpoint or service layer.
-
-## Example
 ```csharp
-// Update only the project's name
-var request = new UpdateProjectRequest(Name: "New Project Name", Description: null, SystemPrompt: null);
-
-// Using with-expression to create a modified copy of an existing request
-var modified = request with { Description = "Updated description" };
+public record UpdateProjectRequest(string? Name, string? Description, string? SystemPrompt)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| [`Name`](../../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string?` | — |
+| `Description` | `string?` | — |
+| `SystemPrompt` | `string?` | — |
+
+
+Represents the payload used to update a project's properties via the update endpoint. This record carries optional values for Name, Description, and SystemPrompt, allowing callers to modify only the fields they want to change. Because the properties are nullable, a null value signals that the corresponding field should be left unchanged during the update. The record is immutable, so a new instance must be created with the desired values rather than mutating an existing one.
+
+## Remarks
+This symbol serves as a concise contract between client and server for partial updates. By accepting nullable fields, it enables partial updates without requiring the full project object to be resent. It sits alongside other API contracts to express update semantics without embedding domain logic; the server interprets the non-null values as replacements for existing fields while preserving others.
+
 ## Notes
-- Null vs empty string: null typically means "leave the existing value unchanged"; an empty string may be interpreted as clearing the value. Confirm the API's specific merge semantics before sending.
-- Immutability: this is a positional record — instances are immutable; use a with-expression to create modified copies.
-- Serialization: some JSON serializers may omit null properties by default, which affects payload size and how the server interprets absent vs null fields. Ensure client and server agree on serializer settings.
+- The record is immutable; to change any field, construct a new UpdateProjectRequest instance.
+- The constructor requires three arguments; to indicate no change for a field, pass null for that parameter.
 
 ---

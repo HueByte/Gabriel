@@ -3,31 +3,36 @@
 > **File:** `src/api/Gabriel.Infrastructure/Persistence/Repositories/ProjectRepository.cs`  
 > **Kind:** class
 
-A thin EF Core repository that encapsulates common persistence operations for Project aggregates and project-scoped queries. Use this when you want a small, testable abstraction over AppDbContext for reading and modifying projects and for performing a bulk reassign of orphaned conversations owned by a specific user.
+```csharp
+public class ProjectRepository : IProjectRepository
+```
+
+
+A concrete EF Core repository that provides CRUD and query operations for Project entities scoped to a specific owner user. Use this when you want a repository abstraction over AppDbContext for reading, adding, updating, removing projects and for bulk-assigning orphan conversations to a project.
 
 ## Remarks
-This repository centralizes project-related queries and simple mutations so higher-level services do not directly depend on AppDbContext or repeat common filtering (notably scoping by ownerUserId). It intentionally leaves transaction and save semantics to the caller: AddAsync, Update and Remove only manipulate the EF change tracker (and AddAsync only enqueues the entity), while AssignOrphanConversationsAsync uses a server-side bulk update to avoid loading rows into memory.
+ProjectRepository wraps an AppDbContext to implement IProjectRepository by scoping queries to an ownerUserId (multi-tenant / per-user isolation) and exposing common patterns: single-entity fetches, a fetch that includes related Files (ordered by Upload time), listing ordered by UpdatedAt, and simple add/update/remove operations. The AssignOrphanConversationsAsync method uses a set-based database update (ExecuteUpdateAsync) to reassign conversations whose ProjectId is null without loading them into the EF change tracker, which improves performance for bulk updates.
 
 ## Example
 ```csharp
-// resolve repository (e.g. via DI) and a DbContext or unit-of-work that exposes SaveChangesAsync
-var projects = await projectRepository.ListAsync(currentUserId, cancellationToken);
+// Typical usage within an application service
+var repo = new ProjectRepository(appDbContext);
+await repo.AddAsync(new Project { Id = Guid.NewGuid(), OwnerUserId = userId, Name = "Demo" }, ct);
+await appDbContext.SaveChangesAsync(ct); // repository methods do not call SaveChanges
 
-// create and persist a new project
-var project = new Project { Name = "New", OwnerUserId = currentUserId };
-await projectRepository.AddAsync(project, cancellationToken);
-await dbContext.SaveChangesAsync(cancellationToken);
+var project = await repo.GetByIdWithFilesAsync(projectId, userId, ct);
+if (project != null)
+{
+    project.Name = "Updated";
+    repo.Update(project);
+    await appDbContext.SaveChangesAsync(ct);
+}
 
-// reassign orphan conversations in bulk (returns number of rows updated)
-int updated = await projectRepository.AssignOrphanConversationsAsync(currentUserId, project.Id, cancellationToken);
-await dbContext.SaveChangesAsync(cancellationToken);
-
-// load project with files
-var projectWithFiles = await projectRepository.GetByIdWithFilesAsync(project.Id, currentUserId, cancellationToken);
+// Bulk assign orphan conversations to a project
+await repo.AssignOrphanConversationsAsync(userId, projectId, ct);
 ```
 
 ## Notes
-- Repository methods do not call SaveChanges/SaveChangesAsync; callers must persist changes on the DbContext/UnitOfWork.
-- Most query methods filter by ownerUserId — this enforces per-user scoping and should be supplied correctly to avoid leaking or missing data.
-- AssignOrphanConversationsAsync uses ExecuteUpdateAsync to perform a server-side bulk update without tracking; this returns the number of rows affected and requires EF Core support for ExecuteUpdateAsync (EF Core 7+).
-- The Include with OrderByDescending (GetByIdWithFilesAsync) relies on EF Core behavior for ordered collection materialization; ordering guarantees can vary by provider/version, so do not rely on it for ordering-sensitive business logic unless verified for your EF Core version.
+- Repository methods (AddAsync, Update, Remove) do not call SaveChanges; the caller is responsible for persisting changes.
+- GetByIdWithFiles includes the Files collection ordered by UploadedAt; depending on EF Core version, Include with ordering requires EF Core support for filtered/ordered includes.
+- AssignOrphanConversationsAsync performs a server-side bulk update and does not populate the change tracker for affected Conversation entities; any tracked Conversation instances will not reflect the update until the context is refreshed or detached and reloaded.

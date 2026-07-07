@@ -3,21 +3,19 @@
 > **File:** `src/api/Gabriel.Engine/Tools/GetCurrentTimeTool.cs`  
 > **Kind:** class
 
-Returns the current UTC time as an ISO 8601 (round-trip) string. Use this tool when an agent or component in the tool framework needs a simple, dependency-free way to obtain the host's current UTC timestamp; the tool is intentionally minimal and designed for use as a building-block in ReAct-style tool chains.
-
-## Remarks
-This class implements a tiny ITool that exposes the tool name ("get_current_time"), a short description, an empty JSON schema for parameters, and an ExecuteAsync implementation that produces the current UTC time. It exists to provide a predictable, side-effect-free source of the system UTC time inside the tool-execution environment without requiring external services.
-
-## Example
 ```csharp
-var tool = new GetCurrentTimeTool();
-Console.WriteLine(tool.Name); // "get_current_time"
-var resultTask = tool.ExecuteAsync("{}", CancellationToken.None);
-string isoUtc = await resultTask; // e.g. "2026-06-08T14:23:45.1234567+00:00"
+public class GetCurrentTimeTool : ITool
 ```
 
+
+GetCurrentTimeTool is a minimal ITool implementation that returns the current UTC time as an ISO 8601 string. It is useful in automation pipelines when a timestamp is needed without introducing external dependencies or custom formatting logic.
+
+It ignores any input arguments and simply returns DateTimeOffset.UtcNow.ToString("o"), which yields a standard, ISO 8601 round-trip timestamp (including the Z suffix for UTC).
+
+## Remarks
+GetCurrentTimeTool serves as a tiny, stateless utility in the Gabriel.Engine tool ecosystem. By providing a consistent timestamp in a pluggable tool, it simplifies logging, metadata stamping, and time-based decision points in workflows without requiring clients to manage clock dependencies or formatting themselves. Because it relies on the system clock, its output is inherently time-varying and not suitable for deterministic tests unless the clock is abstracted or mocked at the call site.
+
 ## Notes
-- The ExecuteAsync implementation ignores both the provided JSON arguments and the CancellationToken; it returns a completed Task with the current time.
-- The timestamp is produced from the host system clock (DateTimeOffset.UtcNow); clock skew or system time configuration will affect the returned value.
-- The string format uses DateTimeOffset.ToString("o") (round‑trip ISO 8601), which includes fractional seconds and the offset ("+00:00" or "Z").
-- The implementation is non-blocking and thread-safe (no mutable state).
+- Time is derived from the host system clock, so values change over time.
+- Output is UTC in ISO 8601 round-trip format (e.g., 2024-12-31T23:59:59.9999999Z).
+- The tool takes no input; the argumentsJson is ignored.

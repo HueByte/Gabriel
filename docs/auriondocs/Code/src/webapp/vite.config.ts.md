@@ -3,12 +3,26 @@
 > **File:** `src/webapp/vite.config.ts`  
 > **Kind:** file
 
-Sets up the Vite development configuration for the web application: enables the React plugin and configures the dev server to run on port 6080 with a proxy that forwards requests under /api to the local .NET backend at http://localhost:6040. Use this file when running the Vite dev server locally so the browser sees API calls as same-origin and you get React fast-refresh and JSX handling from the plugin.
+
+Configures the frontend development environment for a React app built with Vite, enabling the React plugin, running the dev server on port 6080, and proxying API requests under /api to the local .NET backend to simplify development and avoid CORS issues.
 
 ## Remarks
-This configuration exists to simplify local development: the React plugin integrates JSX and Fast Refresh into Vite, while the dev-server proxy keeps browser requests for /api on the same origin and forwards them to the backend, avoiding CORS during development. The file exports a typed configuration via defineConfig so IDEs and type-checking get better diagnostics.
+This abstraction centralizes development-time behavior in a single place. By proxying /api to the backend, it allows frontend code to call /api endpoints as if they were same-origin, while production would typically talk to a real backend URL defined elsewhere. The config is intentionally scoped to development and should be complemented by environment-specific settings for builds.
+
+## Example
+```typescript
+// Common variant: proxy API calls to a backend during dev
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 6080,
+    proxy: {
+      '/api': 'http://localhost:6040',
+    },
+  },
+});
+```
 
 ## Notes
-- The proxy mapping preserves the path by default: a request to /api/users will be forwarded to http://localhost:6040/api/users. If the backend does not expect the /api prefix, add a rewrite rule to remove it.
-- This only affects the development server. Production deployments must handle API routing or CORS on the real server (Vite build output does not include this proxy behavior).
-- Ensure port 6080 (dev server) and 6040 (backend) are free or update the ports to avoid conflicts.
+- This proxy configuration only applies to the Vite development server; production builds will not proxy requests through this configuration.
+- Ensure the backend URL and port are correct and accessible during development; adjust the proxy targets as needed and restart the dev server after changes.

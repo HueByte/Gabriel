@@ -3,48 +3,80 @@
 > **File:** `src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.cs`  
 > **Kind:** record
 
-A compact, serializable DTO representing a conversation returned by the API. Use this contract when returning either a single conversation (with its messages) or a conversation list item (without messages) from server endpoints.
+```csharp
+public record ConversationResponse(
+    Guid Id,
+    Guid? ProjectId,
+    string Title,
+    long AvatarSeed,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    
+    IReadOnlyList<MessageResponse>? Messages,
+    
+    
+    
+    bool? ProjectIsDefault = null,
+    
+    
+    
+    
+    long? EffectiveAvatarSeed = null,
+    
+    
+    
+    
+    string? PatternOverride = null,
+    string? PaletteOverride = null,
+    
+    
+    string? Mode = null
+)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Id` | `Guid` | — |
+| `ProjectId` | `Guid?` | — |
+| `Title` | `string` | — |
+| `AvatarSeed` | `long` | — |
+| `CreatedAt` | `DateTimeOffset` | — |
+| `UpdatedAt` | `DateTimeOffset` | — |
+| `Messages` | `IReadOnlyList<MessageResponse>?` | — |
+| `ProjectIsDefault` | `bool?` | `null` |
+| `EffectiveAvatarSeed` | `long?` | `null` |
+| `PatternOverride` | `string?` | `null` |
+| `PaletteOverride` | `string?` | `null` |
+| `Mode` | `string?` | `null` |
+
+
+Represents the API payload for a conversation, capturing its identity, metadata, and rendering hints. It includes identifiers (Id, ProjectId), title, timestamps, and optional messages when fetching a single conversation. It also carries rendering and behavior hints: avatar seed information (AvatarSeed, EffectiveAvatarSeed), optional skins overrides (PatternOverride, PaletteOverride), an indicator if the conversation belongs to the default standalone project (ProjectIsDefault), and a per-conversation display mode (Mode). In list responses, Messages is null to avoid large payloads; in single-conversation fetches, the Messages collection is populated. Behavior around EffectiveAvatarSeed and overrides depends on whether the conversation resides in a real project or a standalone/default project; when ProjectId is null (legacy rows), several fields become null or are unused.
 
 ## Remarks
-This record models both list and detail responses: when multiple conversations are returned, the Messages property will be null to avoid payload bloat; when a single conversation is fetched, Messages contains the full message history. Several fields are nullable to support legacy rows and the transition between "standalone" conversations and conversations that belong to a Project. Avatar and appearance fields distinguish between a conversation's own settings (AvatarSeed, PatternOverride, PaletteOverride) and the effective values used for rendering when the conversation is part of a non-default project (EffectiveAvatarSeed and the project's skin). The Mode value is a lowercased enum-name string used to bias conversational behavior.
+This abstraction centralizes the conversation payload used by the Conversations API, separating transport concerns from domain entities. It encodes how a conversation should be presented (avatars, skins) and how much content to fetch (Messages). The conditional nullability of ProjectIsDefault and EffectiveAvatarSeed reflects phased feature work and legacy compatibility, enabling clients to render correctly across both real-project and standalone conversations.
 
 ## Example
 ```csharp
-// Detail response (single conversation fetched)
-var detail = new ConversationResponse(
-    Id: Guid.NewGuid(),
-    ProjectId: Guid.Parse("..."),
-    Title: "Planning chat",
-    AvatarSeed: 42L,
-    CreatedAt: DateTimeOffset.UtcNow.AddDays(-10),
-    UpdatedAt: DateTimeOffset.UtcNow,
-    Messages: new List<MessageResponse> { /* ... */ },
-    ProjectIsDefault: false,
-    EffectiveAvatarSeed: 42L,
-    PatternOverride: null,
-    PaletteOverride: null,
-    Mode: "chatty"
-);
-
-// List response (messages omitted)
-var listItem = new ConversationResponse(
-    Id: Guid.NewGuid(),
-    ProjectId: null,
-    Title: "Quick notes",
-    AvatarSeed: 7L,
-    CreatedAt: DateTimeOffset.UtcNow.AddDays(-1),
-    UpdatedAt: DateTimeOffset.UtcNow,
-    Messages: null,
-    ProjectIsDefault: null,
-    EffectiveAvatarSeed: null,
-    PatternOverride: "dots",
-    PaletteOverride: "warm",
-    Mode: null
+// Typical single-conversation payload
+var convo = new ConversationResponse(
+  Id: Guid.Parse("d271b0a2-5f8a-4c3a-9a4e-1d2a5f2b3c4d"),
+  ProjectId: Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
+  Title: "Sprint Planning",
+  AvatarSeed: 42,
+  CreatedAt: DateTimeOffset.UtcNow.AddDays(-1),
+  UpdatedAt: DateTimeOffset.UtcNow,
+  Messages: new List<MessageResponse>(),
+  ProjectIsDefault: false,
+  EffectiveAvatarSeed: 42,
+  PatternOverride: null,
+  PaletteOverride: null,
+  Mode: "chatty"
 );
 ```
 
 ## Notes
-- Messages will be null in list endpoints; do not assume its presence without checking.
-- ProjectIsDefault and EffectiveAvatarSeed can be null when ProjectId is null (legacy rows not backfilled).
-- PatternOverride and PaletteOverride are only applied for standalone/default-project conversations; real-project chats render the project's skin but still echo these values for potential future conversion.
-- Mode is a lowercased enum name string (null means use the default behavior).
+- Messages is null in list responses; populate only when fetching a single conversation.
+- EffectiveAvatarSeed is meaningful only when ProjectId is not null; otherwise it is null (legacy rows).
+- PatternOverride and PaletteOverride convey per-conversation skin hints for standalone chats; real-project chats use the project's skin instead. Mode is transmitted as a lowercase string corresponding to a per-conversation behavioral bias; if unknown, clients should fall back to the default.

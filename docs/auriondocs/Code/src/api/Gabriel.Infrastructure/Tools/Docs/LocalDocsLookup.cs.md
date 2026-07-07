@@ -4,44 +4,19 @@
 > **Kind:** class
 
 ```csharp
-// IDocsLookup over the on-disk LLM-native self-docs folder. This is the
-// PRIMARY docs source - pages here are written specifically for the model to
-// consume and take precedence over the GitHub-backed fallback.
-//
-// Root resolution runs once on first use (lazy). When LocalDocsOptions.Path
-// is absolute and exists, it is used as-is. Otherwise the resolver probes
-// Environment.CurrentDirectory and AppContext.BaseDirectory, walking up a few
-// parents looking for the relative path. First match wins. If nothing is
-// found the source behaves as empty (zero entries, all reads return null) and
-// the composite lookup will transparently fall back to the GitHub source.
 public sealed class LocalDocsLookup : IDocsLookup
 ```
 
 
-Provides an on-disk IDocsLookup implementation that reads LLM-targeted markdown pages from a local repository folder. Use this when you want the model to prefer locally authored, LLM-native documentation files (the primary docs source) instead of the GitHub-backed fallback; it enumerates .md files, extracts a first H1 for each entry's title, and serves file contents on demand.
+LocalDocsLookup is a concrete implementation of IDocsLookup that sources model documentation from a local on-disk self-docs folder. It serves as the primary docs source for the running application, taking precedence over the GitHub-backed fallback when enabled, so the model can access its own documentation without network access.
+
+It resolves the root path lazily on first use by honoring LocalDocsOptions.Path if absolute and existing; otherwise it walks upward from the current directory and AppContext.BaseDirectory up to eight levels to locate a matching root. If none is found, it behaves as though there are no docs.
+
+ListAsync enumerates every markdown file under the resolved root, producing DocsEntry items with a path relative to the root, a title parsed from the first H1 in the file, and a source marker of LocalLlmNative. ReadAsync loads a single document if the path is valid and within the root, returning a DocsContent with the file contents, a canonical URL, and LocalLlmNative as the source.
 
 ## Remarks
-LocalDocsLookup is the primary, file-system-backed docs source used by the composite lookup system. It performs a lazy root-resolution on first use (protected by a lock) and then lists or reads markdown files beneath that root. If LocalDocsOptions.Path is an absolute path that exists it will be used directly; otherwise the resolver probes Environment.CurrentDirectory and AppContext.BaseDirectory and walks upward a limited number of parent directories looking for the configured relative path (first match wins). If no root is found the lookup behaves as empty so higher-level components can transparently fall back to the remote/GitHub source.
-
-## Example
-```csharp
-// Using the lookup directly (commonly resolved from DI):
-var entries = await localDocsLookup.ListAsync(CancellationToken.None);
-foreach (var e in entries)
-{
-    Console.WriteLine($"{e.Path} - {e.Title}");
-}
-
-// Read a specific page (path uses forward slashes relative to the docs root):
-var content = await localDocsLookup.ReadAsync("guides/getting-started.md", CancellationToken.None);
-if (content != null)
-{
-    Console.WriteLine(content.Text);
-}
-```
+LocalDocsLookup isolates filesystem-based docs from the rest of the docs pipeline, enabling fast model access to its own self-documentation and ensuring offline behavior. It cooperates with the overall docs infrastructure by exposing content that can be consumed by the same UI or tooling that consumes GitHub-hosted docs; when local docs are disabled or missing, the composite lookup can transparently fall back to GitHub sources. The lazy root resolution and explicit containment checks improve startup performance and security by avoiding unnecessary IO and preventing traversal beyond the configured root.
 
 ## Notes
-- If LocalDocsOptions.Enabled is false, ListAsync returns an empty list and ReadAsync returns null; the lookup is effectively disabled.
-- Title extraction only scans the first TitleScanByteLimit bytes (4096) for the first H1 (`# ...`); leading BOM and blank lines are tolerated but very long initial front matter or missing headings yield a null Title.
-- ReadAsync normalizes separators and re-anchors the requested path against the resolved root and rejects requests that resolve outside the root (defense against path traversal); it also returns null when the file does not exist.
-- Paths returned by ListAsync are relative to the docs root and use forward slashes so they round-trip correctly across platforms.
+- If LocalDocsOptions.Path is not configured or the resolved root cannot be found, ListAsync returns an empty set and ReadAsync returns null; expect the system to fall back to remote sources via the composite lookup.
+- Titles are derived from the first H1 in each Markdown file; if no H1 is present, the title may be null, which is acceptable for non-title-bearing entries.

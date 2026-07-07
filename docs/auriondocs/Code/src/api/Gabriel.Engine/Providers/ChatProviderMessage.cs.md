@@ -3,36 +3,37 @@
 > **File:** `src/api/Gabriel.Engine/Providers/ChatProviderMessage.cs`  
 > **Kind:** record
 
-Represents a transport-level chat message used at the IChatProvider boundary. Use this record when sending or receiving messages to/from provider implementations — it is intentionally decoupled from the persistence Message entity and models the four message shapes used by OpenAI/xAI-style wire protocols.
-
-## Remarks
-This record exists to separate provider-facing message semantics from any storage-specific concerns. It encodes the four protocol-supported shapes (user/system messages, assistant text, assistant tool-calls, and tool observations) using a small set of nullable properties so providers can inspect only the fields they need. The design favors immutability and a clear mapping to wire semantics: Role determines the origin, Content carries free-form text (optional for assistant tool-call invocations), ToolCalls carries the list of tool call frames when the assistant invokes tools, and ToolCallId links tool observations back to the originating call.
-
-## Example
 ```csharp
-// User or system message
-var userMsg = new ChatProviderMessage(MessageRole.User, Content: "What's the weather like?");
-
-// Assistant textual reply
-var assistantText = new ChatProviderMessage(MessageRole.Assistant, Content: "It's sunny and 72°F.");
-
-// Assistant invoking tools (content may be null or provide a prompt)
-var toolCall = new ChatProviderToolCall("weather", new Dictionary<string, object?> { ["location"] = "Seattle" });
-var assistantToolCall = new ChatProviderMessage(
-    MessageRole.Assistant,
-    Content: null,
-    ToolCalls: new List<ChatProviderToolCall> { toolCall }
-);
-
-// Tool observation / tool response referencing the call id
-var toolObservation = new ChatProviderMessage(
-    MessageRole.Tool,
-    Content: "Observed: rain expected",
-    ToolCallId: "call-123"
-);
+public record ChatProviderMessage(
+    MessageRole Role,
+    string? Content = null,
+    string? ToolCallId = null,
+    IReadOnlyList<ChatProviderToolCall>? ToolCalls = null
+)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Role` | [`MessageRole`](../../Gabriel.Core/Entities/MessageRole.cs.md) | — |
+| `Content` | `string?` | `null` |
+| `ToolCallId` | `string?` | `null` |
+| `ToolCalls` | `IReadOnlyList<ChatProviderToolCall>?` | `null` |
+
+
+This record serves as a transport DTO at the IChatProvider boundary, decoupling provider implementations from the domain and persistence concerns. It encodes the four message shapes supported by the OpenAI/xAI wire protocol so chat messages can be transported in a stable, wire-friendly form regardless of internal domain models. Use this symbol whenever you need to marshal messages between chat providers and the rest of the system, rather than passing the raw domain Message entity across the boundary.
+
+Fields map to the shapes:
+- user/system: Content is set; ToolCallId and ToolCalls are null
+- assistant (text): Content is set
+- assistant (tool calls): Content may be null, ToolCalls is set
+- tool (observation): Content is set, ToolCallId is set
+
+## Remarks
+This transport DTO acts as the boundary abstraction between provider implementations and the domain, preserving serialization semantics and protecting persistence concerns. It consolidates the wire-protocol shapes into a single, stable carrier and clarifies how each combination of fields should be interpreted by the adapter surrounding the IChatProvider boundary.
+
 ## Notes
-- Treat ToolCalls being null as the signal that no tool invocation occurred; prefer null (not an empty list) when no tool frames apply. 
-- Content is optional for assistant messages that use ToolCalls; consumers must handle missing Content.
-- ToolCallId is intended to associate tool-originated observations with a specific tool call; don't assume it's populated for non-tool roles.
+- The fields Content, ToolCallId, ToolCalls are nullable; follow the contract for each shape.
+- When using tool-calls shape, provide a non-null ToolCalls collection; Content may be omitted.
+- Tool (observation) messages require ToolCallId to identify the invocation.

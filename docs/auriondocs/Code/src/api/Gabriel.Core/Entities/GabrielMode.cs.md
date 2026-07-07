@@ -3,31 +3,23 @@
 > **File:** `src/api/Gabriel.Core/Entities/GabrielMode.cs`  
 > **Kind:** enum
 
-A set of discrete persona "modes" that can be attached to a Conversation to influence per-turn system prompts. Use this enum when you want the system prompt to bias the assistant's style (length, level of explanation, stance, etc.) without rewriting the entire persona; the chosen mode selects a Fragments.Mode* snippet that GabrielSystemPromptBuilder splices into each turn.
-
-## Remarks
-GabrielMode values are stored as an integer on Conversation.Mode (nullable — null means Chatty/default). The enum does not itself perform prompt construction; it is a lightweight signal used by PromptRegistry/PromptKey and GabrielSystemPromptBuilder to pick which Fragments.Mode* snippet to include. This lets callers switch high-level behavior (e.g., Tutor vs. Concise) without touching prompt-building logic.
-
-## Example
 ```csharp
-// Set a conversation to the Tutor mode
-conversation.Mode = GabrielMode.Tutor;
-
-// Read with a null fallback to the Chatty default
-var mode = conversation.Mode ?? GabrielMode.Chatty;
-switch (mode)
+public enum GabrielMode
 {
-    case GabrielMode.Tutor:
-        // behavior that relies on the Tutor fragment being applied
-        break;
-    case GabrielMode.Concise:
-        // behavior for concise responses
-        break;
-    // ...
+    Chatty      = 0,
+    Elaborative = 1,
+    Concise     = 2,
+    Tutor       = 3,
+    Critic      = 4,
 }
 ```
 
+
+GabrielMode is an enum that encodes the behavioral bias attached to a single Conversation. It drives which Fragments.Mode* snippet gets spliced into the per-turn system prompt, effectively re-weighting the persona without rewriting it. The mode is stored as an int on Conversation.Mode (nullable; null = Chatty default). Adding a new mode requires three coordinated edits: a new enum value here, a corresponding Fragments.Mode* constant plus a PromptKey.Mode* constant plus a PromptRegistry mapping, and a new case in the mode→PromptKey switch in GabrielSystemPromptBuilder.
+
+## Remarks
+The enum centralizes persona variants and decouples their selection from the prompt-building pipeline. It acts as a single source of truth for mode-based prompt fragments and, together with GabrielSystemPromptBuilder, enables consistent behavior changes across conversations without scattering logic across multiple files.
+
 ## Notes
-- The enum values are persisted as integers; do not reorder or renumber existing members because that will change the meaning of stored data.
-- Adding a new mode requires coordinated updates: a Fragments.Mode* constant, a PromptKey entry and PromptRegistry mapping, and a new case in GabrielSystemPromptBuilder that maps the mode to the PromptKey.
-- Null on Conversation.Mode is treated as GabrielMode.Chatty; callers that read Mode should handle the nullable case explicitly if they need a non-default behavior.
+- Be mindful that the selected mode is stored as an int on Conversation.Mode; if you serialize or migrate data, ensure compatibility with existing values and the default Chatty behavior when null is encountered.
+- When introducing a new mode, you must update all three coordinated locations exactly as described above; missing any step can cause the system to ignore the new mode or fail to map it to the correct prompt fragments.

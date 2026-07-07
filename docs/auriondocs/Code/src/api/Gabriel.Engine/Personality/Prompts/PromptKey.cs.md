@@ -3,29 +3,17 @@
 > **File:** `src/api/Gabriel.Engine/Personality/Prompts/PromptKey.cs`  
 > **Kind:** class
 
-Holds the canonical string keys used to look up named prompt fragments in the prompt registry. Use these constants whenever you need to retrieve or reference a fragment (for example from a dictionary, switch, or registry) so typos become compile-time errors and keys remain consistent across the codebase.
-
-## Remarks
-PromptKey centralises the literal identifiers for every named prompt fragment. Each const corresponds to a fragment declared elsewhere (e.g. in Fragments.*) and is intended to be used as the single source of truth for registry/dictionary keys or switch arms. Keeping the keys as compile-time constants prevents accidental mismatches and makes adding new prompt fragments a two-step process: add the key here and add the matching fragment constant and content.
-
-## Example
 ```csharp
-// Retrieve a fragment from a dictionary-style registry
-var fragment = promptRegistry.GetFragment(PromptKey.ModeChatty);
-
-// Or use in a switch to select behaviour
-switch (modeKey)
-{
-    case PromptKey.ModeChatty:
-        ApplyFragment(Fragments.ModeChatty);
-        break;
-    case PromptKey.ModeConcise:
-        ApplyFragment(Fragments.ModeConcise);
-        break;
-}
+public static class PromptKey
 ```
 
+
+PromptKey is a static container of string constants that serve as named keys into the prompt fragment registry. Each key identifies a specific fragment group (persona, memory, formatting, or mode behavior) and is declared as a const string to ensure they fold into switch arms or dictionary lookups at compile time, catching typos as build errors. The keys are organized by topic using dot-separated identifiers, and whenever a new mode or section is added, its key is defined here alongside the corresponding Fragments.* member.
+
+## Remarks
+By centralizing these keys, callers avoid scattering literal strings across code and gain compile-time validation. The abstraction also makes it straightforward to extend the prompt system: add a new mode by introducing a PromptKey constant and pairing it with a Fragments.* entry, without touching the lookup logic elsewhere. It helps keep prompt assembly modular: the consumer builds prompts by combining named fragments based on the current persona and mode.
+
 ## Notes
-- These are const strings: changing a value will require updating any matching Fragments or registry entries; the intent is to keep keys stable.
-- Add a new key here whenever you introduce a new prompt fragment or mode, and ensure a matching Fragments.* constant exists.
-- The class is a static holder (no instances) — treat it purely as an identifier collection.
+- Ensure the key value matches a corresponding Fragments.* fragment; otherwise prompt assembly may skip or fail at runtime.
+- Do not rename keys without updating call sites that rely on exact strings.
+- Keep the dot-separated namespace stable; it encodes grouping and mode selection.

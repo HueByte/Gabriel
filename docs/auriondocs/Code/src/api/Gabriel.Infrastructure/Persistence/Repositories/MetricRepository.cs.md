@@ -3,30 +3,17 @@
 > **File:** `src/api/Gabriel.Infrastructure/Persistence/Repositories/MetricRepository.cs`  
 > **Kind:** class
 
-EF Core-backed implementation of IMetricRepository that persists MetricEntry records into the application's AppDbContext. Use this when you need to record lightweight, standalone metric events that should be written immediately and independently of any business transaction.
-
-## Remarks
-This repository treats metrics as fire-and-forget events: writes call AddAsync followed by SaveChangesAsync directly (no Unit of Work) because metric recording should not block or participate in the surrounding business transaction. Read methods use AsNoTracking for cheap, read-only queries, and cleanup uses EF Core's bulk ExecuteDeleteAsync to avoid materializing entities during deletions.
-
-## Example
 ```csharp
-// assume `db` is an AppDbContext resolved from DI
-var repo = new MetricRepository(db);
-
-// add a metric
-await repo.AddAsync(new MetricEntry { System = "orders", CreatedAt = DateTimeOffset.UtcNow, /* other props */ });
-
-// read recent metrics for a system
-var recent = await repo.RecentAsync("orders", limit: 50);
-
-// read recent metrics for systems with a prefix
-var prefixed = await repo.RecentByPrefixAsync("order", limit: 20);
-
-// delete old metrics
-int removed = await repo.DeleteOlderThanAsync(DateTimeOffset.UtcNow.AddMonths(-3));
+public sealed class MetricRepository : IMetricRepository
 ```
 
+
+MetricRepository is the EF Core implementation of IMetricRepository. It writes metrics inline by calling AddAsync on the MetricEntry DbSet and then SaveChangesAsync, because metric events are standalone and should not participate in a surrounding business transaction. The repository exposes AddAsync for persisting a new metric, RecentAsync for retrieving the most recent metrics for a given system, RecentByPrefixAsync for systems whose System value starts with a given prefix, and DeleteOlderThanAsync for bulk cleanup of old metric entries.
+
+## Remarks
+By isolating EF Core specifics behind IMetricRepository, the rest of the code interacts with metrics without needing persistence details. Reads are performed with AsNoTracking to avoid unnecessary change tracking, and RecentByPrefixAsync relies on EF Core translating StartsWith into a SQL LIKE predicate to enable index-friendly queries on supported databases. DeleteOlderThanAsync uses a single bulk DELETE via ExecuteDeleteAsync, which is efficient for cleanup tasks but does not materialize entities.
+
 ## Notes
-- If limit <= 0 the Recent* methods return an empty array immediately (no DB call). 
-- AddAsync writes are committed inline via SaveChangesAsync; failures will throw and are not wrapped in a higher-level transaction — this is intentional so metric failures can be tolerated separately from business operations.
-- RecentByPrefixAsync uses StartsWith which EF Core translates to a SQL LIKE; the database can use an index only when the pattern is a prefix (no leading wildcard).
+- RecentAsync and RecentByPrefixAsync return an empty array when limit <= 0.
+- StartsWith translates to LIKE in SQL; for SQLite, supply a literal prefix to leverage indices.
+- DeleteOlderThanAsync executes a bulk operation with no entity tracking; no in-memory materialization is performed.

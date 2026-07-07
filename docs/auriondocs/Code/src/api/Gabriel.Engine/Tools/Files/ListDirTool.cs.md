@@ -3,27 +3,33 @@
 > **File:** `src/api/Gabriel.Engine/Tools/Files/ListDirTool.cs`  
 > **Kind:** class
 
-List the contents of a directory rooted in the configured agent host root (or the conversation project sandbox when mode="project"). Choose this tool when you need a human-friendly, table-style directory listing (type, size, modified, name) that sorts directories first and supports a shallow recursive walk with indentation and an enforced maximum number of entries.
+```csharp
+public sealed class ListDirTool : ITool
+```
+
+
+List the contents of a directory under the agent's configured root with an "ls -la" style, table-formatted output. Use this tool when you need a sandbox-aware, caps-enforced directory listing (host-root vs. conversation project sandbox) rather than calling Directory APIs directly; it enforces the configured root, sorts directories first then alphabetically, and truncates output to a safe maximum.
 
 ## Remarks
-This tool is a safe, opinionated wrapper around filesystem enumeration that enforces agent-level policy (default and hard-capped listing sizes) and resolves paths via IAgentPathResolver so listings are constrained to the configured root or project sandbox. Instead of throwing for common validation problems it returns error strings (prefixed with "Error:"), making it convenient for callers that want a textual result for UI or logging.
+ListDirTool is a small, safe wrapper around filesystem enumeration that integrates with the agent's path resolution and options. It resolves paths via IAgentPathResolver (so absolute or relative paths are validated against the active root), applies AgentToolsOptions defaults and a hard cap for max entries, and returns a human-readable table (type, size, modified, name). ExecuteAsync returns error strings for common failure cases (argument parsing, path resolution, not-a-directory), making it suitable for use in tool-driven agent flows where textual results are expected.
 
 ## Example
 ```csharp
-// List the current root (defaults)
-var args = "{}";
-var result = await listDirTool.ExecuteAsync(args, CancellationToken.None);
-
-// List recursively up to 500 entries and include hidden files
-var argsJson = "{ \"path\": \"./src\", \"mode\": \"host\", \"recursive\": true, \"max_entries\": 500, \"include_hidden\": true }";
-var result2 = await listDirTool.ExecuteAsync(argsJson, CancellationToken.None);
-
-// result/result2 are textual table-style listings or an error message string starting with "Error:".
+// Example: list the project sandbox recursively, including hidden entries
+var argsJson = """
+{
+  "path": "src",
+  "mode": "project",
+  "recursive": true,
+  "max_entries": 100,
+  "include_hidden": true
+}
+""";
+var result = await listDirTool.ExecuteAsync(argsJson, CancellationToken.None);
+Console.WriteLine(result);
 ```
 
 ## Notes
-- If the resolved target is a file the tool returns an error suggesting use of file_info rather than throwing an exception.
-- Recursive output and non-recursive output are both truncated when the total number of entries reaches max_entries; the hard cap from AgentToolsOptions.MaxListEntries is enforced.
-- include_hidden controls whether dotfiles (Unix convention) and entries with the Hidden attribute are shown; it defaults to false.
-- Path resolution happens via IAgentPathResolver; relative paths are resolved under the active root and absolute paths must canonicalize under that root.
-- Common validation errors and parsing issues are caught and returned as textual errors (e.g. malformed JSON arguments or out-of-range max_entries).
+- include_hidden defaults to false; dotfiles (Unix) and Windows Hidden-attribute files are omitted unless you set include_hidden to true.
+- The effective max_entries is clamped by the tool's configured hard cap (AgentToolsOptions.MaxListEntries); requesting a larger value will be reduced to that cap.
+- If the resolved path exists but is a file, ExecuteAsync returns an error message directing you to use file_info instead rather than throwing an exception.

@@ -3,17 +3,16 @@
 > **File:** `src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.cs`  
 > **Kind:** class
 
-A reusable prompt fragment that documents which formatting features the web UI supports (GitHub-flavoured Markdown plus Mermaid, LaTeX math, and syntax-highlighted code fences) and advises the model when to use each. Use this constant when composing system/persona or task prompts so the assistant knows which formatting modalities are available and which to avoid for trivial cases.
-
-## Remarks
-This fragment isolates a medium-level concern (what the UI renders) from persona or behavioral directives so that rendering capabilities can be updated in one place and included consistently across prompts. It provides concrete guidance the model can follow (for example: when Mermaid or LaTeX are appropriate) rather than leaving formatting choices implicit.
-
-## Example
 ```csharp
-// Include the fragment when building a system prompt so the model knows the available renderers
-var systemPrompt = Fragments.PersonaFormatting + "\n\nBe concise and prefer prose unless a diagram or equation improves clarity.";
+public static partial class Fragments
 ```
 
+
+Defines a reusable formatting guide that describes what the chat surface renders and when to apply specific formatting features. It documents the webapp's supported tools — GitHub-flavored Markdown augmented with Mermaid diagrams, KaTeX math, and code highlighting — and clarifies when to use each. This content lives in a static string constant within Fragments so the model and UI can access a single source of truth about rendering capabilities, independent from persona or behavior logic.
+
+## Remarks
+By isolating this guidance in Fragments.PersonaFormatting, the app decouples the knowledge of renderers from the conversational behavior. It acts as a medium concern that the chat surface ships with, enabling consistent guidance across renderers and reducing duplication in prompts or UI text.
+
 ## Notes
-- This is a compile-time constant (const string); references are inlined at compile time — changing the text requires recompilation.
-- The value contains fenced code blocks, backticks and Markdown; if embedding it inside other literal strings or templates, ensure any surrounding quoting/escaping preserves those fences.
+- Keep the guidance in sync with the webapp's actual rendering capabilities; mismatch can mislead users and the model.
+- As a static constant, changes require a rebuild/deploy to propagate; plan changes accordingly.

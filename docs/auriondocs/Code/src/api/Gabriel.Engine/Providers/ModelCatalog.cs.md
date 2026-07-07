@@ -3,25 +3,28 @@
 > **File:** `src/api/Gabriel.Engine/Providers/ModelCatalog.cs`  
 > **Kind:** class
 
-Builds an immutable catalog of available chat models by walking the Models lists of the provided IChatProvider instances at construction time. Use this class when you need a central, read-only view of all registered models and a deterministic way to resolve a runtime ModelSelection from optional user preferences (provider + model). The catalog is constructed once and then used for fast lookups.
+```csharp
+public sealed class ModelCatalog : IModelCatalog
+```
+
+
+ModelCatalog is a concrete, sealed implementation of IModelCatalog that builds a catalog of all available chat models by enumerating every registered IChatProvider.Models during construction. Because providers are registered as singletons, the catalog is built once and reused for subsequent resolutions, avoiding repeated traversal of provider lists. It exposes the full set of models via AvailableModels and resolves a ModelSelection through an optional pair of preferred provider and model; if no valid match is found, it falls back to a precomputed default model.
 
 ## Remarks
-ModelCatalog collects AvailableModel entries from every IChatProvider supplied to its constructor and keeps them in a read-only list. It establishes a default ModelSelection during construction: the first model marked IsActive across providers, or if none are marked active, the first registered model. If no models are present at all the constructor throws an InvalidOperationException. After construction the catalog is effectively immutable and safe for concurrent reads.
+
+Centralizes model discovery and selection, decoupling clients from provider-specific details and ensuring a sane, deterministic default path if configuration is incomplete. The default is determined at construction time (the first active model, or the first available if none are active) and reused for all resolves, which promotes a stable startup experience even in misconfigured environments. The catalog is built once and kept immutable thereafter, providing fast lookups without re-walking providers on every call.
 
 ## Example
 ```csharp
-// Typical usage in a DI scenario: the container supplies all registered IChatProvider implementations
+// Most common usage: explicitly select a provider/model
 var catalog = new ModelCatalog(providers);
+var selection = catalog.Resolve("OpenAI", "GPT-4");
 
-// Read all known models (used to populate UI dropdowns, etc.)
-IReadOnlyList<AvailableModel> models = catalog.AvailableModels;
-
-// Resolve a selection from user preferences (falls back to the catalog default when preference is missing or stale)
-ModelSelection selection = catalog.Resolve(preferredProvider: "openai", preferredModel: "gpt-4");
+// Or rely on the precomputed default when preferences are omitted or unavailable
+var defaultSelection = catalog.Resolve(null, null);
 ```
 
 ## Notes
-- Provider name comparisons are case-insensitive, but model name comparisons use an ordinal (case-sensitive) comparison; a mismatch in model name casing will be treated as "stale" and cause a fallback to the default.
-- If a preferred provider/model pair does not match any registered entry, Resolve silently returns the catalog's default selection rather than throwing — the UI should reflect the actual selection on the next load.
-- The constructor expects that at least one provider exposes a non-empty Models list; otherwise an InvalidOperationException is thrown. The implementation expects a "Mock" provider to be available in minimally configured deployments to avoid this error.
-- The catalog is populated once at creation; subsequent changes to provider registrations or their Models collections will not be reflected in an existing ModelCatalog instance.
+- Provider name comparisons are case-insensitive, while model name comparisons are exact (case-sensitive).
+- If no models are registered across all providers, the constructor throws InvalidOperationException with guidance to register a Mock or configure at least one provider.
+- AvailableModels is a read-only list and does not change after construction; Resolve uses a cached _default when no valid match is found.

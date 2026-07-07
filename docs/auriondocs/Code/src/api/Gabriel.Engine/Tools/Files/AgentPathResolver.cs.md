@@ -3,24 +3,27 @@
 > **File:** `src/api/Gabriel.Engine/Tools/Files/AgentPathResolver.cs`  
 > **Kind:** class
 
-Resolves a supplied path (relative or absolute) into a canonical absolute path anchored to either the configured host root or the current conversation's project directory, validates that the resulting path does not escape that root, and returns a ResolvedPath containing the absolute path, a normalized display form, the resolved root, and the mode. Use this when a tool needs a safe, sandboxed file path for reading or writing within the agent's allowed root.
+```csharp
+public sealed class AgentPathResolver : IAgentPathResolver
+```
+
+
+AgentPathResolver encapsulates the logic for turning a potentially relative path into an absolute, project-scoped path while enforcing a strict root boundary. It supports two rooted contexts through PathRootMode: Host (the operator's host workspace) and Project (the current conversation's project directory). When ResolveAsync is called with a path and mode, it first resolves the appropriate root, converts the input into an absolute path, ensures the path cannot escape the root, and returns a ResolvedPath containing the computed absolute path, a user-friendly relative display, the root used, and the mode.
 
 ## Remarks
-AgentPathResolver centralizes path normalization and sandboxing rules so callers do not need to implement ad-hoc validation. It chooses the root based on PathRootMode (Host or Project), uses Path.GetFullPath to canonicalize segments (including resolving `..`), and then enforces that the final absolute path is either equal to the root or contained within it. The display path is returned relative to the root and normalized to forward slashes for consistent, cross-platform presentation.
+Centralizes path boundary checks and normalization to prevent directory traversal outside the permitted root. It abstracts host vs. project roots behind PathRootMode, coordinating with IToolExecutionContext and IProjectFileService to locate the right root. The returned ResolvedPath provides a stable, display-friendly path that can be safely presented to users or consumed by downstream tooling without reimplementing the resolution logic.
 
 ## Example
 ```csharp
-// Resolve a relative path against the current conversation's project root.
-// The resolver is typically injected as IAgentPathResolver.
-var resolved = await resolver.ResolveAsync("src/app/config.json", PathRootMode.Project, cancellationToken);
-// `resolved` contains the canonical absolute path, a display path relative to the root
-// (e.g. "src/app/config.json" or "." for the root), the root used, and the selected mode.
+// Resolve a path within the current project sandbox
+var resolver = new AgentPathResolver(context, projectFiles, options);
+var resolvedProj = await resolver.ResolveAsync("assets/logo.png", PathRootMode.Project, ct);
+
+// Resolve a path relative to the operator's host workspace
+var resolvedHost = await resolver.ResolveAsync("config/server.json", PathRootMode.Host, ct);
 ```
 
 ## Notes
-- Empty or whitespace-only input throws DomainException: "Path cannot be empty.".
-- If PathRootMode.Host is chosen but the HostRoot option is not configured, a DomainException is thrown explaining host mode is disabled.
-- PathRootMode.Project requires the current execution context to have a ProjectId; otherwise a DomainException is thrown.
-- Absolute inputs are accepted but still validated to ensure they do not escape the resolved root.
-- Root containment checks append a directory separator to avoid false matches (e.g. "C:\\foo" vs "C:\\foobar").
-- Comparison is case-insensitive on Windows and ordinal on non-Windows platforms; display paths always use forward slashes for consistency.
+- Path traversal attempts that escape the configured root will throw DomainException to prevent unauthorized access.
+- The root boundary check is platform-aware: Windows uses a case-insensitive comparison, while POSIX systems are case-sensitive.
+- If PathRootMode.Host is requested but HostRoot is not configured, a DomainException is thrown; callers should either configure HostRoot or switch to PathRootMode.Project.

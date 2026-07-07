@@ -3,22 +3,22 @@
 > **File:** `src/api/Gabriel.Engine/Personality/Prompts/Fragments.Memory.cs`  
 > **Kind:** class
 
-Holds a reusable prompt fragment that documents how the assistant should use long-term memory tools and when those tools should be used. Reach for this constant when assembling system/persona prompts or packaging prompt fragments so the runtime understands the rules for saving, listing, and removing memories.
+```csharp
+public static partial class Fragments
+```
+
+
+Fragments is a small utility container for prompt fragments used to shape the model's prompts. The PersonaMemory member stores the long-term-memory guidance that instructs the agent on how to interact with memory tools (memory_save, memory_list, memory_remove) and when to persist information. This fragment is designed to be appended after the static persona block so memory capabilities are presented as functional constraints rather than as part of the model's identity.
 
 ## Remarks
-This partial Fragments class centralizes prompt fragments used by the persona/prompt builder; PersonaMemory is intentionally a long, multi-line constant so the same guidance can be appended to the system prompt wherever memory behavior must be specified. The fragment is designed to be appended after the static persona block (so it reads as additional capabilities) and can be skipped cleanly by builders that don't register memory tools.
+Fragments centralizes memory-policy text, making it easy to adjust or reuse across prompts without duplicating content. It clarifies the separation between the core persona and memory behavior, supporting consistent behavior across environments and test scenarios. The static const nature ensures the policy remains stable at runtime while still being accessible from code.
 
 ## Example
 ```csharp
-// Compose a system prompt by appending the persona then the memory guidance
-var promptBuilder = new StringBuilder();
-promptBuilder.Append(Fragments.Persona);          // other persona fragments live in this partial class
-promptBuilder.Append("\n\n");
-promptBuilder.Append(Fragments.PersonaMemory);  // adds memory tool guidance
-var systemPrompt = promptBuilder.ToString();
+// Example: including memory guidance in the system prompt
+string systemPrompt = Fragments.PersonaMemory + "\n" + otherPersonaContent;
 ```
 
 ## Notes
-- The value is a compile-time constant; changing it alters assistant behavior across all places it's used.
-- Builders may intentionally omit this fragment if no memory tools are available; the fragment text is written so callers can skip it without further changes.
-- This string is not localized by default — if you need translated guidance, introduce separate localized fragments rather than editing the constant in-place.
+- If memory tools aren't registered the builder can skip this fragment cleanly without rewriting anything upstream.
+- The fragment is a long, raw string literal; consider impact on prompt length and maintainability when integrating into larger prompts.

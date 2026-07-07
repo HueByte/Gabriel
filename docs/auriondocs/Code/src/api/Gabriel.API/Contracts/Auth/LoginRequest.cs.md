@@ -3,28 +3,23 @@
 > **File:** `src/api/Gabriel.API/Contracts/Auth/LoginRequest.cs`  
 > **Kind:** record
 
-Represents credentials submitted by a client to authenticate: an email address and a password. Use this record as the request DTO for login endpoints or any API surface that accepts user credentials.
-
-## Remarks
-This is a simple immutable data contract (positional record) intended for transport/model-binding scenarios in the API layer. It carries no validation, hashing, or security logic — those responsibilities belong to the authentication service or controller handling the request.
-
-## Example
 ```csharp
-// Model binding in an ASP.NET Core controller action
-[HttpPost("/login")]
-public IActionResult Login([FromBody] LoginRequest request)
-{
-    // pass request.Email and request.Password to your authentication service
-    var result = _authService.Authenticate(request.Email, request.Password);
-    return result.Success ? Ok(result) : Unauthorized();
-}
-
-// Manual construction
-var req = new LoginRequest("user@example.com", "s3cr3tP@ss");
+public record LoginRequest(string Email, string Password)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Email` | `string` | — |
+| `Password` | `string` | — |
+
+
+LoginRequest is an immutable data transfer object that carries the user's credentials for an authentication request. As a positional record with Email and Password, it provides a concise, value-based representation of the login payload sent to Gabriel.API's authentication endpoints.
+
+## Remarks
+LoginRequest defines the contract for the login operation: it gathers the input required to authenticate a user and keeps it as a simple, transport-agnostic data carrier. Its record nature enables value-based equality and convenient deconstruction, which helps when composing tests or extracting fields in client code before making the API call.
+
 ## Notes
-- The record's default ToString() prints property values (including Password). Avoid logging or serializing instances with logs that include ToString().
-- Password is stored as a plain string in memory; minimize its lifetime and avoid persisting it. Consider secure handling patterns if required by your threat model.
-- No built-in validation: callers should validate email format and password requirements before use.
-- As a record, it implements value-based equality and supports deconstruction (e.g., var (email, password) = request).
+- Treat Password as sensitive; redact it in logs and diagnostics.
+- Ensure transport security (e.g., TLS) when sending this payload to the authentication service.

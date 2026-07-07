@@ -3,33 +3,28 @@
 > **File:** `src/api/Gabriel.Core/Repositories/IUnitOfWork.cs`  
 > **Kind:** interface
 
-Coordinates persistence across repositories and defines a single commit point for a use‑case. Services call SaveChangesAsync once per logical operation to persist in‑flight changes as an atomic operation; the operation is asynchronous and accepts a CancellationToken to allow cooperative cancellation.
+```csharp
+public interface IUnitOfWork
+```
+
+
+IUnitOfWork defines a contract for coordinating persistence across repositories by committing all in-flight changes as a single transaction. Implementations typically share a data context so that operations performed through multiple repositories can be persisted atomically. Use SaveChangesAsync at the end of a use-case to persist changes; it accepts a CancellationToken for cooperative cancellation and returns the number of state entries written to the data store.
 
 ## Remarks
-This interface establishes a unit-of-work abstraction that centralizes the transaction boundary for a use‑case and decouples service logic from any specific ORM or database transaction API. It is intended to be used alongside repository abstractions so multiple repositories can participate in the same commit. Concrete implementations are responsible for the actual transaction semantics and persistence behavior.
+Unit-of-work serves as the boundary around a business transaction that spans multiple repositories. It decouples repository operations from transaction management, ensuring a single commit point and helping maintain consistency of domain invariants. This abstraction is particularly beneficial in tests, as you can mock or stub IUnitOfWork to simulate transactional commits.
 
 ## Example
 ```csharp
-public class MyService
+// Typical usage: perform several repository operations, then commit once.
+public async Task<int> CompleteAsync(IUnitOfWork uow, CancellationToken ct)
 {
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly IUserRepository _users;
-
-    public MyService(IUnitOfWork unitOfWork, IUserRepository users)
-    {
-        _unitOfWork = unitOfWork;
-        _users = users;
-    }
-
-    public async Task CreateUserAsync(UserDto dto, CancellationToken ct)
-    {
-        _users.Add(new User(dto.Name));
-        await _unitOfWork.SaveChangesAsync(ct);
-    }
+    // perform repository operations using repositories tied to the same context
+    // e.g., await _customerRepo.AddAsync(customer, ct);
+    // e.g., await _orderRepo.UpdateAsync(order, ct);
+    return await uow.SaveChangesAsync(ct);
 }
 ```
 
 ## Notes
-- The integer returned by SaveChangesAsync is implementation-defined; do not assume a specific meaning unless documented by the concrete implementation.
-- The CancellationToken is provided so callers can cancel the asynchronous commit; how cancellation affects the outcome (rolled back, partial, none) depends on the implementation.
-- UnitOfWork instances are typically scoped to a single logical operation or request and are generally not intended for concurrent use from multiple threads.
+- Exceptions from SaveChangesAsync indicate persistence failures; consider wrapping in a try/catch or applying a retry/transient-failure strategy as appropriate.
+- The return value is the number of state entries written; do not rely on it for business-specific counts.

@@ -15,236 +15,175 @@
 ---
 
 ## ModelDto
-
 > **File:** `src/webapp/src/api/models.ts`  
 > **Kind:** interface
 
-Represents a model's metadata and pricing information exchanged via the web API. Use this DTO when listing available models, showing per-model pricing and limits, or persisting which model is currently selected or considered the default.
-
-## Remarks
-This interface centralizes the properties needed by the UI and server to present model choices, estimate costs, and decide when to compact context. The compactThreshold is model-specific but may be null to inherit a global AgentOptions.CompactThreshold; pricing fields are numeric rates used for cost calculation (unit semantics are defined elsewhere in the API). The isDefault and isSelected flags distinguish a model that is marked as the default from one that is currently selected in the active context.
-
-## Example
 ```typescript
-const exampleModel: ModelDto = {
-  provider: "openai",
-  name: "gpt-4o-mini",
-  contextWindowTokens: 8192,
-  // null -> use global AgentOptions.CompactThreshold
-  compactThreshold: 0.18,
-  inputPricePerMTokens: 0.3,
-  outputPricePerMTokens: 0.5,
-  cacheReadPricePerMTokens: 0.01,
-  cacheWritePricePerMTokens: 0.02,
-  isDefault: false,
-  isSelected: true,
-};
+export interface ModelDto
 ```
 
-## Notes
-- If compactThreshold is null the system should fall back to the global AgentOptions.CompactThreshold; when present it is a fraction (e.g. 0.18 means 18% of contextWindowTokens).
-- To compute the absolute token count that triggers compaction multiply contextWindowTokens by compactThreshold.
-- The numeric price fields are rates per “M tokens”; confirm the exact meaning of "M" (thousand vs million) and the currency/units from the API documentation before using these values for billing.
-- This DTO carries presentation/selection state (isSelected) in addition to persisted model metadata (isDefault); consumers should treat isSelected as contextual and transient where appropriate.
+
+Represents a model option in the web API surface. ModelDto aggregates identifying information (provider and model name), operational attributes (contextWindowTokens, optional compactThreshold), pricing details (input/output/cache per MTokens), and UI state flags (isDefault, isSelected). The compactThreshold is nullable to allow inheriting the global setting from AgentOptions when null; otherwise it uses a model-specific fraction to determine when context-compact behavior should apply. This DTO is typically produced when listing available models or rendering selectable options, enabling consistent display, selection, and cost estimation without exposing internal model mechanics.
 
 ---
 
 ## ModelsResponse
-
 > **File:** `src/webapp/src/api/models.ts`  
 > **Kind:** interface
 
-Represents the API response that delivers both the set of available models and the currently selected model. Use this interface when consuming the models endpoint to render choices and the active selection together (for example, in a model picker UI or configuration screen).
+```typescript
+export interface ModelsResponse
+```
+
+
+ModelsResponse represents the API response that conveys both the list of available model descriptors and the currently selected model in the web client. It enables UI components to render the full option set while highlighting or using the active model without issuing separate calls.
 
 ## Remarks
-This DTO groups the full list of model options (availableModels) with the active selection (selected) so callers have both the choices and the current state in a single payload. That reduces extra requests and keeps rendering logic simple — the UI can show the available options and highlight the selected one using the same response.
+
+It serves as a simple DTO boundary that decouples the catalog of options from the current selection. By bundling availableModels and selected in one object, the frontend can render dropdowns, lists, or other selectors while maintaining a single source of truth for the active model. This shape also makes it easy to extend with additional metadata in the future (for example, pagination or model status) without changing the contract elsewhere.
 
 ## Example
+
 ```typescript
-// Typical usage when calling a server endpoint that returns ModelsResponse
-async function loadModels(): Promise<void> {
-  const resp = await fetch('/api/models');
-  const body = (await resp.json()) as ModelsResponse;
-
-  // availableModels: array of ModelDto
-  const options = body.availableModels.map(m => m.name);
-
-  // selected: SelectedModelDto describing the current choice
-  console.log('Selected model:', body.selected);
+// Basic usage example
+function logModels(res: ModelsResponse): void {
+  console.log(`Available models: ${res.availableModels.length}`);
+  console.log(`Selected model present: ${!!res.selected}`);
 }
 ```
 
 ## Notes
-- availableModels may be an empty array; callers should handle that case in the UI.
-- The selected entry typically corresponds to one of the availableModels; validate or handle mismatches if the server-side contract isn't enforced.
 
+- The selected field may be null/undefined if no model is currently chosen; guard against dereferencing it.
+- Treat the arrays and objects as data-transfer shapes from the API; avoid mutating them in-place to preserve immutability expectations.
+- If consumers need more details about a model, make separate requests or rely on the ModelDto/SelectedModelDto structures provided by the API.
 
 ---
 
 ## SelectedModelDto
-
 > **File:** `src/webapp/src/api/models.ts`  
 > **Kind:** interface
 
-A minimal data-transfer object that identifies a selected model by its provider and name. Reach for this shape when you need to pass or store a compact reference to a model (for example, from UI selection controls to an API) rather than its full configuration or capabilities.
-
-## Remarks
-This DTO contains only identifying information: the provider (which names the vendor or service) and the model name (the provider-specific model identifier). It is intentionally small and focused so it can be used in lists, selection controls, and light-weight API payloads where full model metadata is unnecessary.
-
-## Example
 ```typescript
-// Create a selection record from a UI choice
-const selected: SelectedModelDto = {
-  provider: 'openai',
-  name: 'gpt-4'
-};
-
-// Send to an API that expects a model identifier
-await fetch('/api/models/select', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(selected)
-});
+export interface SelectedModelDto
 ```
 
-## Notes
-- Both properties are required strings; the interface does not perform runtime validation.
-- Ensure provider and name values match the server or registry expectations (IDs, casing, etc.), since this DTO only carries the raw identifiers.
+
+Represents a selected machine learning model by specifying its provider and model name. This interface is used to identify and reference a particular model within the application or API.
+
 
 ---
 
 ## SetActiveModelRequest
-
 > **File:** `src/webapp/src/api/models.ts`  
 > **Kind:** interface
 
-A simple data transfer object that describes which model should be set as the active model for a given provider. Use this interface when sending or receiving payloads that change the currently selected model — for example, from a web UI to an API endpoint that stores the active provider and model name.
-
-## Remarks
-This interface intentionally uses nullable string fields (string | null) instead of optional properties so callers must explicitly provide a value for each property. That explicitness makes it possible to distinguish between "no change" (omitted in some APIs) and an intentional clearing of the value (null). It is a plain DTO — it carries data only and does not perform validation or side effects.
-
-## Example
 ```typescript
-// Select a model
-const setActive: SetActiveModelRequest = {
-  provider: "openai",
-  name: "gpt-4o-mini"
-};
-
-await fetch('/api/active-model', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(setActive)
-});
-
-// Clear the currently selected model for the provider
-const clearModel: SetActiveModelRequest = {
-  provider: "openai",
-  name: null
-};
-
-await fetch('/api/active-model', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(clearModel)
-});
+export interface SetActiveModelRequest
 ```
 
+
+SetActiveModelRequest defines the payload used when requesting the activation of a model in the API. It contains two fields, provider and name, both of which are string or null. A caller uses this object to indicate which provider should supply the model and which model name should be activated; null values express that a particular field is not being specified in this request. This interface acts as a boundary between the HTTP API layer and the server-side model resolution logic.
+
+## Remarks
+SetActiveModelRequest is a minimal DTO that decouples the external API surface from the internal representation of models. The nullable fields provide flexibility for partial updates and forward-compatibility as the set-active semantics evolve. In practice, the provider and name are consumed by the service that selects the active model, keeping the transport contract stable while allowing internal naming and resolution to vary.
+
 ## Notes
-- Both properties are required by the type but may be null; do not use undefined if the API expects this shape.
-- Null commonly signals an explicit "clear" action; an empty string may be interpreted differently by the server—prefer null to indicate absence.
-- This interface does not validate that provider or name correspond to known values; validate on the client or server as appropriate.
+- Null values are explicit in this contract; ensure your client serializes nulls if your API expects them, since some serializers drop nulls by default.
+- If both fields are null, the API may treat the request as a no-op or return an error; verify the endpoint's contract before sending such a payload.
 
 ---
 
 ## fetchModels
-
 > **File:** `src/webapp/src/api/models.ts`  
 > **Kind:** function
 
-Fetches the server's models list and returns it as a ModelsResponse. Use this helper when you need the canonical list of models from the backend (it sends credentials/cookies and integrates with the app's refresh logic) and you want a Promise that either resolves to the parsed response or rejects on failure.
-
-## Remarks
-This function delegates the actual HTTP call to a withRefresh wrapper, so it participates in whatever token/refresh and retry behavior that helper implements. It always sends credentials (cookies) with the request and accepts an optional AbortSignal for cancellation; callers should provide a signal when they need the ability to cancel the request.
-
-## Example
 ```typescript
-const controller = new AbortController();
-try {
-  const models = await fetchModels(controller.signal);
-  console.log('Received models:', models);
-} catch (err) {
-  console.error('Failed to fetch models:', err);
-}
-// To cancel: controller.abort();
+export async function fetchModels(signal?: AbortSignal): Promise<ModelsResponse>
 ```
 
-## Notes
-- The function throws a generic Error if the HTTP response has a non-OK status (response.ok === false); inspect the error message for the status and statusText.
-- The JSON body is cast to ModelsResponse without runtime validation — malformed responses will still be returned as that type at runtime and may cause downstream errors.
-- Network errors and any errors from withRefresh propagate to the caller; handle with try/catch or let the promise reject.
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `signal` | `AbortSignal` | — |
+
+**Returns:** `Promise<ModelsResponse>`
+
+
+Fetches the list of available models from the server by issuing a GET request to /api/models, honoring an optional AbortSignal for cancellation and including credentials so cookies are sent. It delegates the actual network call to withRefresh to centralize refresh/retry behavior. If the server response is not OK, it throws an error containing the HTTP status and status text. On success, it parses the response body as JSON and returns it cast to ModelsResponse.
 
 ---
 
 ## setActiveModel
-
 > **File:** `src/webapp/src/api/models.ts`  
 > **Kind:** function
 
-Sends a PUT request to the server endpoint /api/models/active with the provided SetActiveModelRequest payload and returns the parsed ModelsResponse. Use this helper from client-side code when you need to change which model the server considers "active" and want the response deserialized for further use.
-
-## Remarks
-The network call is performed via the withRefresh helper (the request function is passed into withRefresh). The request is sent as JSON (Content-Type: application/json) and includes credentials ('include') so cookies or other credentialed transport are sent. If the HTTP response is not ok the function throws an Error containing the status code and any response body text it can read.
-
-## Example
 ```typescript
-const controller = new AbortController();
-try {
-  const request: SetActiveModelRequest = { /* fields per type definition */ };
-  const result = await setActiveModel(request, controller.signal);
-  // result is a ModelsResponse — handle updated models state here
-} catch (err) {
-  // network or server error (non-2xx responses) will be thrown as Error
-  console.error('Unable to set active model:', err);
-}
+export async function setActiveModel(
+  request: SetActiveModelRequest,
+  signal?: AbortSignal,
+): Promise<ModelsResponse>
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `request` | `SetActiveModelRequest` | — |
+| `signal` | `AbortSignal` | — |
+
+**Returns:** `Promise<ModelsResponse>`
+
+
+Sets the active model on the server by sending a PUT request to /api/models/active with a JSON payload describing the desired model. It relies on withRefresh to refresh authentication as needed and supports cancellation via an optional AbortSignal. On success, it returns the server’s ModelsResponse parsed from the JSON body. If the response is not OK, it reads any response text and throws an Error including the HTTP status and the text to help diagnose the failure.
+
+## Remarks
+This abstraction centralizes the mutation of the active model behind a single API surface. It handles token refresh and credential transmission, and surfaces a clear failure mode when the server rejects the request, keeping callers focused on business logic rather than transport details.
+
 ## Notes
-- On non-2xx responses an Error is thrown; the message includes the HTTP status and any response text the client could read.
-- The call uses credentials: 'include', so cookies and other credentialed transports configured for the origin will be sent.
-- The optional AbortSignal allows callers to cancel the request; if provided, aborting the signal will cancel the underlying fetch.
+- If the server returns non-JSON on a successful response, JSON parsing may fail (the function expects a JSON body that matches ModelsResponse).
+- The error path includes response text for diagnostics; be mindful that large or sensitive content may appear in the error message.
+- The AbortSignal is forwarded to fetch; passing a signal enables cancellation from the caller if needed.
 
 ---
 
 ## withRefresh
-
 > **File:** `src/webapp/src/api/models.ts`  
 > **Kind:** function
 
-Attempts a single session refresh when an HTTP 401 is encountered and retries the fetch once. Use this wrapper around network calls that should transparently try to renew an authentication session before giving up; if the retry still returns 401 the function signals that the session has expired and throws an Error so callers can handle sign-in flows.
+```typescript
+async function withRefresh(doFetch: () => Promise<Response>): Promise<Response>
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `doFetch` | `() => Promise<Response>` | — |
+
+**Returns:** `Promise<Response>`
+
+
+withRefresh is an asynchronous helper that executes a provided fetch-like operation and automatically handles an expired session. It runs doFetch, and if the server responds with 401, it attempts to refresh the session; if the refresh succeeds, it retries the original fetch. If the retry also returns 401, it signals that the session has expired and throws a clear error. The function then returns the resulting Response. This pattern is useful when multiple API calls can encounter an expired session and you want a centralized retry flow instead of duplicating refresh logic at every call site.
 
 ## Remarks
-This helper centralizes the common pattern of "try request, refresh session on 401, retry once" so callers don't need to implement the sequence repeatedly. It performs at most one refresh attempt per invocation and relies on external functions (refreshSession and signalSessionExpired) to perform the refresh and to notify the application that the session is no longer valid.
+By encapsulating the refresh-and-retry flow, withRefresh decouples authentication concerns from business logic, ensuring consistent handling of 401s across API calls. It collaborates with refreshSession to obtain a new token and signalSessionExpired to notify the app when re-authentication is required. This keeps API-call sites small and focused on data handling.
 
 ## Example
 ```typescript
-// Typical usage with the Fetch API
-try {
-  const resp = await withRefresh(() => fetch('/api/private/data', { credentials: 'include' }));
-  if (!resp.ok) throw new Error(`Request failed: ${resp.status}`);
-  const data = await resp.json();
-  // use data
-} catch (err) {
-  // handle session expiry (withRefresh throws when it detects an expired session)
-  console.error(err);
+async function loadCurrentUser() {
+  const resp = await withRefresh(() => fetch('/api/me'));
+  if (!resp.ok) {
+    throw new Error(`Request failed: ${resp.status}`);
+  }
+  return resp.json();
 }
 ```
 
 ## Notes
-- doFetch may be invoked twice; avoid passing a fetch wrapper that has one-time side effects (for example a Request whose body is a consumed stream) unless it can be safely retried.
-- refreshSession and signalSessionExpired are external and may throw or have side effects; exceptions from refreshSession will propagate to the caller.
-- withRefresh only retries once after a successful refresh; it does not implement exponential backoff or repeated refresh attempts.
-- The function throws a generic Error with message "Session expired. Please sign in again." when the retry still returns 401; callers may want to catch and handle that specific message or replace it with an application-specific error type.
-```
+- If the initial doFetch returns 401 and refreshSession() returns false, the original 401 is still surfaced, and the function will throw a "Session expired. Please sign in again." error.
+- The final error is a generic Error; callers can catch it to trigger a login flow or user-facing messaging.
+- Non-401 errors (e.g., network failures) propagate as-is and are not intercepted by this wrapper.
 
 ---

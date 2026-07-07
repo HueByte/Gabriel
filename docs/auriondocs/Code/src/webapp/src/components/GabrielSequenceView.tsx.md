@@ -11,94 +11,79 @@
 ---
 
 ## GabrielSequenceViewProps
-
 > **File:** `src/webapp/src/components/GabrielSequenceView.tsx`  
 > **Kind:** interface
 
-Properties for configuring a GabrielSequenceView component: select which sequence feed to load, control a forced refetch, set the rendered square size in pixels, and receive the raw sequence when a fetch completes. Use this interface when embedding GabrielSequenceView so the parent can choose the data source, trigger refreshes after user actions, and derive shared UI accents from the server-driven sequence.
+```typescript
+interface GabrielSequenceViewProps
+```
+
+
+GabrielSequenceViewProps defines the props consumed by the GabrielSequenceView component to render a sequence. It specifies the source sequence to fetch (conversations or project-wide shares), an optional refreshKey to trigger a refetch after updates, an optional size for a square display, and an optional onSequenceLoaded callback that exposes the raw GabrielSequence to the parent so visual accents can be derived from the server-driven palette.
 
 ## Remarks
-This small props bag intentionally separates view concerns from parent logic. "source" determines which backend endpoint the view will call (for example a conversation-specific sequence vs. a project-shared sequence). "refreshKey" is a manual change-detection mechanism: incrementing it causes the view to refetch. "size" controls the rendered square pixel dimensions (defaults to 200 to match the prior Three.js avatar). "onSequenceLoaded" lets the parent observe the raw GabrielSequence each time the view successfully fetches it so shared UI accents (gradients, pulse colors, link tints) can be derived from the same server-driven palette.
+GabrielSequenceViewProps acts as a thin bridge between data-fetching concerns and presentation concerns. By isolating the source and refresh mechanism from layout and by providing a hook (onSequenceLoaded) for the parent to align theming, it enables reuse of the same view for different sequence sources while keeping concerns decoupled.
 
 ## Example
 ```typescript
-// Typical usage in JSX
 <GabrielSequenceView
-  source={sequenceSource}
-  refreshKey={fetchCounter}
-  size={300}
-  onSequenceLoaded={(sequence) => {
-    const palette = derivePaletteFromSequence(sequence);
-    setUiPalette(palette);
-  }}
+  source={SequenceSource.Conversation}
+  size={240}
+  refreshKey={refreshCounter}
+  onSequenceLoaded={(sequence) => applyPaletteFromSequence(sequence)}
 />
-
-function derivePaletteFromSequence(sequence: GabrielSequence) {
-  // inspect server-provided sequence to pick gradient/colors
-  return {/* ... */};
-}
 ```
 
 ## Notes
-- Changing refreshKey is the intended way to force the component to refetch; toggling other props may not trigger a fetch.
-- size is a square pixel measurement; omit to use the default of 200.
-- onSequenceLoaded is invoked once per successful fetch — it can be called multiple times over the component's lifetime, so avoid heavy synchronous work in the callback or debounce expensive operations.
-- Treat the GabrielSequence passed to onSequenceLoaded as read-only; do not mutate it in-place.
+- Changing refreshKey forces a refetch; pass a changing value (e.g., a counter) after actions like sending a message.
+- size defaults to 200 if omitted; adjust to fit your layout, keeping in mind this controls the visual footprint of the square render.
+
 
 ---
 
 ## GabrielSequenceView
-
 > **File:** `src/webapp/src/components/GabrielSequenceView.tsx`  
 > **Kind:** function
 
-Renders a visual view of a Gabriel sequence using the provided data source. Reach for this component when you need to display a Gabriel sequence in the UI and want a self-contained renderer that accepts a data source, an optional refresh trigger, a size hint, and a completion callback.
-
-## Remarks
-This component abstracts the UI concerns for presenting a Gabriel sequence so callers do not need to manage rendering details. It accepts a `source` (the origin of sequence data), a `refreshKey` to force reloading when external state changes, and a `size` hint (default 200) to control the rendered footprint. Use `onSequenceLoaded` to be notified when the component has obtained/initialized the sequence (for example to synchronize other parts of the UI).
-
-## Example
 ```typescript
-// Typical usage in JSX
-<GabrielSequenceView
-  source={mySequenceSource}
-  refreshKey={cacheBuster}
-  size={300}
-  onSequenceLoaded={() => console.log('sequence ready')}
-/>
+export function GabrielSequenceView(
 ```
 
+
+GabrielSequenceView is a React functional component that renders a visual representation of a Gabriel sequence from the provided source data. It offers a compact, embeddable surface for UI pages, with a configurable render size and an optional post-load hook. Pass the sequence data via source, use refreshKey to force a re-render when the data or display conditions change, control the visualization footprint with size, and optionally respond to load completion with onSequenceLoaded.
+
+## Remarks
+GabrielSequenceView acts as a presentation-layer abstraction that isolates the details of how a Gabriel sequence is drawn from the rest of the application. By taking a raw source and a refreshKey, it lets parent components trigger re-renders without mutating internal state. It also provides a callback hook (onSequenceLoaded) so callers can chain actions (e.g., hide loading UI or start downstream processing) once the sequence is ready. It fits alongside other sequence-related components that share a common prop shape for consistent behavior.
+
 ## Notes
-- `size` is a visual hint (defaults to 200) — treat it as the component's intended width/height rather than a data limit.
-- Provide a stable `refreshKey` when you need the view to reload in response to external changes; changing the key should cause the component to refresh.
-- `onSequenceLoaded` is invoked when the component finishes loading/initializing the sequence; treat it as an asynchronous notification rather than a synchronous return value.
+- Ensure that source is stable and serializable; if it changes, update refreshKey to guarantee the view reinitializes.
+- onSequenceLoaded might fire multiple times if the component remounts or the sequence is reloaded; guard accordingly.
 
 ---
 
 ## draw
-
 > **File:** `src/webapp/src/components/GabrielSequenceView.tsx`  
 > **Kind:** function
 
-Animates and renders a palette-indexed sequence to a canvas by linearly interpolating between consecutive frames and writing the resulting RGB bytes into an ImageData buffer on each animation frame. Callers reach for this when they want a smooth, continuous cross-frame blend (rather than discrete frame stepping) and are already managing a canvas context, an ImageData/data buffer, and a sequence object referenced by sequenceRef.
-
-## Remarks
-Per-frame work: the function computes the current cycle position from the RAF timestamp and an anchored start time, picks the current and next frame indices, computes a linear interpolation factor t in [0,1), and then walks every pixel to blend the palette entries for those two frames into the ImageData byte array. It writes the RGB channels each frame (the alpha channel is intentionally left alone and is expected to be initialized once elsewhere), then pushes the result to the canvas with ctx.putImageData. The function re-schedules itself with requestAnimationFrame, forming a continuous animation loop.
-
-## Example
 ```typescript
-// Typical usage (simplified):
-startTimeRef.current = performance.now();
-raf = requestAnimationFrame(draw);
-
-// To stop:
-cancelAnimationFrame(raf);
+const draw = (now: number) =>
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `now` | `number` | — |
+
+
+Draw is the per-frame render callback that drives a palette-based, frame-sequence animation on a canvas. It computes a looping cycle position from the elapsed time since startTime and, for the current frame, linearly interpolates each pixel's color between the current and next frame using their palette entries, then writes the result into a shared ImageData buffer and paints it with putImageData. Alpha remains fixed from initialization and is not updated on every frame; only the RGB channels are recomputed, producing smooth color transitions across frames. The function then re-schedules itself via requestAnimationFrame to continue the animation.
+
+## Remarks
+This function encapsulates the timing, frame selection, and color interpolation for a palette-driven frame sequence, enabling smooth morphing without constructing new textures per frame. By operating on a common ImageData buffer and a single canvas context, it keeps rendering lightweight and predictable, while remaining agnostic to the higher-level component structure that provides the sequence and palette data.
+
 ## Notes
-- The function mutates shared outer variables: sequenceRef.current, startTimeRef, imageData/data, ctx, raf and relies on constants FRAME_DURATION_MS, FRAMES and PIXEL_COUNT being defined and valid (> 0).
-- The alpha channel (byte at offset +3) is not set here; ensure imageData.data alpha values are initialized once (e.g., 255) or you will get transparent pixels.
-- This does a per-pixel loop every frame and rounds to integers; consider performance implications for large PIXEL_COUNT or slow devices.
-- The animation runs until its RAF handle is cancelled externally (cancelAnimationFrame).
+- Alpha channel is initialized once and not updated per frame; ensure the initial alpha value matches the desired opacity.
+- Interpolated color components are rounded per pixel; this can introduce tiny color deviations over frames but preserves performance and visual stability.
+
 
 ---

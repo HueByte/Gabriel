@@ -3,28 +3,59 @@
 > **File:** `src/api/Gabriel.Engine/Services/ContextMetrics.cs`  
 > **Kind:** record
 
-A snapshot of token usage and compaction state that the agent service evaluates immediately before sending the next turn. Use this when you need the same token accounting and compact/threshold decision the backend uses (for example to show a "context used / until compact" indicator in the UI that matches server-side behavior).
+```csharp
+public record ContextMetrics(
+    int CurrentTokens,
+    int ContextWindowTokens,
+    int CompactThresholdTokens,
+    double CompactThresholdRatio,
+    int MessagesAfterCut,
+    bool IsSummarized,
+    int SummaryTokens,
+    
+    int SystemPromptTokens,
+    
+    int ProjectPromptTokens,
+    
+    int MemoryTokens,
+    
+    
+    
+    int ToolsTokens,
+    
+    int ConversationTokens)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `CurrentTokens` | `int` | — |
+| `ContextWindowTokens` | `int` | — |
+| `CompactThresholdTokens` | `int` | — |
+| `CompactThresholdRatio` | `double` | — |
+| `MessagesAfterCut` | `int` | — |
+| `IsSummarized` | `bool` | — |
+| `SummaryTokens` | `int` | — |
+| `SystemPromptTokens` | `int` | — |
+| `ProjectPromptTokens` | `int` | — |
+| `MemoryTokens` | `int` | — |
+| `ToolsTokens` | `int` | — |
+| `ConversationTokens` | `int` | — |
+
+
+ContextMetrics is a record that captures a snapshot of token usage and decision-related context when preparing the next turn. It is surfaced via IAgentService.GetContextMetricsAsync so the UI can display how much of the current context window is used and whether a summarization or trimming will occur for the upcoming turn. The per-category breakdown fields (SystemPromptTokens through ConversationTokens) mirror exactly what ToProviderHistory assembles, enabling a grid visualization that adds up to CurrentTokens in a way that reflects the backend's actual decision-making.
 
 ## Remarks
-This record exposes a per-category breakdown of how tokens are consumed (system prompts, project prompt, memories, tools, conversation messages and an optional rolling summary) plus the context window and compaction thresholds the agent uses to decide whether to compact history. The breakdown mirrors what ToProviderHistory assembles so a UI grid or progress meter can add the categories up and match the backend's actual decision process.
+ContextMetrics provides a stable, serializable snapshot of the contextual baggage considered for the next turn. It decouples the UI from provider internals, letting dashboards display a “context used / until compact” indicator that remains in sync with how the engine will compose or trim messages. It helps diagnose and tune the system by revealing where token usage concentrates (prompts, memories, tools, or ongoing conversation).
 
 ## Example
 ```csharp
-// Typical usage: ask the agent service for current metrics and render a progress bar
-var metrics = await agentService.GetContextMetricsAsync(conversationId);
-var used = metrics.CurrentTokens;
-var capacity = metrics.ContextWindowTokens;
-var percent = capacity == 0 ? 0 : (double)used / capacity;
-Console.WriteLine($"Tokens: {used}/{capacity} ({percent:P1})");
-Console.WriteLine($"Compact threshold: {metrics.CompactThresholdTokens} tokens ({metrics.CompactThresholdRatio:P0})");
-if (metrics.IsSummarized)
-{
-    Console.WriteLine($"Summary present: {metrics.SummaryTokens} tokens");
-}
+// Most common usage: fetch and display current context usage
+var metrics = await agentService.GetContextMetricsAsync(...);
+Console.WriteLine($"CurrentTokens={metrics.CurrentTokens}, ConversationTokens={metrics.ConversationTokens}, SystemPromptTokens={metrics.SystemPromptTokens}");
 ```
 
 ## Notes
-- ProjectPromptTokens and MemoryTokens are zero when the project has no override or no saved memories respectively.
-- ToolsTokens are counted against the same context window even though tool descriptors are not part of the message array.
-- The per-category fields are intended to sum to CurrentTokens up to a small per-message overhead; do not assume large discrepancies without checking provider-specific accounting.
-- Use CompactThresholdTokens/CompactThresholdRatio to show when the backend is likely to compact; the agent service's internal MaybeCompactAsync performs the authoritative check.
+- The per-category buckets are intended to sum into the overall CurrentTokens when the same per-message overhead is accounted for; do not interpret the buckets as exact independent totals.
+- CompactThresholdRatio is a double; comparisons should consider floating-point precision and potential rounding differences between components.

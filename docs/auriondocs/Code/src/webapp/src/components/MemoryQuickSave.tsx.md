@@ -11,91 +11,77 @@
 ---
 
 ## MemoryQuickSaveProps
-
 > **File:** `src/webapp/src/components/MemoryQuickSave.tsx`  
 > **Kind:** interface
 
-Props for the MemoryQuickSave component that supply an initial memory body, the optional project context, and a callback to close the UI. Use this interface when rendering the quick-save UI so the parent can provide a pre-filled message, indicate whether the save should offer a project scope, and react when the user dismisses the flow.
+```typescript
+interface MemoryQuickSaveProps
+```
+
+
+MemoryQuickSaveProps is a TypeScript interface that defines the shape of the props passed to the MemoryQuickSave UI. It carries three pieces of data: seedBody, projectId, and onClose. seedBody provides the prefilled text inserted into the memory's body field; users can edit it before saving. projectId controls the scope of the save; a non-null value enables a project-scoped save, while null hides the project option and switches the UI to user-scope. onClose is a callback invoked to dismiss the quick-save dialog.
 
 ## Remarks
-This is a small, presentation-focused props contract that keeps the quick-save component decoupled from application state. The parent is responsible for providing the starting content (seedBody) and for handling closure behavior; the component itself handles editing and saving. projectId is nullable so the same component can be used both inside a project (showing project-scoped save options) and outside it (hiding those options).
+MemoryQuickSaveProps acts as a small boundary between the MemoryQuickSave component and its surroundings. By isolating seed content, scope, and close behavior, it makes the component easier to test and reuse in different contexts (with project-scoped or user-scoped saving). The seedBody is intentionally editable, signaling that the initial value is a suggestion rather than the final content.
 
 ## Example
 ```typescript
-// Parent component: show a quick-save dialog with a prefilled message
-function Parent() {
-  const [open, setOpen] = React.useState(true);
-  const currentProjectId: string | null = getActiveProjectId();
-
-  return (
-    open && (
-      <MemoryQuickSave
-        seedBody={"Notes from today's meeting: ..."}
-        projectId={currentProjectId}
-        onClose={() => setOpen(false)}
-      />
-    )
-  );
-}
+const props: MemoryQuickSaveProps = {
+  seedBody: "Idea: summarize the user's goal here...",
+  projectId: "proj-123",
+  onClose: () => {
+    // close handler implementation
+  }
+};
 ```
 
 ## Notes
-- seedBody is only a starting value — the user can edit it before saving.
-- If projectId is null the component should hide any project-scoped save options and only offer user-scope saving.
-- onClose is required; it should close/dismiss the quick-save UI when invoked (either after save or when the user cancels).
+- seedBody is a starting point; the actual body is edited by the user before saving.
+- If projectId is null, the project-scoped option is hidden and the UI operates in user-scope.
+- onClose should be stable across renders to avoid unnecessary re-mounts.
 
 ---
 
 ## MemoryQuickSave
-
 > **File:** `src/webapp/src/components/MemoryQuickSave.tsx`  
 > **Kind:** function
 
-A small React UI component that exposes a lightweight "quick save" flow for persisting an initial memory (seedBody) into a given project (projectId) and notifying the caller when the flow closes (onClose). Use this when you need an in-place component to capture or save a memory tied to a project without implementing the full save UI yourself.
-
-## Remarks
-The symbol is defined in a .tsx file and follows React component naming conventions, so callers should treat it as a functional component. Its purpose is to isolate the quick-save UX: the parent provides the initial content (seedBody) and the target project identifier (projectId), and receives an onClose callback when the component finishes or is dismissed. Keeping this interaction small and self-contained makes it easy to reuse wherever a compact memory-save affordance is needed.
-
-## Example
 ```typescript
-// Render the quick-save component inside JSX
-<MemoryQuickSave
-  seedBody={{ title: 'Note', content: 'Check experiment results' }}
-  projectId="proj-42"
-  onClose={() => { /* refresh list or close modal */ }}
-/>
+export function MemoryQuickSave(
 ```
 
+
+MemoryQuickSave is a lightweight React function component that provides a concise, in-place save action for a memory seed associated with a specific project. It accepts seedBody (the content to persist), projectId (target project), and onClose (callback invoked to dismiss its UI after the save completes). Use MemoryQuickSave when you want a focused, inline saving interaction—such as inside a modal or panel—without routing through a broader save flow.
+
+## Remarks
+
+By encapsulating the save trigger in MemoryQuickSave, the UI stays cohesive and reusable across different parts of the app. It separates the responsibilities of collecting a seed and persisting it from higher-level layout or navigation concerns. The component signature suggests it triggers a save and then immediately signals completion by invoking onClose, allowing it to be composed with modals, drawers, or inline panels.
+
 ## Notes
-- The implementation source was not available; concrete types for seedBody and the exact signature of onClose are unknown. Treat seedBody as the initial payload and onClose as a notification callback (it may be called with or without arguments).
-- The component likely performs asynchronous persistence. Provide stable callbacks and handle loading/error states in the parent if needed.
-- Verify accessibility and focus management in the real implementation if embedding inside dialogs or modals.
+
+- The exact persistence mechanism is abstracted away; expect that the component wires through a shared memory/save service or context to persist seedBody for projectId.
+- If the save operation can fail, coordinate error handling with the caller; onClose is typically invoked on success, not on failure, so error feedback should be surfaced by the parent when needed.
 
 ---
 
 ## onKey
-
 > **File:** `src/webapp/src/components/MemoryQuickSave.tsx`  
 > **Kind:** function
 
-Calls the surrounding onClose callback when the user presses the Escape key. Use this function as a keyboard event handler (for example registered with window.addEventListener or attached to a DOM element) to provide an Escape-to-close shortcut.
-
-## Remarks
-This small helper centralizes the Escape-key-to-close behaviour so the component can attach a single handler rather than duplicating the check in multiple places. It expects an accessible onClose closure in scope and performs a simple string check against event.key; it does not stop propagation or prevent the default action.
-
-## Example
 ```typescript
-// attach on mount and remove on unmount in a React component
-useEffect(() => {
-  window.addEventListener('keydown', onKey);
-  return () => window.removeEventListener('keydown', onKey);
-}, [onKey]);
+const onKey = (e: KeyboardEvent) =>
 ```
 
-## Notes
-- The handler checks event.key strictly for 'Escape'; older browsers or unusual keyboards may report different values (e.g. 'Esc'), so account for compatibility if necessary.
-- This expects a DOM KeyboardEvent (as used with addEventListener). If you pass it directly as a React synthetic event handler, ensure the types and event object align.
-- The function does not call preventDefault() or stopPropagation(); if those behaviours are required, handle them where the function is attached or extend the handler.
-- Ensure the onClose closure is stable (memoized or referenced) if you attach/detach this handler in an effect to avoid stale references or unnecessary re-registrations.
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `e` | `KeyboardEvent` | — |
+
+
+Handles keyboard input by checking for the Escape key and invoking onClose when detected. This small handler is intended to be attached to a UI component (such as the memory quick-save panel) to allow users to dismiss it with the Escape key without clicking a button. It relies on an outer onClose callback provided by the surrounding scope.
+
+## Remarks
+It encapsulates a common UX pattern (dismissal with Escape) to keep the UI logic focused and reusable. It relies on onClose from the surrounding scope and should be attached to a focusable element or container that receives keyboard events; without focus, Escape presses won't trigger the close.
 
 ---

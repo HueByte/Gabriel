@@ -3,21 +3,32 @@
 > **File:** `src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectConfiguration.cs`  
 > **Kind:** class
 
-Configures the EF Core mapping for the Project aggregate: table name, keys, property constraints (requiredness and lengths), indexes (including a filtered index for the per-user default project), the files navigation backed by a private field, and the cascade delete relationship to project files. Use this configuration when building the DbContext model so the database schema and query-related indexes reflect the domain invariants and performance assumptions.
-
-## Remarks
-This class centralizes persistence concerns for Project so the domain shape, database schema and query patterns stay consistent across the application. It encodes domain-level invariants (required properties, max lengths), adds indexes for the common access patterns (user’s projects sorted by UpdatedAt and quick lookup of a user’s default project), and maps the Files navigation to a private backing field to preserve aggregate encapsulation.
-
-## Example
 ```csharp
-protected override void OnModelCreating(ModelBuilder modelBuilder)
-{
-    base.OnModelCreating(modelBuilder);
-    modelBuilder.ApplyConfiguration(new ProjectConfiguration());
-}
+public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 ```
 
+
+ProjectConfiguration is the EF Core configuration for the Project aggregate. It maps the Project entity to the Projects table, enforces key and property constraints, and defines how the Files navigation and related entities are persisted. It also introduces two indexes to support common access patterns: a user-owned list ordered by UpdatedAt, and a filtered index that enforces at most one Default per user. It uses a private backing field for the Files collection to allow mutation through the aggregate while keeping the navigation encapsulated, and it enables cascade delete for related File entities.
+
+## Remarks
+By isolating persistence mapping in a dedicated configuration class, domain types remain free of persistence concerns, improving separation of concerns and testability. The filtered index on IsDefault optimizes the common invariant of "at most one Default per user"; note that support for filtered indexes depends on the database provider, so migrations should be reviewed when changing providers (SQLite explicitly supports such indexes, but behavior may vary elsewhere). Mapping the private _files field enables encapsulated mutation of the Files collection while still letting EF Core materialize the relationship when needed.
+
 ## Notes
-- The filtered index uses an explicit SQL filter ("IsDefault" = 1); quoting and filter syntax are provider-specific — confirm the target database supports filtered indexes and the exact filter expression when generating migrations.
-- The Files navigation is mapped to a private field named _files; renaming that field in the Project class requires updating this configuration or migrations may break.
-- Deleting a Project will cascade-delete its Files because of DeleteBehavior.Cascade; ensure callers expect this side effect.
+- Filtered index support is provider-specific; ensure your database provider supports the HasFilter clause.
+- Mapping the private field _files requires the domain type to declare this backing field consistent with the configuration.
+- Cascade delete means deleting a Project will also remove its related File entities; verify this aligns with domain invariants to prevent unintended data loss.
+
+## Dependencies
+- IEntityTypeConfiguration
+- Project
+- UpdatedAt
+- Metadata
+- PropertyAccessMode
+- DeleteBehavior
+
+## Symbol To Document
+- Name: ProjectConfiguration
+- Kind: class
+- File: src/api/Gabriel.Infrastructure/Persistence/Configurations/ProjectConfiguration.cs
+- Language: csharp
+- ID: b02ebe11-7f32-41d2-a64f-030d65259805

@@ -10,62 +10,64 @@
 ---
 
 ## ModelSelector
-
 > **File:** `src/webapp/src/components/ModelSelector.tsx`  
 > **Kind:** function
 
-Renders a controlled dropdown that displays available models and lets the user change the application's active model. The component fetches the list of available models and the currently selected model on mount, shows loading and error states, and calls setActiveModel when the user picks a different model; it disables the picker while the change is being saved.
+```typescript
+export function ModelSelector()
+```
+
+
+ModelSelector renders a dropdown to pick the active model. It fetches the list of available models from the server when mounted, shows a loading state while waiting, surfaces non-abort errors, and updates the server-side active model when a user selects a different option. The component uses the server's response as the canonical state to reflect what was actually stored.
 
 ## Remarks
-ModelSelector coordinates three responsibilities: loading the canonical model list and current selection (via fetchModels), sending updates to the server (via setActiveModel), and reflecting the server's authoritative state by replacing local data with the PUT response. It uses an AbortController to cancel the initial fetch on unmount and encodes model identifiers as a "provider::name" string when communicating with the select element.
+By encapsulating the fetch and update logic, ModelSelector provides a single, reusable UI primitive for model selection. It delegates data fetching to fetchModels and state changes to setActiveModel, keeping concerns separated. After a successful update, it refreshes its data with the response, avoiding drift between client and server. The hint text in the UI communicates that changes apply on the next message and ties the selection to the default configured in appsettings.json.
 
 ## Notes
-- The code assumes the fetched ModelsResponse always contains a non-null `selected`. If `data.selected` can be null/undefined, constructing `"${data.selected.provider}::${data.selected.name}"` will throw at render time.
-- onPick treats an empty string value (`""`) as a request to clear the active model (provider and name set to null). The rendered options do not include an explicit empty option, so clearing can only occur if an empty value is provided programmatically or added to the options list.
-- AbortError thrown by the fetch is intentionally ignored; other errors are surfaced to the user via the component's error state.
+- Encoding and parsing rely on the delimiter :: in the composite value provider::name; if either field contains ::, the selection value would be parsed incorrectly.
+- The code path allows an empty value ('') to represent a reset, but there is no explicit empty option in the dropdown, which can be confusing.
+- The component uses AbortController to cancel the initial fetch on unmount; if the fetch implementation ignores the AbortSignal, there could be a brief, unsafe state transition.
 
 ---
 
 ## labelFor
-
 > **File:** `src/webapp/src/components/ModelSelector.tsx`  
 > **Kind:** function
 
-Returns a compact, human-readable label for a ModelDto suitable for showing in a model-selection dropdown. It combines provider and model name, rounds the context window (in thousands of tokens) to an integer with a "k ctx" suffix, optionally appends a compact-threshold percentage when present, and marks the label with " (default)" if the model is the default selection.
+```typescript
+function labelFor(m: ModelDto): string
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `m` | `ModelDto` | — |
+
+**Returns:** `string`
+
+
+Computes a concise, human-friendly label for a ModelDto to display in UI dropdowns. It composes the provider and model name, the model's context window size expressed in thousands of tokens, and optional extras: a per-model compact threshold override and a marker when the model is the default choice. This function centralizes formatting logic so all dropdowns show consistent labels, and developers would call it rather than duplicating string assembly.
 
 ## Remarks
-This helper centralizes the UI text formatting for model choices so the dropdown can surface at-a-glance differences between models (for example, which models have a compact threshold that may cause earlier trimming and therefore affect cost or behavior). It keeps presentation logic out of the JSX markup and ensures consistency across lists of models.
+Labeling is kept in one place to ensure consistent presentation across the model selector UI. It encapsulates display concerns: whether a model is the default choice, how much context it can consume, and any compact threshold override that affects perceived cost. By taking a ModelDto and returning a single string, it decouples UI chrome from the underlying data shape, making future tweaks to the label format less risky.
 
 ## Example
 ```typescript
-const model: ModelDto = {
-  provider: 'grok',
+const m: ModelDto = {
+  provider: 'gpt',
   name: 'grok-4.3',
-  contextWindowTokens: 200000,
-  compactThreshold: 0.8, // 80%
-  isDefault: false,
-};
-
-console.log(labelFor(model));
-// Output: "grok / grok-4.3 — 200k ctx, compact @ 80%"
-
-const defaultModel: ModelDto = {
-  provider: 'openai',
-  name: 'gpt-4o',
-  contextWindowTokens: 32768,
-  compactThreshold: null,
   isDefault: true,
+  contextWindowTokens: 200000,
+  compactThreshold: 0.75
 };
-
-console.log(labelFor(defaultModel));
-// Output: "openai / gpt-4o — 33k ctx (default)"
+labelFor(m); // -> "gpt / grok-4.3 — 200k ctx, compact @ 75% (default)"
 ```
 
 ## Notes
-- compactThreshold is checked with != null, so both null and undefined are treated as "not present."
-- The context window is divided by 1,000 and formatted with toFixed(0) (an integer string) followed by "k ctx"; small windows (<1000 tokens) will render as "0k ctx."
-- The compact percentage uses Math.round(m.compactThreshold * 100), so it shows integer percentages (no fractional precision) and may round up/down compared to the raw value.
-- The output is not localized (hard-coded English suffixes and punctuation); adjust if localization is required.
+- If compactThreshold is null/undefined, the suffix ", compact @ ..." is omitted.
+- The label uses an em dash and specific spacing to produce consistent alignment in the UI.
+- The context window is displayed as a rounded number of thousands of tokens (e.g., 200k), derived from dividing tokens by 1000.
 
 
 ---

@@ -3,18 +3,17 @@
 > **File:** `src/api/Gabriel.Core/Exceptions/DomainException.cs`  
 > **Kind:** class
 
-Represents a domain-level rule violation. Throw this exception from application or domain logic when a business/validation rule is broken and you want the global exception handler to translate the error into an HTTP 400 Bad Request. It is a thin subclass of System.Exception exposing only a message constructor.
-
-## Remarks
-This type exists to clearly distinguish expected domain validation errors from unexpected or infrastructure failures. The global exception handler inspects this exception type and converts it to a 400 response so domain code does not need to know about HTTP concerns; controllers and services can simply throw DomainException to signal client errors.
-
-## Example
 ```csharp
-// Inside a domain service or aggregate
-if (age < 18)
-    throw new DomainException("Customer must be at least 18 years old.");
+public class DomainException : Exception
 ```
 
+
+DomainException is the base exception type for violations of domain rules. Throwing this type (or a derived type) signals a business-rule failure that the global exception handler translates into a 400 Bad Request, allowing client code to receive a consistent, user-friendly error without exposing internal infrastructure details.
+
+## Remarks
+DomainException provides a centralized way to represent domain-level errors across the application. By deriving specific exceptions from it, you can categorize different rule violations while preserving uniform HTTP error handling and messages, keeping domain concerns decoupled from transport logic.
+
 ## Notes
-- DomainException carries only a message (no error code or additional metadata). If you need machine-readable problem details, extend the type or use a different error shape.
-- The project maps this exception type to a 400 Bad Request in the global exception handler; changing that behavior requires updating the handler implementation.
+- Use DomainException (or a derived type) for expected domain-rule violations, not for programming errors or I/O problems.
+- Keep failure messages user-friendly and avoid leaking internal state or sensitive details since they will be surfaced to clients.
+- If you catch DomainException to attach context or translation, prefer throwing a more specific derived type or rethrow the original to preserve the domain intent.

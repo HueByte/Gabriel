@@ -3,36 +3,37 @@
 > **File:** `src/api/Gabriel.Core/Entities/MessageRole.cs`  
 > **Kind:** enum
 
-Represents the origin or intent of a conversation message. Use this enum to tag messages so callers and processors can distinguish system instructions, user input, assistant responses, and tool-generated observations.
-
-## Remarks
-This enum is the canonical classification for messages exchanged within the dialog/assistant system. The values are intentionally explicit so messages can be serialized, logged, and routed (for example, forwarding tool observations to a different handler). The Tool member is special: it denotes an observation produced by executing a tool in response to an assistant's tool_call; the corresponding Message object will reference the assistant's tool_call via a ToolCallId.
-
-## Example
 ```csharp
-// Example: basic handling of different message roles
-void HandleMessage(Message message)
+public enum MessageRole
 {
-    switch (message.Role)
-    {
-        case MessageRole.System:
-            ApplySystemInstructions(message.Content);
-            break;
-        case MessageRole.User:
-            EnqueueForAssistantProcessing(message);
-            break;
-        case MessageRole.Assistant:
-            SendAssistantReplyToClient(message);
-            break;
-        case MessageRole.Tool:
-            // Tool messages are observations answering a previous tool_call
-            ProcessToolObservation(message.ToolCallId, message.Content);
-            break;
-    }
+    System = 0,
+    User = 1,
+    Assistant = 2,
+
+    Tool = 3,
 }
 ```
 
+
+Defines the origin of a chat message in the Gabriel.Core messaging model. Each MessageRole indicates who produced the message in a multi-turn conversation: System messages establish context, User messages originate from the end user, Assistant messages are model responses, and Tool messages carry the results of an external tool invocation. The Tool variant includes a ToolCallId that links the observation back to the corresponding tool invocation, enabling traceability and correct routing of tool outputs within the dialog.
+
+## Remarks
+This abstraction separates message semantics from content, allowing the UI, logging, prompt construction, and routing logic to treat each role differently. In tool-augmented workflows, Tool messages turn tool results into first-class observations, preserving how a user goal was achieved and enabling distinct presentation and auditing of tool outputs within the conversation.
+
+## Example
+```csharp
+// Example usage illustrating roles in a conversation
+var conv = new List<Message>
+{
+    new Message { Role = MessageRole.System, Content = "You are a helpful assistant." },
+    new Message { Role = MessageRole.User, Content = "Translate this to French." },
+    new Message { Role = MessageRole.Assistant, Content = "Voici la traduction." },
+    // After invoking an external tool, the result is represented as a Tool message
+    new Message { Role = MessageRole.Tool, Content = "Tool result: translated text", ToolCallId = "tool-456" }
+};
+```
+
 ## Notes
-- The enum values are explicit and used in serialized forms — do not renumber or remove members if messages are persisted or exchanged across services.
-- Tool messages are intended to carry results of tool invocations; consumers should look for a ToolCallId on the Message to correlate the observation with the originating tool_call.
-- Treat these roles as orthogonal to content: a message labeled Assistant may still include metadata that requires special handling (e.g., suggested actions).
+- ToolCallId must reference the corresponding tool invocation; without it, the tool observation cannot be linked to its source.
+- Tool messages represent observed tool outputs and should not be treated as ordinary assistant text; maintain a clear distinction in history and UI.
+- When persisting or transmitting messages, ensure the numeric Role values remain in sync with the enum to avoid misinterpretation during deserialization.

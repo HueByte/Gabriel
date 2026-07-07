@@ -3,23 +3,17 @@
 > **File:** `src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.cs`  
 > **Kind:** class
 
-A decorator for IWebSearch that records every search invocation as a single row in the generic metric event log. Use this to wrap provider implementations (or the composite) at registration time when you want per-provider telemetry (outcome, query, result_count, latency_ms, error_message) under the stable system name web_search.<provider>.
-
-## Remarks
-This class instruments an existing IWebSearch without changing its behavior: it measures call latency with a Stopwatch, records a WebSearchEvent for every completed call (success or empty) and for failures, and then rethrows exceptions so callers see the original error. Provider names are lowercased to produce a canonical metric system name (e.g. "web_search.tavily"). The decorator intentionally omits logging OperationCanceledException (treating cancellation as caller-driven, not a provider failure) and uses CancellationToken.None when recording errors so the failure is persisted even if the original token is already cancelled.
-
-## Example
 ```csharp
-// Wrap a concrete provider so metrics are emitted under web_search.brave
-IWebSearch inner = new BraveWebSearch(...);
-IMetricRecorder recorder = serviceProvider.GetRequiredService<IMetricRecorder>();
-var instrumented = new InstrumentedWebSearch(inner, recorder, "Brave");
-
-var results = await instrumented.SearchAsync("cats", 10, CancellationToken.None);
+public sealed class InstrumentedWebSearch : IWebSearch
 ```
 
+
+InstrumentedWebSearch wraps an IWebSearch and records a telemetry row for each SearchAsync call. It constructs a canonical system name of the form web_search.{provider} (lowercased) and uses IMetricRecorder to persist a WebSearchEvent containing the outcome, query, result count, latency in milliseconds, and an optional error message. The decorator times the inner call with a stopwatch, records the event, and then returns the results. If the inner call throws, it records an error event with the exception message and rethrows; cancellation is treated specially and not logged. This instrumentation is applied at registration time so every provider in a composite path (and in single-provider scenarios) yields observable, provider-level telemetry. The diagnostics endpoint uses these rows to aggregate throughput, latency, and reliability across providers.
+
+## Remarks
+InstrumentedWebSearch decouples telemetry from business logic, ensuring that provider performance and failures can be observed without modifying the underlying search implementations. By normalizing the system name and emitting structured payloads, it enables consistent, cross-provider dashboards and diagnostics even when providers are composed or swapped behind a single interface. Importantly, it preserves normal exception semantics: callers see the same exceptions as if no instrumentation were present, while telemetry is emitted in parallel.
+
 ## Notes
-- OperationCanceledException is not recorded; cancellation is considered caller-controlled and is rethrown without a metric row. 
-- The metric recording is awaited in both success and error paths — a slow or blocking IMetricRecorder will add to SearchAsync latency.
-- On error the recorder is invoked with CancellationToken.None to ensure the failure is persisted even if the original token was cancelled.
-- The system name is lowercased at construction; supply a provider name only (the class prefixes with "web_search.").
+- Latency is measured from the moment SearchAsync is invoked until the inner call completes, excluding the time spent emitting metrics (the Stop is invoked before awaiting the metric write).
+- Cancellation (OperationCanceledException) is rethrown without recording a metric event.
+- On errors, the payload includes the exception message; the event is recorded with Outcome set to "error" and ResultCount to 0 before rethrowing.

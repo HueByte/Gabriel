@@ -3,27 +3,27 @@
 > **File:** `src/api/Gabriel.API/Configuration/InfisicalExtensions.cs`  
 > **Kind:** class
 
-Adds Infisical as a configuration source to an IConfigurationBuilder using the familiar options-pattern. Use this extension when integrating Infisical-backed configuration into an application's configuration pipeline (for example in Program.cs or Startup) and you want to configure behavior via an InfisicalOptions callback.
+```csharp
+public static class InfisicalExtensions
+```
+
+
+InfisicalExtensions exposes a canonical, ASP.NET Core–style extension for wiring Infisical into a .NET application's configuration pipeline. The AddInfisical method follows the Options-pattern: callers supply an `Action<InfisicalOptions>` to configure the InfisicalOptions instance, after which an InfisicalConfigurationSource is registered with the IConfigurationBuilder. The extension returns the same builder to enable fluent, chainable configuration (similar to AddDbContext or AddSwaggerGen). This decouples Infisical setup from application startup logic and centralizes configuration in a single, testable place.
 
 ## Remarks
-This is a small convenience wrapper that follows the canonical ASP.NET Core options-style registration (same shape as AddDbContext/AddSwaggerGen). It constructs an InfisicalOptions instance, invokes the provided configuration delegate to populate it, and then registers an InfisicalConfigurationSource with the builder. The method keeps configuration registration concise and idiomatic.
+This extension encapsulates the Infisical configuration concerns behind a lightweight, reusable surface. By accepting a delegate to configure InfisicalOptions, it cleanly separates how options are provided from how the configuration source is consumed, helping tests substitute options and validating the integration at startup time.
 
 ## Example
 ```csharp
-// In Program.cs or Startup.cs
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Configuration.AddInfisical(opts =>
-{
-    opts.ApiKey = "your-api-key";      // example option property
-    opts.Project = "my-project";
-    opts.Environment = "development";
+// Typical usage during application startup
+var builder = new ConfigurationBuilder();
+builder.AddInfisical(opts => {
+    // Configure options here (properties depend on InfisicalOptions)
+    // e.g. opts.ProjectId = "my-project"; opts.SecretsEndpoint = "https://...";
 });
-
-var app = builder.Build();
 ```
 
 ## Notes
-- The configure delegate is executed synchronously during registration; the configured InfisicalOptions instance is passed to InfisicalConfigurationSource at that time.
-- The method does not validate or null-check the builder argument; calling it with a null IConfigurationBuilder will result in a NullReferenceException.
-- Whether later mutations to the InfisicalOptions instance affect the configuration source depends on how InfisicalConfigurationSource stores or copies the options (the instance is passed to its constructor).
+- Calling AddInfisical multiple times registers multiple InfisicalConfigurationSource instances; the final configuration depends on the ordering of sources within IConfiguration.
+- Ensure required properties on InfisicalOptions are set within the configure delegate to avoid runtime configuration issues.
+- This pattern keeps Infisical-specific setup isolated from business logic, aligning with standard .NET startup conventions.

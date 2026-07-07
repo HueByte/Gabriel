@@ -3,21 +3,25 @@
 > **File:** `src/webapp/src/App.tsx`  
 > **Kind:** function
 
-Renders the application root by composing the global authentication provider around the router. Use this component as the top-level React component when mounting the app so that routing and route components can access authentication context and any other global providers added here.
+```typescript
+export function App()
+```
+
+
+App is the root React component that wires the authentication context to the router by rendering AuthProvider around RouterProvider with the app's router. Use App as the entry point when booting the UI so all routes and descendants have access to authentication state and routing.
 
 ## Remarks
-This is the central composition point for cross-cutting concerns (authentication, routing and any other global providers such as theming or error boundaries). Placing AuthProvider above RouterProvider guarantees that route components, loaders, and actions can read authentication state or helpers from context. Keep changes to global initialization here to avoid spreading provider wiring across the codebase.
+Centralizes the provider composition, establishing a stable composition root for the app. It ensures that authentication and routing contexts are consistently available to every page and component. This pattern also makes it easier to extend the root with additional global providers (such as theming or localization) without scattering wrappers throughout the codebase.
 
 ## Example
-```typescript
+```tsx
 import ReactDOM from 'react-dom/client';
-import { App } from './App';
+import { App } from './src/webapp/src/App';
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
-root.render(<App />);
+ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
 ```
 
 ## Notes
-- The order of providers matters: AuthProvider must wrap RouterProvider so routes can access auth context.
-- App has no props and performs no side effects itself; to change global configuration, update the providers or wrap App in a higher-level component.
-- If the application needs performance optimization when re-rendering the root, consider memoizing providers or moving expensive initialization out of render.
+- The App component assumes a router variable defined (likely in the same module or imported) to be passed to RouterProvider.
+- Wrapping order matters: AuthProvider must wrap RouterProvider to ensure auth context is accessible inside route components.
+- If you introduce additional providers, keep them inside App to preserve a single entry point for the provider tree.

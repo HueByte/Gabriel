@@ -3,30 +3,34 @@
 > **File:** `src/api/Gabriel.Core/Configuration/InfisicalOptions.cs`  
 > **Kind:** class
 
-A configuration POCO that holds options used to connect to an Infisical secrets provider. Use this type when binding application configuration (appsettings, environment variables, or user-secrets) to supply host, project, credentials and runtime options for the Infisical integration; its IsConfigured property is a quick way to detect whether the provider has enough information to run.
+```csharp
+public class InfisicalOptions : IConfigSection<InfisicalOptions>
+```
+
+
+InfisicalOptions encapsulates the configuration required to connect to Infisical secret management and exposes the endpoints, credentials, and runtime options via a configuration section. The IsConfigured property gates initialization, returning true only when Host, ProjectId, ClientId, and ClientSecret are present; if any essential value is missing, the provider gracefully skips, allowing local development without Infisical access, while ClientSecret should be sourced from secure stores (e.g., user secrets or INFISICAL__CLIENTSECRET) rather than appsettings.json.
 
 ## Remarks
-This class centralizes the four required values (Host, ProjectId, ClientId, ClientSecret) and several optional settings (Environment, SecretPath, TimeoutSeconds). ClientId is considered non-sensitive and acceptable in appsettings.json, while ClientSecret is sensitive and intended to come from user-secrets (key: "Infisical:ClientSecret") or the environment variable INFISICAL__CLIENTSECRET. The static SectionName property is provided so callers can bind configuration from the "Infisical" section. If any of the four essential values are missing or blank, IsConfigured returns false — the provider is expected to skip initialization quietly in that case so local development still succeeds without Infisical access.
+InfisicalOptions acts as a single source of truth for Infisical configuration, separating non-sensitive fields from the sensitive ClientSecret. It enables safe defaults for development and a clear separation of concerns between configuration sources (appsettings.json, environment variables, and user secrets).
 
 ## Example
 ```csharp
-// In Program.cs (ASP.NET Core minimal hosting):
-var builder = WebApplication.CreateBuilder(args);
+// Typical usage with Microsoft.Extensions.Configuration
+var config = new ConfigurationBuilder()
+    .AddJsonFile("appsettings.json", optional: true)
+    .AddEnvironmentVariables()
+    .Build();
 
-// Bind and register options from configuration (appsettings, env vars, user-secrets)
-builder.Services.Configure<InfisicalOptions>(builder.Configuration.GetSection(InfisicalOptions.SectionName));
+var options = new InfisicalOptions();
+config.GetSection("Infisical").Bind(options);
 
-// Later, optionally read and check configuration to decide whether to enable the provider
-var opts = new InfisicalOptions();
-builder.Configuration.GetSection(InfisicalOptions.SectionName).Bind(opts);
-if (opts.IsConfigured)
+if (options.IsConfigured)
 {
-    // Wire up the Infisical provider or client
-    // e.g. services.AddSingleton(new InfisicalClient(opts));
+    // Initialize Infisical client with the provided options
 }
 ```
 
 ## Notes
-- ClientSecret is sensitive: prefer user-secrets or the environment variable INFISICAL__CLIENTSECRET (or the equivalent platform secret store) instead of committing it to source-controlled configuration files.
-- IsConfigured performs simple non-empty checks. If it returns false the code that integrates with Infisical is expected to skip initialization; this is silent by design and may make missing configuration harder to notice unless you log or fail explicitly.
-- TimeoutSeconds is measured in seconds and defaults to 15; SecretPath defaults to "/" and Environment defaults to "dev" — adjust if your deployment requires different values.
+- Store ClientSecret securely; avoid storing it in appsettings.json. Prefer user secrets or environment variables (INFISICAL__CLIENTSECRET).
+- IsConfigured only checks that the essential values are present; it does not verify runtime connectivity or permissions.
+- Environment defaults to "dev" and can be overridden per environment; ensure consistency across deployments.

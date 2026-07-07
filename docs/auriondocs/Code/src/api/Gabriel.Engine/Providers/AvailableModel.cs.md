@@ -3,33 +3,40 @@
 > **File:** `src/api/Gabriel.Engine/Providers/AvailableModel.cs`  
 > **Kind:** record
 
-Represents a single model option surfaced to consumers (for example, a UI dropdown entry). This record is a provider-agnostic, flattened view of models produced by the IModelCatalog so callers can show model metadata, pricing and selection state without touching provider-specific types.
-
-## Remarks
-IModelCatalog constructs instances of this record by iterating every registered IChatProvider and collecting their declared models; the result is a single unified list across all providers. The IsDefault flag identifies the one model chosen by configuration as the bootstrap/default model. Pricing fields are stored as decimals and express provider-reported cost per "M tokens" billing unit; consult the provider or configuration for the exact currency and billing granularity. ToolMode indicates how the model is intended to be used (tool/assistant/completion semantics) and guides client-side behavior and UI affordances.
-
-## Example
 ```csharp
-// Build an AvailableModel for display in a dropdown and pick the default
-var model = new AvailableModel(
-    Provider: "openai",
-    Name: "gpt-4o-mini",
-    ContextWindowTokens: 8192,
-    CompactThreshold: 0.75,
-    InputPricePerMTokens: 0.0030m,
-    OutputPricePerMTokens: 0.0040m,
-    CacheReadPricePerMTokens: 0.0001m,
-    CacheWritePricePerMTokens: 0.0002m,
-    IsDefault: false,
-    ToolMode: ToolMode.Chat
-);
-
-// Typical use: show models in UI and highlight the default
-IEnumerable<AvailableModel> allModels = modelCatalog.GetAll();
-var defaultModel = allModels.FirstOrDefault(m => m.IsDefault);
+public sealed record AvailableModel(
+    string Provider,
+    string Name,
+    int ContextWindowTokens,
+    double? CompactThreshold,
+    decimal InputPricePerMTokens,
+    decimal OutputPricePerMTokens,
+    decimal CacheReadPricePerMTokens,
+    decimal CacheWritePricePerMTokens,
+    bool IsDefault,
+    ToolMode ToolMode)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Provider` | `string` | — |
+| [`Name`](ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+| `ContextWindowTokens` | `int` | — |
+| `CompactThreshold` | `double?` | — |
+| `InputPricePerMTokens` | `decimal` | — |
+| `OutputPricePerMTokens` | `decimal` | — |
+| `CacheReadPricePerMTokens` | `decimal` | — |
+| `CacheWritePricePerMTokens` | `decimal` | — |
+| `IsDefault` | `bool` | — |
+| [`ToolMode`](../../Gabriel.Core/Configuration/ToolMode.cs.md) | [`ToolMode`](../../Gabriel.Core/Configuration/ToolMode.cs.md) | — |
+
+
+Represents a single model option that the user can select in the UI dropdown. The UI builds a flattened list by iterating across all registered IChatProvider instances' Models via IModelCatalog, so AvailableModel provides a uniform view of each provider's model options. The IsDefault flag marks the config-declared bootstrap choice; there should be a single default across the entire catalog.
+
+## Remarks
+This sealed record serves as a lightweight, immutable data transfer object used by the UI and catalog layers. Its value-based equality makes it a natural key for dropdown items, and its decoupled shape keeps provider-specific details out of the UI. By aggregating across providers, it enables a consistent selection experience regardless of the underlying model provider.
+
 ## Notes
-- The record is immutable (C# record positional syntax); copy-and-update can be done with the with-expression.
-- Pricing fields represent provider-reported cost per "M tokens" unit; do not assume currency or billing period — read provider config for details.
-- Provider + Name together identify the model entry across the catalog; IsDefault is expected to be set on at most one entry in the aggregated list.
+- If multiple AvailableModel entries have IsDefault set to true, bootstrap selection may become ambiguous; enforce a single default in configuration or central catalog logic.

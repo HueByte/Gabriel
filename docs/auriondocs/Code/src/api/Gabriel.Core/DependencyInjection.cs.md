@@ -3,27 +3,23 @@
 > **File:** `src/api/Gabriel.Core/DependencyInjection.cs`  
 > **Kind:** class
 
-Registers the core Gabriel domain services (IChatService, IProjectService, IMemoryService) into an IServiceCollection so they can be resolved by the application's dependency injection container. Use this extension in application startup when you want the domain-level services wired into DI without pulling in the agent/engine stack (which is registered separately via AddEngineServices).
+```csharp
+public static class DependencyInjection
+```
+
+
+DependencyInjection is a domain-wiring helper that provides AddCoreServices, an extension on IServiceCollection. It registers IChatService, IProjectService, and IMemoryService to their concrete implementations as scoped services, centralizing core-domain wiring so startup code can call a single method instead of registering each service individually; engine-related setup remains separate and is wired via AddEngineServices.
 
 ## Remarks
-This class provides a small, focused composition root for domain wiring — it keeps Gabriel's domain service registrations separate from the engine/agent registrations (the latter live in Gabriel.Engine and are added with AddEngineServices). Each service is registered with a scoped lifetime, making them appropriate for typical per-request lifetimes in web or hosted applications.
+By grouping core service registrations behind a single extension, this symbol keeps the composition root tidy and makes the intended lifetimes explicit. It also promotes testability by allowing mocks or stubs to be substituted for the interfaces in isolation, without touching startup code.
 
 ## Example
 ```csharp
-// Program.cs (minimal hosting)
-var builder = WebApplication.CreateBuilder(args);
-
-// Register core domain services
-builder.Services.AddCoreServices();
-
-// Register engine/agent stack (separate package)
-builder.Services.AddEngineServices();
-
-var app = builder.Build();
-app.Run();
+// Common usage at startup
+services.AddCoreServices();
 ```
 
 ## Notes
-- The services are registered with AddScoped; do not capture these scoped services inside singletons or resolve them from the root service provider.
-- This helper only wires domain services. Engine-specific registrations and the agent loop live in Gabriel.Engine and must be registered separately via AddEngineServices.
-- Avoid calling AddCoreServices multiple times to prevent duplicate registrations for the same service types.
+- Scoped lifetime means one instance per DI scope (per web request in ASP.NET Core); in non-web apps, create a scope to ensure per-operation instances.
+- Call AddCoreServices once in the composition root to avoid confusion from multiple registrations.
+- This extension wires only the core domain services; engine-related registrations are handled separately via AddEngineServices.

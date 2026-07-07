@@ -3,25 +3,17 @@
 > **File:** `src/api/Gabriel.Core/Repositories/IMetricRepository.cs`  
 > **Kind:** interface
 
-Storage contract for a generic metric/event log used by diagnostic readers and background maintenance tasks. Use this interface when you need a persistent, schema-less store for metric entries that will be written by recording services (e.g. IMetricRecorder) and read by diagnostics controllers or tooling.
-
-## Remarks
-This interface separates the writer-side recording API from the storage implementation used by diagnostics and maintenance code. Implementations can use EF, a document store, or any other backing store because the repository treats payloads as opaque JSON (schema-less). The RecentByPrefixAsync method is provided to avoid N+1 reads when consumers need "everything under a subsystem prefix" in a single query.
-
-## Example
 ```csharp
-// Persisting a metric (caller serializes payload into MetricEntry.Payload as JSON)
-var entry = new MetricEntry { System = "web_search.indexer", Timestamp = DateTimeOffset.UtcNow, Payload = jsonPayload };
-await metricRepository.AddAsync(entry, cancellationToken);
-
-// Reading recent metrics for a subsystem prefix and grouping by exact system name
-var recent = await metricRepository.RecentByPrefixAsync("web_search.", 200, cancellationToken);
-var grouped = recent.GroupBy(e => e.System)
-                    .ToDictionary(g => g.Key, g => g.OrderByDescending(e => e.Timestamp).ToList());
+public interface IMetricRepository
 ```
 
+
+IMetricRepository defines how metric event entries are stored and retrieved. This repository serves as the storage contract for the metric log: reads power the diagnostic surface (controllers and support tooling), while writes are routed through the IMetricRecorder service in Engine so subsystems don’t depend on EF directly. Callers provide a MetricEntry that has already been serialized to JSON; AddAsync persists a single row in a schema-less store. The retrieval methods enable diagnostics workflows: RecentAsync returns the most recent entries for a specific system, while RecentByPrefixAsync aggregates entries across systems whose names start with a given prefix; DeleteOlderThanAsync supports cleanup by removing data older than the cutoff, intended for maintenance tasks rather than HTTP-exposed operations.
+
+## Remarks
+As an abstraction, this interface enables swapping the underlying storage backend and facilitates testing with in-memory or alternative implementations without touching business logic. The schema-less design offers flexibility for evolving metric payloads while preserving a stable contract for readers. The read endpoints are tailored for diagnostics tooling, returning ordered results to support intuitive analysis across systems and prefixes.
+
 ## Notes
-- AddAsync expects the MetricEntry to already contain a JSON-serialized payload; the storage layer does not enforce or interpret a schema.  
-- RecentAsync and RecentByPrefixAsync return results newest-first; callers should not rely on any other implicit ordering.  
-- The limit parameter on RecentByPrefixAsync applies to the combined result set across all matching systems (not per-system).  
-- DeleteOlderThanAsync performs a hard delete and is intended for background maintenance or manual cleanup (not exposed via HTTP).
+- DeleteOlderThanAsync performs a hard delete and should be used with caution, typically from maintenance/background tasks in line with retention policies.
+- Pass the CancellationToken through to the underlying I/O operations to support cancellation and cancellation-aware shutdown.
+- For RecentByPrefixAsync, the limit applies to the combined result set across all matched systems, not per-system; callers should account for cross-system aggregation when presenting results.
