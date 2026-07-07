@@ -21,10 +21,17 @@ public sealed record Frame(byte[] Pixels)
 | `Pixels` | `byte[]` | — |
 
 
-Represents a compact, immutable frame of pixel data for a 16×16 image, stored as palette indices. It is a value object (record) with a single property, Pixels, containing 256 bytes where each byte is an index into a Palette's Colors. The frame's fixed dimensions are exposed by Width, Height, and PixelCount constants, and pixels are stored in row-major order. Accessing a specific pixel uses At(x, y), which computes the offset y * Width + x and returns the corresponding byte from Pixels. This abstraction is useful whenever you need to shuttle small, palette-based frames around a sequence of colors without dealing with raw color values directly.
+Frame represents a 16×16 tile where every pixel stores a byte index into a Palette, enabling color resolution to be performed by a separate Palette at render time. The At(x, y) method gives quick access to the pixel index at coordinates, using the standard row-major layout Pixels[y * Width + x].
 
 ## Remarks
-Frame centralizes the layout concerns (size, indexing) in one place, ensuring consistent interpretation across consumers that share the same Palette. As a record, Frame benefits from value-based equality semantics, easy comparisons, and safe copying. The Pixels array is the sole data payload; higher-level rendering or color interpretation is performed by Palette and rendering code.
+Because the color information is not embedded, a single Frame can be used with many Palettes, supporting palette swaps and theme changes without altering geometry. This separation of concerns makes it easy to reuse frames across sprites or tilesets while mapping to different color schemes at render time. Being a sealed, single-property record gives Frame value equality semantics, which helps when frames are stored in collections or compared for changes.
+
+## Example
+```csharp
+Frame frame = new Frame(pixels);
+var index = frame.At(5, 7);
+var color = palette[index];
+```
 
 ## Notes
-- At(x, y) does not guard against out-of-bounds coordinates; callers must ensure 0 ≤ x < Width and 0 ≤ y < Height to avoid IndexOutOfRangeException.
+- At() does not perform bounds checks; ensure 0 <= x < Width and 0 <= y < Height before calling At.

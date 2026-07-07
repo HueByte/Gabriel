@@ -32,31 +32,27 @@ interface FlowParams
 ```
 
 
-FlowParams is a compact TypeScript interface that describes the numeric configuration for a flow-style visual pattern used in the pulse pattern module. It exposes seven properties: angle, bandWidth, bands, period, speed, cx, and cy. By packaging these related values in a single FlowParams object, callers can pass a complete configuration to pattern-generation logic without scattering individual numeric literals, enabling reuse, easier parameterization, and clearer intent when configuring different flow instances.
+FlowParams is a TypeScript interface that describes the configuration object used by the flow pattern in the Pulse web app. It collects seven numeric values (angle, bandWidth, bands, period, speed, cx, cy) into a single parameter bundle that pattern renderers can consume to compute layout, timing, and motion.
 
 ## Remarks
-FlowParams acts as a stable data contract between UI/configuration code and the rendering subsystem. It isolates the concerns of "what parameters exist" from "how they're applied," providing a single place to adjust flow generation behavior and to reuse parameter sets across multiple patterns. It also improves type safety and discovery in IDEs.
+This interface centralizes the configuration for the flow primitive, ensuring that any consumer of a flow pattern receives a complete, typed set of controls. By bundling angle, dimensional parameters, and animation tuning into one object, it reduces API surface area and makes it easy to swap in alternate visual parameters without modifying rendering code.
 
 ## Example
 ```typescript
-// Example usage: configure and render a flow pattern
-const params: FlowParams = {
-  angle: 30,
-  bandWidth: 1.25,
-  bands: 6,
-  period: 120,
-  speed: 1.0,
-  cx: 320,
-  cy: 240
+const defaultFlow: FlowParams = {
+  angle: 0,
+  bandWidth: 4,
+  bands: 5,
+  period: 1000,
+  speed: 1,
+  cx: 0,
+  cy: 0
 };
-
-renderFlowPattern(params);
 ```
 
 ## Notes
-- Ensure the values are finite numbers; NaN or Infinity will break rendering.
-- If consuming JSON at runtime, validate shapes since TypeScript types are erased at runtime and this interface is a compile-time contract.
-- Be mindful of coordinate system origin and units when setting cx, cy to position the flow.
+- Values are plain numbers; there are no inherent units encoded in the interface. Consult broader documentation or consumers to determine expected units.
+- This interface has no defaults; callers or consuming functions must provide all fields or merge in defaults elsewhere.
 
 ---
 
@@ -69,22 +65,13 @@ interface NoiseParams
 ```
 
 
-NoiseParams is a lightweight configuration object that groups four numeric parameters used by the noise generation routine in pattern rendering. It encapsulates scale, loopR, seed, and octaves so callers can pass a single configuration object instead of multiple separate arguments, improving readability and reusability.
+NoiseParams represents the configuration for procedural noise used by the pulse-pattern system. It aggregates four numeric parameters: scale, loopR, seed, and octaves. scale controls the spatial granularity of the noise; loopR defines the looping radius or period to produce seamless repetitions; seed makes noise deterministic across runs; and octaves controls how many layers of noise are combined to produce richer texture.
 
 ## Remarks
-NoiseParams serves as a contract between the rendering code and its noise generators. It isolates how noise is configured from how it is consumed, enabling swapping implementations or reusing the same settings across multiple patterns.
-
-## Example
-```typescript
-// Common usage: create a configuration object and pass it to a noise function
-const params: NoiseParams = { scale: 0.8, loopR: 200, seed: 42, octaves: 5 };
-const value = noiseAt(position, params);
-```
+NoiseParams serves as a stable, self-describing configuration bundle that decouples the noise engine from its callers. It promotes reuse and makes it easier to tweak the appearance of patterns by adjusting a single object rather than modifying calls at many sites.
 
 ## Notes
-- Different noise algorithms may interpret "scale" and "octaves" differently; choose values compatible with the generator you use.
-- Use a stable seed to reproduce results; changing the seed yields different noise patterns.
-- If the object is mutated after creation, results may vary; prefer treating NoiseParams as immutable or creating a new object when changes are needed.
+- Ensure values are within sensible ranges before use: non-negative scale and octaves, and a positive loopR. Invalid values may cause runtime errors or nonsensical visuals.
 
 ---
 
@@ -97,28 +84,10 @@ export interface Pattern<P = unknown>
 ```
 
 
-`Pattern<P>` defines a contract for parameterized, spatial-temporal patterns. Implementations provide an init method that creates a parameter object of type P from a given size and a RNG, and a sample method that evaluates the pattern value at coordinates (t, x, y) using those parameters and a time value. This abstraction lets you separate how a pattern is parameterized from how it is evaluated, enabling interchangeable pattern strategies and easier testing.
+`Pattern<P>` is a generic contract for stateful, parameterized pattern generators. It provides init(size: number, rng: Rand): P to create the pattern's internal state and sample(t: number, x: number, y: number, params: P, time: number): number to produce a value from that state at a given position and moment.
 
 ## Remarks
-Pattern acts as an architectural anchor for procedural content generation. By decoupling parameter creation from value computation, it enables swapping different pattern strategies without changing the rest of the system, and it makes testing easier by isolating the sampling logic from parameter state. The generic parameter type P lets each pattern carry its own specialized configuration.
-
-## Example
-```typescript
-type Params = { value: number };
-class ConstantPattern implements Pattern<Params> {
-  init(size: number, rng: Rand): Params {
-    return { value: size };
-  }
-  sample(t: number, x: number, y: number, params: Params, time: number): number {
-    return params.value;
-  }
-}
-```
-
-## Notes
-- Pattern is an interface; you cannot instantiate Pattern directly.
-- The init method captures per-pattern state in P, which is then used by sample.
-- Be mindful that sample should be pure with respect to input coordinates and time for a given params instance.
+Pattern serves as a pluggable generator boundary in rendering or simulation pipelines. By separating initialization from sampling, it lets different pattern implementations share the same usage surface while carrying their own internal state (P). Because init consumes a Rand, the randomness shaping the pattern is captured at initialization, enabling repeatable runs when the RNG is controlled by the caller.
 
 ---
 
@@ -131,15 +100,31 @@ interface PlasmaParams
 ```
 
 
-PlasmaParams is a lightweight TypeScript interface that groups ten numeric parameters into a single, strongly-typed object used to drive plasma-pattern calculations in the Pulse patterns module. It provides a stable data contract for pattern generators and helpers that need multiple related numbers, reducing parameter clutter in function signatures. The ten properties a, b, c, d, sa, sb, sc, sd, cx, and cy are all numbers; together they describe the configuration state for a given plasma computation and are typically consumed by rendering or calculation logic that positions and shapes the pattern around a coordinate reference (cx, cy).
+PlasmaParams is a compact TypeScript interface that bundles ten numeric configuration values used to render a plasma-like pattern in the pulse patterns subsystem. It exists to pass related parameters as a single object rather than as a scattered set of arguments, improving readability and reusability across rendering and calculation functions. All fields are plain numbers, representing coefficients and coordinates that downstream code applies when generating the visual effect.
 
 ## Remarks
-PlasmaParams exists to decouple pattern-configuration data from the logic that performs the computation. By consolidating related numeric knobs into a single interface, APIs become easier to read, test, and extend (for example, by adding new fields in the future without changing every call site). The cx and cy fields suggest a coordinate reference used by pattern calculations, reinforcing that this object represents spatial configuration as much as numeric tuning.
+Design-wise, PlasmaParams serves as a cohesive parameter bag that isolates the plasma configuration from the logic that consumes it. It helps decouple pattern configuration from rendering code, enabling easier testing and reuse across different plasma patterns that share the same parameter shape. By grouping a–d, sa–sd, and center coordinates cx, cy, it clarifies which values belong to a plasma-style pattern.
+
+## Example
+```typescript
+const example: PlasmaParams = {
+  a: 1,
+  b: 1,
+  c: 1,
+  d: 1,
+  sa: 0.5,
+  sb: 0.5,
+  sc: 0.5,
+  sd: 0.5,
+  cx: 320,
+  cy: 240
+};
+```
 
 ## Notes
-- All fields are plain numbers; TypeScript enforces the shape at compile time, but there is no runtime validation inherent to the interface.
-- All properties are required when constructing a PlasmaParams object; supply sensible defaults at call sites if you need optional behavior.
-- Changing field names or inferred semantics would be a breaking change for call sites depending on this contract.
+- All properties are required; you must supply values for all ten fields.
+- The names a,b,c,d, sa,sb,sc,sd, cx, cy are domain-specific and not self-describing; consult the consuming code to understand their meaning.
+- There is no runtime validation implied by the interface; ensure values are within expected ranges before use.
 
 ---
 
@@ -152,10 +137,27 @@ interface PulseParams
 ```
 
 
-PulseParams defines a compact contract for the numeric settings that drive a pulsing visual effect. It groups the center coordinates (cx, cy), the width of the wave to render (waveWidth), the number of ripple rings (ripples), and the maximum radius the pulse can expand to (maxRadius), enabling animation code to operate with a single, cohesive parameter object rather than scattering individual numbers.
+PulseParams defines the configuration for a single pulse pattern used by the web app's pulse rendering system. It groups the center coordinates (cx, cy), the visual width of the waveform (waveWidth), the number of ripple rings to render (ripples), and the maximum reach of the pulse (maxRadius), allowing rendering code to produce consistent ripple animations from a given point.
 
 ## Remarks
-PulseParams acts as a simple data carrier that abstracts the geometry and look of a pulse. It decouples the animation loop from the specific numeric details, enabling reuse and easier experimentation with different visual styles. This interface expresses intent: a geometric center and a radial expansion culminating at maxRadius, governing how many ripples and how wide each wave appears.
+PulseParams acts as a simple data container that decouples geometry from animation logic. By passing this object, the rendering layer can render different pulse patterns without changing the drawing code; it also makes it straightforward to validate and reuse the same parameter shape across multiple patterns. If the design later requires more attributes (e.g., color, duration), they can extend this interface while keeping existing consumers intact.
+
+## Example
+```typescript
+const pulse: PulseParams = {
+  cx: 100,
+  cy: 100,
+  waveWidth: 8,
+  ripples: 3,
+  maxRadius: 60
+};
+// The rendering system consumes PulseParams to draw a ripple pattern from (cx, cy)
+```
+
+## Notes
+- Values are numeric; ensure non-negative and appropriate ranges to avoid invalid visuals.
+- Treat PulseParams as immutable; create new instances rather than mutating existing ones during animation.
+- cx/cy refer to the render target's coordinate space; ensure alignment with the view or canvas.
 
 ---
 
@@ -168,14 +170,26 @@ interface ShimmerCell
 ```
 
 
-ShimmerCell is a lightweight data contract describing a single shimmering segment within a pattern animation. It encodes where the segment appears horizontally (from and to) and when it appears in time (startTime and duration), enabling the rendering pipeline to compose a full shimmer effect from a collection of cells without coupling presentation logic to the data.
+Represents a single shimmer segment used in a UI shimmer animation. ShimmerCell captures both the horizontal range (from and to) that the shimmer spans and the timing (startTime and duration) for when that segment lights up. Use it when composing a shimmer pattern, by listing multiple cells to describe the full sequence instead of embedding timing logic in rendering code.
 
 ## Remarks
-Separating the data shape from rendering logic, ShimmerCell acts as a building block for pattern shimmer effects. It lets the UI renderer consume a uniform list of cells to produce synchronized shimmering across a pattern without hardcoding layout details.
 
-## Notes
-- Ensure from <= to to avoid invalid ranges.
-- Use a consistent time unit for startTime and duration across all cells in a given animation run (e.g., milliseconds or frames).
+ShimmerCell decouples animation timing from rendering. It enables declarative pattern construction: you can reorder, merge, or stagger cells without touching the drawing code. By modeling shimmer as data, patterns can be precomputed or animated with consistent timing across platforms.
+
+## Example
+
+```typescript
+// A minimal shimmer cell defining a short glow interval
+const cell: ShimmerCell = { from: 0, to: 0.25, startTime: 0, duration: 120 };
+```
+
+```typescript
+// A tiny pattern composed of two adjacent shimmer cells
+const pattern: ShimmerCell[] = [
+  { from: 0, to: 0.25, startTime: 0, duration: 120 },
+  { from: 0.25, to: 0.5, startTime: 120, duration: 120 }
+];
+```
 
 ---
 
@@ -188,17 +202,16 @@ interface ShimmerParams
 ```
 
 
-ShimmerParams is a compact data container that aggregates the parameters required to drive a shimmer effect in the pulse pattern system. It groups a two-dimensional grid of ShimmerCell objects to be updated, a numeric duration window that bounds how long shimmer segments last, and a Rand instance used to introduce controlled randomness. Use this interface when you want to pass all shimmer-related configuration as a single, cohesive object rather than scattering values across multiple function parameters.
+ShimmerParams is a compact configuration object that bundles the inputs required to run a shimmer animation over a grid of pixels. It carries the 2D pixel grid, a minimum and maximum duration for shimmer cycles, and a random number generator to introduce per-cell variation.
 
 ## Remarks
+This interface serves as a single, cohesive parameter bag for shimmer pattern generation, decoupling animation configuration from rendering logic. By accepting a shared Rand instance, it enables consistent randomness across cells and reusability of timing bounds, which helps keep the shimmer behavior predictable when the same seed is used.
 
-By encapsulating pixels, timing, and randomness together, ShimmerParams decouples the rendering logic from the exact values used to orchestrate a shimmer. It enables reuse of the same pixel grid with different timing or randomness seeds, and it makes testing easier by isolating the configuration from the rendering loop. It sits at the boundary between data (pixels) and behavior (durations and RNG), providing a stable contract for shimmer initialization.
-
-## Notes
-
-- minDur and maxDur are plain numbers; there is no compile-time enforcement of minDur <= maxDur; callers should validate before use.
-- pixels is a 2D array; ensure rectangular shape if the consumer assumes uniform row lengths.
-- rng must be a valid Rand instance; passing something else will likely cause runtime errors.
+## Example
+```ts
+const grid: ShimmerCell[][] = [];
+const params: ShimmerParams = { pixels: grid, minDur: 50, maxDur: 200, rng: rand() };
+```
 
 ---
 
@@ -211,15 +224,14 @@ interface SpiralParams
 ```
 
 
-SpiralParams is a small data contract that groups the numeric configuration used to render a spiral pattern within the Pulse patterns module. It exposes six parameters: arms (the number of spiral arms), tightness (how tightly the spiral winds), speed (the animation rate), sharpness (the curvature or edge crispness of the arms), and cx/cy (the spiral's center coordinates). This interface is intended as a plain data carrier consumed by the spiral rendering logic.
+SpiralParams is a lightweight, strongly-typed parameter bag that describes a spiral pattern: how many arms, how tight the twist is, animation speed, arm sharpness, and the center coordinates. This interface is consumed by the pattern rendering logic to produce a spiral, so developers reach for it when configuring or mutating a spiral-based pattern as a single cohesive object.
 
 ## Remarks
-By isolating these related values, SpiralParams decouples the rendering configuration from the drawing code, enabling reuse across pattern presets and simplifying testing. It defines a stable API boundary that can evolve (e.g., by adding new parameters) without forcing changes on call sites.
+By encapsulating these values in a dedicated type, SpiralParams decouples pattern configuration from the rendering implementation, making it easier to reuse across components and to swap in different spiral configurations without touching the generator code. It also provides a single place to reason about defaults and validation rules for spiral-based visuals. The interface is intentionally a plain data contract—behaviors are implemented elsewhere, walking the values into the math that draws the spiral.
 
 ## Notes
-- No constraints are enforced by the type system; validate ranges at the call site if necessary (e.g., arms should be a positive value).
-- cx and cy are interpreted in the drawing coordinate space; ensure they align with the renderer's origin or transforms.
-- This is a plain data object; avoid adding methods or behavior; treat as immutable data if possible to simplify reasoning.
+- No runtime constraints are enforced by the type itself; validate values before use (e.g., arms > 0, non-negative numeric fields).
+- cx and cy specify the spiral's center in the rendering coordinate system; ensure they align with the target canvas or view dimensions.
 
 ---
 
@@ -232,15 +244,26 @@ interface WavesParams
 ```
 
 
-WavesParams is a lightweight TypeScript interface that describes the numeric parameters controlling a wave-based visual pattern in the Pulse module. It encapsulates angle (orientation), freq (cycles per unit), speed (motion pace), sharpness (edge steepness), and the center coordinates cx and cy, enabling functions that render or animate waves to receive a single, typed configuration object rather than a scattered set of primitive arguments.
+WavesParams is a compact parameter bag that groups the numeric controls for a wave-based pattern: angle, frequency, speed, sharpness, and the center coordinates cx and cy. Use it when you want to pass multiple related settings as a single object to a generator or renderer, instead of threading six separate numbers through the call sites.
 
 ## Remarks
-WavesParams acts as a simple data contract that decouples the parameter source from the rendering logic. By bundling all wave-related knobs into one object, the code that consumes these values stays generic and testable, and different patterns or effects can be configured by swapping this object. The cx/cy fields define the wave's center in the rendering space, while angle, freq, speed, and sharpness tune the direction, rate, velocity, and crispness of the wave.
+By bundling these related values into a single interface, WavesParams provides a stable contract between the pattern consumer and the generator. It improves reusability and readability by keeping pattern configuration cohesive and interchangeable across different components that implement the same visual effect.
+
+## Example
+```typescript
+const params: WavesParams = {
+  angle: 0,
+  freq: 1.5,
+  speed: 0.75,
+  sharpness: 0.6,
+  cx: 320,
+  cy: 240
+};
+```
 
 ## Notes
-- Angle unit is not explicit in the interface; ensure the consumer uses a consistent unit (e.g., radians or degrees) with the rest of the rendering pipeline.
-- cx and cy refer to the wave's center within the coordinate system used by the pattern; mismatch with the canvas/SVG coordinate space can produce offset visuals.
-- All fields are plain numbers with no defaults; callers should provide meaningful values and validation should occur at the call site or in the consuming function.
+- All fields are plain numbers with no runtime constraints; ensure downstream logic validates them if needed.
+- This interface describes data shape only and does not prescribe behavior; it should be consumed by a function or class that implements the actual wave-based rendering or computation.
 
 ---
 
@@ -253,25 +276,15 @@ export type PatternName = keyof typeof PATTERNS
 ```
 
 
-PatternName is a TypeScript type alias that represents the set of valid pattern names by selecting the keys of PATTERNS. It yields a string literal union of the PATTERNS object's property names, providing a compile-time contract for any API that accepts a pattern name. Use PatternName wherever you want to constrain values to known patterns defined in PATTERNS, rather than relying on arbitrary strings.
+PatternName is a TypeScript type that represents the set of valid keys defined on PATTERNS. It is defined as keyof typeof PATTERNS, producing a union of string literals corresponding to the PATTERNS keys; developers use PatternName to constrain inputs to actual pattern names and to gain editor autocomplete and compile-time safety when accessing PATTERNS.
 
 ## Remarks
-PatternName centralizes the domain of pattern identifiers. By deriving its values from PATTERNS, it stays in sync with the supported patterns across the codebase; adding or removing a pattern in PATTERNS automatically updates all typings that use PatternName. This reduces drift between runtime data and type-level constraints and helps developers discover valid pattern names via autocomplete.
-
-## Example
-```typescript
-// Example usage demonstrating the type-safe pattern name
-function renderPattern(name: PatternName) {
-  // ... implementation
-}
-
-// Assuming PATTERNS has a key named 'dash', the following is valid:
-const p: PatternName = "dash";
-```
+By deriving PatternName from PATTERNS keys, this type keeps the consumer in sync with the available patterns without manual maintenance. It acts as a thin, type-safe bridge between the runtime PATTERNS map and its consumers, preventing accidental usage of non-existent pattern names. This abstraction helps centralize the source of truth for pattern identifiers.
 
 ## Notes
-- There is no runtime representation for PatternName; it's a compile-time type alias derived from PATTERNS.
-- For maximum reliability, ensure PATTERNS is declared as a value with literal keys (e.g., const PATTERNS = { ... } as const) so keyof typeof PATTERNS yields stable string literals.
+- Type-level only: PatternName does not exist at runtime; there is no corresponding value.
+- Renaming or removing a key in PATTERNS automatically changes the allowed values in PatternName after recompile.
+
 
 ---
 
@@ -295,7 +308,20 @@ function fbm(x: number, y: number, seed: number, octaves: number): number
 **Returns:** `number`
 
 
-Fractal Brownian motion (fBM) is produced by layering multiple octaves of value noise: each octave samples noise at a higher frequency, scales its contribution by a decreasing amplitude, and the results are averaged to yield a smooth, natural-looking value. This function orchestrates that pattern for the given coordinates (x, y) and a seed, returning a normalized, multi-octave noise value. Use fbm when you need richer, multi-scale variation in textures, terrain, or procedural patterns without manually composing the octave loop at each call site.
+Computes fractal Brownian motion by summing several octaves of 2D value noise with progressively higher frequency and lower amplitude, then normalizing by the total amplitude to produce a stable multi-scale value for procedural patterns. Given coordinates x and y, a seed to diversify the noise, and octaves to control detail, fbm yields a smooth, natural variation suitable for textures, terrains, or patterned effects.
+
+## Remarks
+fbm blends multiple scales of valueNoise into a cohesive variation rather than relying on a single noise scale. Each octave doubles the frequency and halves the amplitude, with seeds offset by i * 17 to decorrelate octaves and reduce artifacts. Normalizing by the cumulative amplitude keeps outputs in a stable range across different octave counts.
+
+## Example
+```typescript
+// Example usage: common case
+const v = fbm(12.3, 45.6, 7, 6);
+```
+
+## Notes
+- octaves is treated as the loop bound; non-integer values are effectively truncated due to the loop condition (i < octaves).
+- The per-octave seed offset (i * 17) decorrelates octaves; changing this constant changes the texture character.
 
 ---
 
@@ -318,15 +344,21 @@ function hash2(x: number, y: number, seed: number): number
 **Returns:** `number`
 
 
-Computes a deterministic pseudo-random value in [0,1] from two integer inputs x and y and a numeric seed. It coerces the inputs to 32-bit integers, mixes them with the seed, and applies a small bitwise scramble to produce a stable, hash-like number suitable for coordinate-based procedural variation without relying on a global RNG.
+Computes a deterministic, pseudo-random value from two coordinates and a seed. It uses 32-bit integer arithmetic and bitwise mixing to blend the inputs into a single nonnegative value, which is then normalized to the [0, 1] range. Use it when you need a repeatable, seedable random-like value for procedural patterns (textures, noise) without pulling from a global RNG.
 
 ## Remarks
- hash2 is intentionally stateless: the same (x, y, seed) triple always yields the same output, making it ideal for tile-based patterns, noise generation, or other procedural content that must be reproducible across runs or across different parts of a rendering pipeline. It serves as a building block for higher-level pattern generators by providing a compact, fast, deterministic source of pseudo-random numbers derived from spatial coordinates.
+This helper is designed for deterministic content generation: the same x, y, and seed always yield the same result, making it ideal for repeatable noise in patterns. The mixing uses integer multiplications and bitwise shifts to avoid simple correlations between input values, while remaining compact.
+
+## Example
+```typescript
+const r = hash2(12, 34, 7);
+console.log(r);
+```
 
 ## Notes
-- Inputs are coerced to 32-bit signed integers (x|0, y|0, seed|0); values outside that range wrap around.
-- The result is in [0, 1], but 1.0 can occur due to the final division by 4294967295.
-- Not suitable for cryptographic use or security-sensitive randomness.
+- Inputs x, y, and seed are coerced to 32-bit integers via bitwise OR with zero (x | 0, y | 0, seed | 0); non-integer inputs are truncated.
+- Output is a number in the range [0, 1], with the full interval achievable depending on the packed value.
+- Not suitable for cryptographic purposes; this is a fast, non-cryptographic hash intended for procedural-generation uses rather than security-sensitive randomness.
 
 ---
 
@@ -346,26 +378,21 @@ export function pickPattern(rng: Rand, name?: PatternName):
 | `name` | `PatternName` | — |
 
 
-PickPattern selects a Pattern definition from the available catalog, using the provided RNG to pick randomly when no name is supplied, or returning the explicitly requested named pattern. It returns an object with the selected PatternName and its corresponding Pattern definition. This helper centralizes pattern selection so UI and logic can either request a specific pattern by name or rely on a reproducible random pattern for demonstrations, tests, or procedurally generated content.
+pickPattern selects a Pattern using the supplied RNG and an optional PatternName, returning an object with both the chosen name and its corresponding Pattern definition. Call it when you need a ready-to-use pattern and either want to constrain the choice to a known name or prefer a deterministic, RNG-driven random selection for testing, seeding, or UI presentation.
 
 ## Remarks
-By returning both the name and the definition, the function keeps the caller from needing to cross-reference a separate catalog. It also isolates randomness from the rest of the system, allowing deterministic testing by injecting a seeded Rand. This pattern of decoupled selection is helpful wherever a catalog of named patterns is consumed by UI components or procedural generators.
+pickPattern centralizes the relationship between pattern identifiers (PatternName) and their concrete definitions (Pattern). It hides the internal storage or registry of available patterns behind a single API, making it easier to swap implementations without changing call sites. By returning both the name and def, it avoids a second lookup and ensures consumers always have the identifier that produced the definition.
 
 ## Example
-
-```typescript
-// Random pattern using a seeded RNG
-const rng = new Rand(/* seed */ 42);
+```ts
 const { name, def } = pickPattern(rng);
-
-// Specific named pattern
-const { name: chosen, def: pattern } = pickPattern(rng, 'Stripes');
+console.log(name, def);
 ```
 
 ## Notes
-- Invalid PatternName may throw at runtime.
-- Seed the RNG to achieve reproducible results.
-
+- If a name is provided, the function will yield the corresponding Pattern for that name; the return value will reflect the chosen name.
+- For reproducible results, seed the RNG before calling pickPattern, since randomness affects which pattern is selected when name is not provided.
+- The RNG may advance its internal state as a side effect of the call; be mindful of call order if deterministic sequencing matters.
 
 ---
 
@@ -386,14 +413,10 @@ const range = (rng: Rand, min: number, max: number) => min + rng() * (max - min)
 | `max` | `number` | — |
 
 
-Computes a random value in the half-open interval [min, max) by invoking the supplied Rand function. It returns min + rng() * (max - min), assuming rng yields a number in [0, 1). Rand is a type alias for a zero-argument function that returns a number, enabling you to inject different RNG implementations or deterministic generators for testing.
+Generates a random floating-point number within the specified range from `min` (inclusive) to `max` (exclusive) using the provided random number generator function `rng`. This function scales the output of `rng()`, which is expected to produce a value between 0 and 1, to the desired numeric interval.
 
 ## Remarks
-By abstracting the randomness behind Rand, this function decouples range generation from a specific RNG implementation. It makes testing easier—provide a deterministic Rand—and allows swapping RNG strategies without changing the logic that computes the range.
-
-## Notes
-- Assumes rng returns a value in [0, 1). If not, results may fall outside [min, max).
-- If max <= min, the expression can produce degenerate or inverted results; validate inputs or clamp accordingly.
+This abstraction allows for flexible random number generation within any numeric range while decoupling the source of randomness. By accepting a `Rand` function as input, it supports custom or seeded random generators, facilitating reproducible or specialized random sequences beyond the default global random source.
 
 ---
 
@@ -412,23 +435,22 @@ const smooth = (t: number) => t * t * (3 - 2 * t)
 | `t` | `number` | — |
 
 
-Smooth is a classic smoothstep easing function implemented as t^2(3−2t). It maps an input t in [0,1] to an eased value that begins at 0 when t = 0 and ends at 1 when t = 1, with gradual acceleration and deceleration to avoid abrupt motion. Use it when you want a non-linear interpolation that preserves endpoints, such as easing animation progress or blending between states instead of applying a linear proportion.
+Implements the standard smoothstep easing function: it takes a normalized progress t in [0, 1] and returns t^2(3 - 2t), producing a smooth, S-shaped interpolation with zero slope at both ends. Use it to smoothly interpolate between two values rather than relying on linear progress in animations, UI transitions, or procedural patterns.
 
 ## Remarks
-Zero slope at t=0 and t=1 gives a smooth start and end, avoiding sudden changes in velocity when easing between states. This makes it a go-to choice for non-linear progress curves where endpoints must be preserved.
+This function is clean and deterministic, with no side effects, so it can be freely composed into animation or interpolation code. It encapsulates a widely used easing curve (3t^2 - 2t^3), enabling consistent smoothing across values without repeating math. By plugging smooth(t) into a linear interpolate, you can produce natural-feeling transitions throughout the UI and graphics layers.
 
 ## Example
 ```typescript
-smooth(0) // 0
-smooth(0.25) // 0.15625
-smooth(0.5) // 0.5
-smooth(1) // 1
+// Example: use smooth to interpolate between two numbers with easing
+const a = 0;
+const b = 100;
+const t = 0.25;
+const value = a + (b - a) * smooth(t); // ≈ 15.625
 ```
 
 ## Notes
-- Intended input range is [0,1]; for t outside that interval, the output may fall outside [0,1].
-- The derivative is zero at the endpoints, yielding a gentle ease-in and ease-out behavior.
-- It is the canonical smoothstep curve and is widely used for graphics, UI transitions, and interpolations where a natural-looking ramp is desired.
+- Assumes 0 <= t <= 1. Outside this range, the result may lie outside [0, 1] and the easing behavior is not guaranteed.
 
 ---
 
@@ -451,24 +473,14 @@ function valueNoise(x: number, y: number, seed: number): number
 **Returns:** `number`
 
 
-Produces a smooth, deterministic 2D value-noise sample at (x, y) using the provided seed. It divides space into unit cells, samples the four corners of the cell containing (x, y) via hash2, then blends those corner values with bilinear interpolation guided by the smoothed fractional offsets. The result is a single scalar noise value suitable for procedural textures, height maps, or other patterns that require repeatable, natural-looking variation.
+Computes a deterministic, seeded 2D value noise value for coordinates (x, y). It locates the containing unit cell by flooring x and y, samples the four corner values using hash2 at (xi, yi), (xi + 1, yi), (xi, yi + 1), and (xi + 1, yi + 1), then blends them with a bilinear interpolation after applying a smoothing function to the fractional offsets (xf, yf). The resulting number is a smooth, continuous value that varies with position and seed, making it suitable for stable procedural textures or patterns in 2D space.
 
 ## Remarks
-
-This abstraction isolates the lower-level hash-based corner sampling and interpolation from higher-level pattern composition. By combining hash2 with smooth interpolation, callers can layer multiple frequencies or seeds (e.g., for fractal terrain) without reimplementing the interpolation logic. The function is deterministic: the same x, y, and seed always yield the same output, making it ideal for reproducible rendering.
-
-## Example
-
-```typescript
-// Common usage: sample a value-noise value at a point with a given seed
-const n0 = valueNoise(2.3, 5.7, 42);
-```
+ValueNoise is a deterministic function for a given seed: the same inputs always yield the same output. The bilinear interpolation, combined with the smoothing of the fractional offsets, minimizes artifacts and yields smooth transitions between lattice points. Because the corner values come from hash2, the exact distribution of results depends on hash2's implementation while remaining consistent for the same seed and coordinates.
 
 ## Notes
-
-- Pure function with no side effects; safe to call in tight loops.
-- Relies on hash2 and smooth; ensure those utilities behave consistently.
-- Output range depends on hash2; not normalized.
-
+- The output range and distribution depend on the implementations of hash2 and smooth; do not assume the result is confined to [0, 1].
+- This function is deterministic and side-effect-free for a fixed seed, but its characteristics can vary with different hash2/smooth definitions.
+- If you require more complex textures, consider combining valueNoise with additional octaves or other noise sources to enrich the pattern.
 
 ---

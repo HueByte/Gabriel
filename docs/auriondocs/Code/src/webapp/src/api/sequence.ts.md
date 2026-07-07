@@ -22,11 +22,14 @@ export interface GabrielSequence
 ```
 
 
-Represents a sequence of frames using a palette-based color system, designed for efficient storage and rendering of graphical animations or images. Each sequence includes a version number, a palette defining RGB colors, an array of frames where each frame is an array of palette indices, and associated metadata describing the sequence.
+Represents the shape of a Gabriel sequence used by the web application to encode an animation as palette-indexed frames. A GabrielSequence carries a version number, a color palette, a collection of frames, and sequence metadata. The palette is an array of RGB triples [r, g, b], while frames is 64 arrays of 256 palette indices each. The metadata field carries additional information described by GabrielSequenceMetadata. This interface is used whenever a Gabriel sequence must be created, transmitted, or consumed by rendering or export tooling, providing a stable contract between producers and consumers of sequence data while avoiding per-frame color data duplication.
 
 ## Remarks
-This interface structures graphical data by separating color information (palette) from frame data (indices), optimizing memory usage and enabling easy manipulation of animation frames. The fixed size of 64 frames with 256 palette indices each suggests a design tailored for specific rendering constraints or legacy formats.
+GabrielSequence acts as a compact data contract that enables efficient interchange and shared color data across frames. By separating the palette from the per-frame indices, it supports lightweight serialization and consistent color interpretation across components that render or export animations. It relies on GabrielSequenceMetadata to convey context (such as descriptive details about the sequence) without embedding that metadata into every frame. This separation also makes it easy to swap palettes or reuse them across frames without modifying the frame indices.
 
+## Notes
+- The frames field is documented as 64 frames; ensure the array length is exactly 64 and each frame contains 256 palette indices.
+- Indices in frames must be valid indices into the provided palette (0 <= index < palette.length) to ensure correct color mapping.
 
 ---
 
@@ -39,23 +42,23 @@ export interface GabrielSequenceMetadata
 ```
 
 
-GabrielSequenceMetadata is a compact data contract that captures meta-information about a Gabriel sequence generation. It includes the seed used to derive the sequence, the generation time as an ISO 8601 timestamp, and an optional human-readable summary of the sequence's current state. This metadata is typically attached alongside the sequence payload to support auditing, debugging, and reproducibility without exposing or transporting the full sequence data.
+GabrielSequenceMetadata is a compact data contract that describes the metadata for a Gabriel sequence. It captures the seed used to generate the sequence, the generation timestamp in ISO 8601 format, and an optional summary of the sequence's current state.
 
 ## Remarks
-By separating provenance (seed, timestamp) and a compact state description from the sequence values, this interface enables lightweight logging and correlation across system boundaries. It facilitates deterministic reproduction and easier debugging: given the same seed and generation time, developers can trace how a sequence was produced, and the stateSummary provides a quick digest of progress or characteristics. It acts as a stable contract between producers and consumers of sequence data.
+GabrielSequenceMetadata serves as a stable boundary for metadata across modules that handle Gabriel sequences. By keeping seed, generatedAt, and stateSummary as a simple, serializable payload, it helps decouple metadata concerns from the sequence data and supports consistent logging, auditing, and client display. The nullability of stateSummary communicates that a descriptive state may be unavailable, which consumers should handle gracefully.
 
 ## Example
 ```typescript
-const meta: GabrielSequenceMetadata = {
-  seed: 42,
-  generatedAt: new Date().toISOString(),
-  stateSummary: 'initialized; ready to generate'
+const exampleMetadata: GabrielSequenceMetadata = {
+  seed: 98765,
+  generatedAt: new Date('2024-01-01T12:00:00Z').toISOString(),
+  stateSummary: "Initial seed applied; ready to generate"
 };
 ```
 
 ## Notes
-- generatedAt should be a valid ISO 8601 timestamp; consider using toISOString()
-- stateSummary may be null if no summary is available
+- If stateSummary can be null, code consuming the metadata should guard for null before string operations or display.
+- generatedAt should reflect the exact time of generation; ensure that time is captured in UTC and serialized in ISO 8601 format.
 
 ---
 
@@ -65,14 +68,34 @@ const meta: GabrielSequenceMetadata = {
 
 ```typescript
 export type SequenceSource =
-  |
+  | { kind: 'conversation'; conversationId: string }
+  | { kind: 'project'; projectId: string };
 ```
 
 
-SequenceSource is a discriminated union type that represents the origin or source of a sequence within the application. It allows developers to handle sequences differently based on whether they come from a conversation or potentially other sources, facilitating type-safe branching and processing of sequence data.
+SequenceSource represents the origin of a sequence in the API: it is a discriminated union that can be either a conversation-based source or a project-based source, each carrying its own identifier. This type makes explicit how a sequence was produced or should be retrieved, enabling safe handling by inspecting the kind and then accessing the corresponding id.
 
 ## Remarks
-This type uses a discriminated union pattern with a `kind` property to distinguish between different sequence sources. This design enables clear and maintainable code paths when working with sequences originating from various contexts, such as conversations or other future extensions.
+Because it is a discriminated union on the 'kind' field, TypeScript can narrow the type in branches, allowing safe access to either conversationId or projectId without risk of reading a non-existent property.
+
+## Example
+```ts
+function logSequenceSource(src: SequenceSource): void {
+  switch (src.kind) {
+    case 'conversation':
+      console.log(`Conversation sequence: ${src.conversationId}`);
+      break;
+    case 'project':
+      console.log(`Project sequence: ${src.projectId}`);
+      break;
+  }
+}
+```
+
+## Notes
+- The two variants are mutually exclusive; only one id property exists for any given value.
+- Access to the id field is only valid after narrowing by kind; attempting to read src.conversationId when kind is 'project' will be a TypeScript error.
+- This type does not carry any additional data beyond the id fields; extend only if you need more variants.
 
 ---
 
@@ -94,15 +117,14 @@ function doFetch(source: SequenceSource, signal?: AbortSignal): Promise<Response
 **Returns:** `Promise<Response>`
 
 
-doFetch is a small helper that resolves the URL for a given SequenceSource and fetches it, returning a `Promise<Response>`. It centralizes the fetch logic for sequence-related endpoints by delegating URL resolution to urlFor(source) and by applying a consistent set of fetch options, namely credentials: 'include' and an optional AbortSignal.
+Fetch wrapper that retrieves a Response for a given SequenceSource by issuing a request to the URL produced by urlFor(source). It returns the raw fetch `Promise<Response>`, leaving status checks, error handling, and body parsing to the caller. The request includes credentials: 'include' to send cookies and authentication data, and it forwards an optional AbortSignal to support cancellation from the caller.
 
 ## Remarks
-doFetch sits at the boundary between high-level API usage and low-level network calls. It hides the mechanics of URL resolution and credential policy behind a single, reusable function, reducing duplication and ensuring that all requests for sequence data follow the same convention. It also provides a natural extension point: if you later need common headers, error handling, or retry behavior, you can add it in one place without touching every caller.
+This small abstraction centralizes how sequence data is fetched, keeping URL construction and fetch configuration aligned across consumers. It relies on urlFor(source) to determine the destination URL, and it ensures that cookies and credentials accompany the request, while allowing callers to cancel in-flight requests via AbortSignal. It does not perform error handling, retry logic, or response parsing.
 
 ## Notes
-- This function always uses credentials: 'include'; if your authentication strategy changes, you may need to adjust this behavior or bypass it in contexts that require different credentials handling.
-- The AbortSignal is optional; callers that do not need cancellation can omit the argument.
-- The function returns a native `Promise<Response>`; downstream code should inspect response.ok and parse the body as needed (e.g., via response.json()).
+- Using credentials: 'include' sends cookies and HTTP authentication data; ensure your server's CORS policy allows credentials from the origin.
+- The function does not parse the response or perform retries; consumers must check response.ok and parse the body as needed. If an AbortSignal is provided and the request is canceled, the Promise rejects with an AbortError.
 
 ---
 
@@ -127,27 +149,22 @@ export async function fetchGabrielSequence(
 **Returns:** `Promise<GabrielSequence>`
 
 
-FetchGabrielSequence retrieves a GabrielSequence from the provided SequenceSource and abstracts away the boilerplate around authenticated requests. It first uses doFetch to fetch data, but if the server indicates the session is unauthorized (401), it attempts a session refresh via refreshSession and retries once. If the retry still results in 401, it signals that the session has expired and throws. On a successful response, it returns the parsed GabrielSequence.
+Fetches a GabrielSequence for the given SequenceSource, optionally honoring an AbortSignal to cancel the request. It starts by performing a fetch via doFetch and, if the server replies with 401, attempts a session refresh and retries once. If the retry also yields 401, it signals that the session has expired and throws a clear error instructing the user to sign in again. For any non-ok response, it throws a descriptive error including the status code and status text. On success, the response body is parsed as a GabrielSequence and returned.
 
 ## Remarks
-This function centralizes session-refresh semantics for sequence endpoints. It coordinates doFetch, refreshSession, and session-expiry signaling, so callers don't have to reimplement common error handling for authentication. It serves as a robust single point of truth for fetching Gabriel sequences while preserving clear error pathways for failed or expired sessions.
+Encapsulates the authentication-flow and error handling for sequence retrieval, so callers don't need to implement retry-on-401 logic themselves. It centralizes the session-expiration behavior by signaling the session expiry when a refresh still fails, providing a single, consistent contract for sequence fetches across the app. It relies on shared helpers (doFetch, refreshSession, signalSessionExpired) to compose the observable behavior.
 
 ## Example
-```typescript
-// Common usage pattern
-try {
-  const abort = new AbortController();
-  const sequence = await fetchGabrielSequence(mySource, abort.signal);
-  // Use the GabrielSequence object here
-} catch (err) {
-  // Handle fetch or authentication errors
-}
+```ts
+const source: SequenceSource = /* obtain from your app */;
+const controller = new AbortController();
+const sequence: GabrielSequence = await fetchGabrielSequence(source, controller.signal);
 ```
 
 ## Notes
-- A 401 response may trigger a session refresh; if the refresh fails or the retried fetch still returns 401, a "Session expired. Please sign in again." error is thrown.
-- The function casts the response body to GabrielSequence; if the payload shape does not match, runtime typing may produce unexpected results.
-- Passing an AbortSignal allows cancellation of the request; consider wiring UI controls to abort long-running fetches if needed.
+- Only a single retry is attempted after a 401 response.
+- If the session refresh fails or if the second fetch returns a non-OK status, a descriptive Error is thrown.
+- The AbortSignal is passed through to allow cancellation of the underlying fetch.
 
 ---
 
@@ -168,25 +185,24 @@ function urlFor(source: SequenceSource): string
 **Returns:** `string`
 
 
-Computes the API URL for the sequence resource associated with a given SequenceSource. If the source denotes a conversation, the returned path points to that conversation's sequence endpoint; otherwise it points to the project's sequence endpoint.
+urlFor takes a SequenceSource and returns the REST path to fetch its sequence. It selects between the conversation endpoint and the project endpoint based on source.kind, so callers pass a single SequenceSource and need not assemble the URL themselves.
 
 ## Remarks
-URL construction is centralized here to ensure consistent routing to sequence resources across the UI. It relies on a discriminated union (SequenceSource) and encodeURIComponent to safely embed IDs in the path, so callers don't need to assemble routes by hand.
+urlFor centralizes endpoint construction for sequence retrieval. It ensures IDs are URL-encoded and selects the correct API path based on the source kind, reducing duplication and making future endpoint changes easier to adopt.
 
 ## Example
-```typescript
-// Conversation sequence URL
-urlFor({ kind: 'conversation', conversationId: 'abc-123' });
-// -> '/api/conversations/abc-123/sequence'
+```ts
+// Example usage
+const convoSource = { kind: 'conversation', conversationId: 'c123' } as const;
+const pathA = urlFor(convoSource);
+// -> "/api/conversations/c123/sequence"
 
-// Project sequence URL
-urlFor({ kind: 'project', projectId: 'proj 9' });
-// -> '/api/projects/proj%209/sequence'
+const projSource = { kind: 'project', projectId: 'p456' } as const;
+const pathB = urlFor(projSource);
+// -> "/api/projects/p456/sequence"
 ```
 
 ## Notes
-- IDs are encoded with encodeURIComponent to handle special characters in path segments.
-- Pass raw IDs (do not pre-encode) to avoid double-encoding; the function applies encoding itself.
-- The function returns a relative path (no scheme or host); callers may prepend a base URL if needed.
+- Be aware that non-'conversation' kinds default to the project path due to the ternary; ensure SequenceSource covers all valid kinds to avoid routing to the wrong endpoint.
 
 ---

@@ -19,22 +19,17 @@ public interface IAgentPathResolver
 ```
 
 
-This interface defines a contract for resolving a tool’s path argument into an absolute filesystem path on disk. Implementations centralize security-critical checks by validating path prefixes, applying mode-based root gating, and enforcing project authorization, guaranteeing these hardening steps occur exactly once per resolution. Callers pass a string that may be relative or absolute, a PathRootMode that selects the root scope (host root vs. project sandbox), and a CancellationToken to support cooperative cancellation. All filesystem agent tools route through this resolver to ensure consistent, auditable path resolution.
+Resolves a tool's path argument to an absolute path on disk, scoped to either the configured host root or the active conversation's project sandbox. Implementations provide a single, centralized gate for path resolution, ensuring the same hardening (prefix check, mode gating, and project authorization) is applied consistently across all filesystem agent tools. Callers should rely on this abstraction whenever user-supplied or relative paths must be translated into safe, canonical paths before performing any file I/O.
 
 ## Remarks
-By funneling path resolution through IAgentPathResolver, the system ensures consistent scoping of tool-accessible files and prevents leakage between host and project sandboxes. The abstraction decouples the concerns of path normalization and security checks from individual tools, simplifying testing and evolving the underlying policy. It also makes it straightforward to swap in different resolution strategies (e.g., in-process vs. remote) without changing call sites.
 
-## Example
-```csharp
-// Typical usage via dependency injection
-var resolver = serviceProvider.GetRequiredService<IAgentPathResolver>();
-ResolvedPath path = await resolver.ResolveAsync("logs/output.txt", PathRootMode.HostRoot, cancellationToken);
-```
+IAgentPathResolver serves as the single policy boundary for path translation. By funneling path resolution through this interface, the engine guarantees that every path is resolved under the same security constraints (root scope, prefix validation, and authorization) before any filesystem access occurs. It decouples path policy from individual tools, enabling consistent behavior and easier testing or future policy changes.
 
 ## Notes
-- Ensure path normalization prevents directory traversal outside the allowed root; implementers must enforce the prefix check exactly once during resolution.
-- Observe CancellationToken to support cancellation in I/O or authorization checks.
-- Respect PathRootMode semantics; mixing modes across calls could bypass sandbox boundaries.
+
+- Observe the CancellationToken; resolution may involve IO or authorization and should respect cancellation.
+- Do not apply additional security checks at the call site; the contract expects the resolver to enforce prefix, mode, and authorization exactly once.
+- Ensure the result is within the allowed roots; unexpected paths indicate a failure in the resolver's enforcement or in the provided inputs.
 
 ---
 
@@ -60,15 +55,16 @@ public sealed record ResolvedPath(
 | `Mode` | `PathRootMode` | — |
 
 
-Represents the outcome of resolving a path within a rooted file system context. It bundles both the actual path opened by the tool (Absolute) and a user-friendly representation (Display) that is relative to the resolved root (RootAbsolute). The Mode indicates how the path was rooted, guiding consumers on how to interpret the Display value.
+ResolvedPath is an immutable data carrier that encodes the result of resolving a path against a predefined root. It provides both the actual absolute path to operate on (Absolute) and a user-friendly representation (Display), along with the rooted directory (RootAbsolute) and a PathRootMode that indicates how the root was determined or applied.
 
 ## Remarks
-By centralizing path-related information in a single, immutable record, this symbol separates IO concerns from presentation concerns. Consumers can use Absolute for file access while presenting Display to users, and rely on RootAbsolute to understand the anchored root. PathRootMode further clarifies the rooting strategy, enabling callers to adapt Display formatting without changing how the underlying file system is accessed.
+This abstraction separates concerns between the filesystem interaction (Absolute) and how the path should appear to users or logs (Display).
+It's commonly produced by a path resolver, such as IAgentPathResolver, and is passed through the system wherever path decisions need to be reported or validated.
+Because ResolvedPath is a record, equality is value-based, which makes it suitable for caching and deduplication of resolution results.
 
 ## Notes
-- Absolute is the concrete filesystem path opened by the tool; Display is intended for user-facing presentation and may be rooted relative to RootAbsolute.
-- RootAbsolute serves as the anchored root directory used to compute or interpret Display; ensure it remains consistent with how Display is produced.
-- As a sealed record, ResolvedPath has value-based equality and is immutable once constructed, which supports straightforward caching and comparison across components.
+- Display should be treated as informational only; never rely on it for critical IO decisions.
+- Keep Absolute and RootAbsolute in sync with Display to avoid confusing mismatches in UI.
 
 ---
 
@@ -85,13 +81,30 @@ public enum PathRootMode
 ```
 
 
-PathRootMode represents which root context to use when resolving file system paths in the agent's path-resolution workflow. It exposes two values, Host and Project, to distinguish between paths resolved against the host machine's filesystem and those resolved within the current project workspace. Use this enum whenever a path-resolution operation must be contextualized to a specific root rather than assuming a single default.
+PathRootMode is an enum that selects the root context for resolving file-system paths in the agent path resolver. It exposes two options—Host and Project—allowing callers to choose whether paths are rooted in the host environment or in the current project workspace.
 
 ## Remarks
-This enum provides a lightweight abstraction that enables a multi-root path resolver to support different resolution strategies without scattering root-specific logic across callers. It cleanly separates concerns, letting the IAgentPathResolver switch behavior based on the selected root while other components simply pass a PathRootMode value.
+
+By abstracting the root policy into this enum, the resolver can remain agnostic about where paths originate, while callers can express intent clearly at the call site. This design makes it straightforward to swap path-root semantics for different environments (for example, testing against a synthetic project workspace versus the real host file system) without changing resolver code.
+
+## Example
+
+```csharp
+PathRootMode mode = PathRootMode.Host;
+switch (mode)
+{
+    case PathRootMode.Host:
+        // Resolve against the host file system
+        break;
+    case PathRootMode.Project:
+        // Resolve against the project workspace
+        break;
+}
+```
 
 ## Notes
-- Ensure that all path-resolution code paths handling PathRootMode remain in sync when adding new roots.
-- Prefer using the enum type in switch statements and comparisons rather than raw integers to avoid invalid values.
+
+- Be aware that PathRootMode currently has only Host and Project; adding new roots in the future requires updating call sites and any exhaustive matches.
+
 
 ---

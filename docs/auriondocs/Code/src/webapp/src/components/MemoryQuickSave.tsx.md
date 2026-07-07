@@ -19,26 +19,15 @@ interface MemoryQuickSaveProps
 ```
 
 
-MemoryQuickSaveProps is a TypeScript interface that defines the shape of the props passed to the MemoryQuickSave UI. It carries three pieces of data: seedBody, projectId, and onClose. seedBody provides the prefilled text inserted into the memory's body field; users can edit it before saving. projectId controls the scope of the save; a non-null value enables a project-scoped save, while null hides the project option and switches the UI to user-scope. onClose is a callback invoked to dismiss the quick-save dialog.
+MemoryQuickSaveProps defines the props contract for the Memory Quick Save UI. It carries the initial seed for the memory body, an optional project context, and a close callback: seedBody supplies prefilled text for the memory's body (editable by the user before saving), projectId designates the project scope (non-null enables project-scoped saving and reveals the project control; null hides that option, leaving the user-scoped path), and onClose is invoked to dismiss the UI.
 
 ## Remarks
-MemoryQuickSaveProps acts as a small boundary between the MemoryQuickSave component and its surroundings. By isolating seed content, scope, and close behavior, it makes the component easier to test and reuse in different contexts (with project-scoped or user-scoped saving). The seedBody is intentionally editable, signaling that the initial value is a suggestion rather than the final content.
-
-## Example
-```typescript
-const props: MemoryQuickSaveProps = {
-  seedBody: "Idea: summarize the user's goal here...",
-  projectId: "proj-123",
-  onClose: () => {
-    // close handler implementation
-  }
-};
-```
+This interface centralizes the data required by the Memory Quick Save component, enabling it to present a meaningful default body, conditionally expose project-scoped saving, and signal when the UI should close. By encoding seedBody and projectId as inputs rather than performing work itself, the symbol supports reuse of the MemoryQuickSave UI across contexts (project-scoped or user-scoped) without embedding presentation logic in callers.
 
 ## Notes
-- seedBody is a starting point; the actual body is edited by the user before saving.
-- If projectId is null, the project-scoped option is hidden and the UI operates in user-scope.
-- onClose should be stable across renders to avoid unnecessary re-mounts.
+- seedBody is a starting point that the user can edit; it is not the final saved content.
+- When projectId is null, the project scope control should be hidden, reflecting a user-scoped scenario.
+- onClose should be wired to the UI's dismissal path to avoid leaving the dialog open.
 
 ---
 
@@ -51,16 +40,10 @@ export function MemoryQuickSave(
 ```
 
 
-MemoryQuickSave is a lightweight React function component that provides a concise, in-place save action for a memory seed associated with a specific project. It accepts seedBody (the content to persist), projectId (target project), and onClose (callback invoked to dismiss its UI after the save completes). Use MemoryQuickSave when you want a focused, inline saving interaction—such as inside a modal or panel—without routing through a broader save flow.
+MemoryQuickSave is a React functional component that wires a quick-save action for a given seedBody within a specific project. It takes three props: seedBody, projectId, and onClose. The component's behavior is inferred from its name and props; it likely triggers a save operation scoped to the provided project and then invokes onClose to signal completion or dismissal.
 
 ## Remarks
-
-By encapsulating the save trigger in MemoryQuickSave, the UI stays cohesive and reusable across different parts of the app. It separates the responsibilities of collecting a seed and persisting it from higher-level layout or navigation concerns. The component signature suggests it triggers a save and then immediately signals completion by invoking onClose, allowing it to be composed with modals, drawers, or inline panels.
-
-## Notes
-
-- The exact persistence mechanism is abstracted away; expect that the component wires through a shared memory/save service or context to persist seedBody for projectId.
-- If the save operation can fail, coordinate error handling with the caller; onClose is typically invoked on success, not on failure, so error feedback should be surfaced by the parent when needed.
+MemoryQuickSave encapsulates a minimal, reusable save interaction that can be dropped into modal dialogs or inline UIs without pulling in broader save flows. By binding the action to projectId, it ensures the save context remains explicit and predictable, while onClose gives the parent component control over lifecycle after the action completes.
 
 ---
 
@@ -79,9 +62,13 @@ const onKey = (e: KeyboardEvent) =>
 | `e` | `KeyboardEvent` | — |
 
 
-Handles keyboard input by checking for the Escape key and invoking onClose when detected. This small handler is intended to be attached to a UI component (such as the memory quick-save panel) to allow users to dismiss it with the Escape key without clicking a button. It relies on an outer onClose callback provided by the surrounding scope.
+onKey is a small keyboard event handler that receives a KeyboardEvent and triggers a close action when the Escape key is pressed. It is intended to be attached to a focusable element or a keydown listener to provide a concise, keyboard-accessible way to dismiss a panel, modal, or overlay, delegating the actual close operation to onClose.
 
 ## Remarks
-It encapsulates a common UX pattern (dismissal with Escape) to keep the UI logic focused and reusable. It relies on onClose from the surrounding scope and should be attached to a focusable element or container that receives keyboard events; without focus, Escape presses won't trigger the close.
+This function centralizes Escape-to-close behavior for the MemoryQuickSave UI, keeping dismissal logic in one place and enabling reuse across different UI regions. It is intentionally narrow: it only reacts to the Escape key and delegates the actual dismissal to onClose, making it easy to test or replace in isolation.
+
+## Notes
+- onClose must be defined in the surrounding scope; onKey calls it directly when Escape is detected, so an undefined onClose will cause a runtime error.
+- It does not call preventDefault or stopPropagation; if you need to intercept Escape in more complex keyboard handling, attach it at the appropriate level and consider adding explicit event control as needed.
 
 ---

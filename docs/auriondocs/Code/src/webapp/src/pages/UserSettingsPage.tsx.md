@@ -8,12 +8,11 @@ export function UserSettingsPage()
 ```
 
 
-UserSettingsPage renders the Settings screen for the current user, showing account information, model selection, memory entries, and chat display toggles, while wiring navigation and authentication actions. Use this component to present and manage user preferences and account details within the app’s settings route.
+UserSettingsPage is a React functional component that renders the user-centric Settings page. It gathers authentication state via useAuth, shows either a loading state, the signed-in user's email and id, or a not-signed-in notice, and provides sections for Model selection, Memory, and Chat display preferences. It also includes a back button for navigation and a Sign out action that invokes logout. The UI exposes three toggles to hide different parts of the chat display (thinking, tool calls, and tool results), wiring them to dedicated hooks so the user can customize their workspace without altering the underlying data.
 
 ## Remarks
-Acts as a page-level composition that coordinates multiple settings concerns through dedicated subcomponents and hooks. By centralizing the UI for account state, model selection, memory, and chat display preferences, it keeps the settings surface consistent and easy to extend. It relies on hooks for authentication state and local visibility controls, delegating persistence and domain logic to those hooks and to child components.
+UserSettingsPage centralizes the user-facing settings experience by tying together authentication state with per-user preferences. It delegates presentation of model and memory details to child components (ModelSelector and MemoryList) while coordinating navigation and sign-out flow. This composition makes it straightforward to extend or replace individual sections without affecting the overall page structure.
 
 ## Notes
-- The component renders different blocks depending on user state: undefined (loading), a user object (signed in), or null (not signed in).
-- The visibility toggles are driven by external hooks (useHideThinking, useHideToolCalls, useHideToolResults); changes may affect other parts of the UI that consume the same state.
-- The back button uses navigate(-1); in certain routing setups this may not return to the intended page, so consider explicit navigation when appropriate.
+- The Account section renders three distinct states based on the authentication status: undefined (loading), a user object (signed in with email/id), and null (not signed in).
+- The toggles for hiding thinking, tool calls, and tool results are local UI state driven by respective hooks; persistence behavior relies on the implementations of those hooks elsewhere in the codebase.

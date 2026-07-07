@@ -18,36 +18,18 @@ public interface IUserPreferences
 ```
 
 
-IUserPreferences provides access to per-user customization settings for the system's AI model usage. Use GetAsync to read the current user's preferences at the start of a request, and SetPreferredModelAsync to apply or reset the user's chosen provider and model. It is implemented by Gabriel.Infrastructure and consumed via DI by services like AgentService; its per-request scope allows it to align with the active ICurrentUser and DbContext.
+IUserPreferences is a small, per-user contract that exposes the capability to read and persist the active user's preferences related to model/provider selection. Use GetAsync to retrieve the current UserPreferences for the active context, and SetPreferredModelAsync to persist a chosen provider and model for that user. If you pass null for both provider and model, the user’s selection is cleared and the system default configured elsewhere is used instead.
+
+Implemented by Gabriel.Infrastructure and consumed by AgentService via dependency injection, this contract is intentionally scoped per-request so it can reliably access per-request context such as ICurrentUser and DbContext without leaking infrastructure concerns into callers.
 
 ## Remarks
-By abstracting persistence behind this interface, domain services can tailor responses to a specific user without depending on storage details. It collaborates with the current user context and the DbContext to ensure that changes apply to the correct user and scope. The ability to pass null for both parameters in SetPreferredModelAsync cleanly reverts to the default configuration when a user wants to drop customizations.
 
-## Example
-```csharp
-// Example usage
-public class ExampleUsage
-{
-    private readonly IUserPreferences _prefs;
-    public ExampleUsage(IUserPreferences prefs) { _prefs = prefs; }
-
-    public async Task RunAsync(CancellationToken ct)
-    {
-        var current = await _prefs.GetAsync(ct);
-        // React to current preferences as needed
-
-        await _prefs.SetPreferredModelAsync("providerA", "model123", ct);
-
-        // Revert to application defaults
-        await _prefs.SetPreferredModelAsync(null, null, ct);
-    }
-}
-```
+The abstraction decouples business logic from the persistence details of per-user configuration, centralizing how a user’s preferred model/provider is read and written. This enables per-user customization without forcing callers to know about the underlying data store or lifecycle concerns. The per-request scope also improves testability, as implementations can be stubbed or mocked in tests while preserving correct user context during real requests.
 
 ## Notes
-- Pass the CancellationToken through to support operation cancellation. 
-- GetAsync returns a UserPreferences instance; changes should be persisted via SetPreferredModelAsync rather than mutating a returned object. 
-- This interface is scoped per-request; avoid caching preferences across requests to prevent context leakage.
+
+- To reset to the configured default, call SetPreferredModelAsync(null, null, ct). Partial resets (e.g., clearing only provider or only model) are not defined by this contract.
+- Because the implementation is DI-scoped per request, do not rely on caching the returned preferences across requests; fetch fresh data per request when needed.
 
 ---
 
@@ -67,16 +49,21 @@ public sealed record UserPreferences(string? PreferredProvider, string? Preferre
 | `PreferredModel` | `string?` | — |
 
 
-Represents a small per-user value object that captures the user's preferred provider and model. It is intentionally kept outside of JWT claims to avoid bloating tokens, and its structure is a record to support straightforward evolution—adding fields is a one-line change. The two fields, PreferredProvider and PreferredModel, are nullable, reflecting cases where a user has not expressed a preference for one or both dimensions. As a sealed positional record, it offers value-based equality and immutability, while benefiting from deconstruction and with-expressions for convenient copy-on-write updates.
+UserPreferences is an immutable value object that captures a per-user choice of provider and model. It lives outside JWT claims to avoid bloating tokens, and it is currently scoped to model selection. By modeling these values as a record, adding new fields in the future is a one-line change that won't disrupt existing consumers.
 
 ## Remarks
 
-By isolating user preferences from authentication data, this type decouples concerns and enables consistent propagation of user choices across layers (UI, API, and domain logic). It provides a stable, contract-friendly carrier that can be serialized or transferred without inflating JWTs, while still allowing future enhancements via the same shape.
+Because it is a sealed record, it benefits from value-based equality and clear copying semantics (via with-expressions). It serves as a lightweight boundary between identity/authorization concerns and runtime model selection, enabling centralized handling of per-user preferences and easier future evolution.
+
+## Example
+
+```csharp
+var prefs = new UserPreferences("OpenAI", "gpt-4");
+```
 
 ## Notes
 
-- Null values indicate unspecified preferences; callers must handle nulls or supply defaults.
-- Record semantics provide value-based equality and immutability; use with to derive modified copies rather than mutating instances.
-- Be mindful of contract evolution: changing property names or types affects serialization and consumers; coordinate changes.
+- Nullable fields mean absence indicates no preference; callers should provide sensible defaults when a value is null.
+- Being a record, you cannot mutate an existing instance. To apply changes, create a new instance or use a with-expression to copy with modified fields (e.g., `prefs with { PreferredModel = "gpt-5" }`).
 
 ---

@@ -8,11 +8,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
 ```
 
 
-AppDbContext is the EF Core DbContext that coordinates the Gabriel.Infrastructure persistence, blending ASP.NET Core Identity with the domain data using Guid keys. It exposes DbSets for Conversations, Messages, RefreshTokens, Projects, ProjectFiles, MemoryEntries, and MetricEntries, applies configurations from the assembly, and stores DateTimeOffset properties as binary to support SQLite and comparable databases.
+AppDbContext acts as the EF Core DbContext for the Gabriel.Infrastructure layer, combining Identity's user/role schema with the domain entities used by the application. It exposes DbSets for Conversations, Messages, RefreshTokens, Projects, ProjectFiles, MemoryEntries, and MetricEntries, making it the central point for querying and persisting application data.
 
 ## Remarks
-Acts as the central persistence boundary for identity and domain aggregates, shielding callers from EF Core details. By loading configurations from the assembly, it keeps mappings centralized and migrations coherent, while the DateTimeOffset conversion demonstrates provider-agnostic temporal data handling.
+- Centralizes data access and coordination between identity and domain models.
+- It calls base.OnModelCreating(modelBuilder) before applying the project-specific configurations to ensure Identity tables are established, then custom mappings are layered on top.
+- It overrides ConfigureConventions to persist DateTimeOffset as binary in SQLite via DateTimeOffsetToBinaryConverter, enabling proper ordering and comparisons in SQLite where native DateTimeOffset support is absent.
 
 ## Notes
-- Always call base.OnModelCreating when deriving from IdentityDbContext to ensure the AspNet* identity tables are wired up.
-- DateTimeOffsetToBinaryConverter stores DateTimeOffset as a long; if you later switch to a database provider with native DateTimeOffset support, you may be able to remove this converter.
+- SQLite-specific: DateTimeOffset values are stored as 64-bit binary; this can affect migrations or data portability if you switch database providers.
+- The order of configuration matters: base.OnModelCreating should be invoked before applying configurations to avoid interfering with Identity mappings.

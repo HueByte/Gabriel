@@ -4,25 +4,12 @@
 > **Kind:** file
 
 
-Configures the frontend development environment for a React app built with Vite, enabling the React plugin, running the dev server on port 6080, and proxying API requests under /api to the local .NET backend to simplify development and avoid CORS issues.
+This file contains the Vite configuration for the web frontend. It enables the React plugin and exports a configuration object that runs the development server on port 6080 and proxies API calls under /api to the .NET backend at http://localhost:6040. This setup lets the frontend call /api endpoints during development as if they were same-origin, avoiding CORS issues while keeping backend and frontend decoupled.
 
 ## Remarks
-This abstraction centralizes development-time behavior in a single place. By proxying /api to the backend, it allows frontend code to call /api endpoints as if they were same-origin, while production would typically talk to a real backend URL defined elsewhere. The config is intentionally scoped to development and should be complemented by environment-specific settings for builds.
-
-## Example
-```typescript
-// Common variant: proxy API calls to a backend during dev
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 6080,
-    proxy: {
-      '/api': 'http://localhost:6040',
-    },
-  },
-});
-```
+Centralizing this dev-time configuration makes it easy to switch environments without touching application code. The proxy keeps the frontend code agnostic of the backend location; by adjusting the target in this file, you can redirect API requests to a different backend or host without changing call sites.
 
 ## Notes
-- This proxy configuration only applies to the Vite development server; production builds will not proxy requests through this configuration.
-- Ensure the backend URL and port are correct and accessible during development; adjust the proxy targets as needed and restart the dev server after changes.
+- The proxy depends on the backend being reachable at the target address during development; if the backend isn't running, API requests will fail.
+- The proxy is only active in Vite's dev server; production builds won't proxy requests. For production, configure the real API base URL or a different proxy strategy.
+- If you modify the port or API path, update this file accordingly to preserve the same development ergonomics.

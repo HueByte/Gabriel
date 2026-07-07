@@ -8,20 +8,10 @@ public interface IToolRegistry
 ```
 
 
-IToolRegistry defines a centralized registry of tools available to the engine. It exposes a read-only collection of all registered tools, a name-based lookup, and a projection into provider-facing descriptors. Use it when you need to enumerate tools, retrieve a specific tool by name, or convert the registry into a list of ToolDescriptor objects to send to a consumer such as an LLM.
+IToolRegistry is an abstraction that collects and exposes the available tools to a consuming provider. It exposes All as a read-only list of ITool, enabling inspection and enumeration of capabilities; Find allows optional lookup by tool name, returning null if the tool is not present; AsDescriptors projects the registry into a provider-facing list of ToolDescriptor values, which is the shape sent to the language model via the tools parameter.
 
 ## Remarks
-IToolRegistry acts as a façade between internal ITool implementations and the provider-facing consumer. By exposing AsDescriptors, it offers a lightweight ToolDescriptor view that external components can rely on without coupling to concrete ITool details; this separation lets the engine evolve its internal tool model while preserving a stable external contract.
-
-## Example
-```csharp
-// Most common usage: present descriptor metadata to the provider
-IReadOnlyList<ToolDescriptor> descriptors = toolRegistry.AsDescriptors();
-
-// Optionally look up a specific tool by name
-ITool? tool = toolRegistry.Find("SpellCheck");
-```
+IToolRegistry serves as a boundary between the runtime implementations of tools and the consumer that presents them to the language model. The distinction between ITool (dynamic, executable tools with metadata) and ToolDescriptor (a lightweight descriptor) allows swapping the underlying registry, caching results, or filtering tools without affecting callers.
 
 ## Notes
-- Find returns null if no tool with the given name exists; callers must null-check.
-- AsDescriptors reflects the registry state at invocation time; if tools are added or removed, refresh by calling again.
+- Find may return null when a tool with the given name is not registered; callers should handle the absence gracefully.

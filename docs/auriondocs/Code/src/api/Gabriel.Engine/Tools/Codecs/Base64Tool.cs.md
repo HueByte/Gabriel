@@ -8,22 +8,12 @@ public sealed class Base64Tool : ITool
 ```
 
 
-Base64Tool is a sealed, stateless utility that encodes text to Base64 or decodes Base64 back to text. It is a pure function of its inputs with no I/O, designed to be used when you need reliable Base64 operations on UTF-8 data (for transport or inspection) rather than hand-rolling the encoding.
+Base64Tool is a pure function that encodes text to Base64 or decodes a Base64 string back to text based solely on its input arguments. It treats text as UTF-8 and enforces a maximum input length of 100000 characters. Use op encode to convert text into Base64, or op decode to turn a Base64 string back into readable text. When encoding for URLs or filenames, you can opt-in url_safe to emit the URL-safe alphabet with no padding; decoding accepts both alphabets transparently. It is not intended for hashing or other non-reversible encodings.
 
 ## Remarks
-Base64Tool centralizes Base64 behavior behind a small, well-defined surface. By enforcing input validation (non-empty text and a configurable maximum length) and consistent error signaling through Base64Exception, it remains easy to test and reason about, while remaining completely agnostic to I/O concerns. It fits alongside other codec-like tools in the toolbox, enabling reuse and predictable behavior across the codebase.
-
-## Example
-```csharp
-// Encode text to Base64
-var tool = new Base64Tool();
-var json = "{\"text\": \"Hello, world!\", \"op\": \"encode\"}";
-var result = await tool.ExecuteAsync(json, CancellationToken.None);
-// result starts with: "Encoded: "
-```
+Base64Tool implements the ITool interface to provide a deterministic, side-effect-free transformation that is easy to compose in tests and scripts. Validation and error behavior are centralized in Base64Exception, keeping the normal path simple: a result string prefixed with Encoded: or Decoded:, or an error string prefixed with Error:. The url_safe option makes it practical to embed encoded data in URLs or filenames, while decoding remains flexible.
 
 ## Notes
-- 'text' cannot be empty and must be at most 100000 characters.
-- When encoding, set url_safe = true to emit URL/filename-safe Base64 without padding.
-- Decoding accepts both standard and URL-safe Base64 inputs.
-- The wrapper returns human-friendly strings like "Encoded: ..." or "Decoded: ..."; parse the payload accordingly rather than relying on exact textual formatting.
+- text must be non-empty and not exceed 100000 characters; otherwise a Base64Exception is thrown.
+- op must be encode or decode; any other value raises a Base64Exception.
+- encoding with url_safe uses a URL-safe alphabet and omits padding; decoding accepts both alphabets automatically.

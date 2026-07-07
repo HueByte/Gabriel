@@ -8,22 +8,13 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 ```
 
 
-Configures EF Core's Fluent API for the RefreshToken entity and maps it to the RefreshTokens table. It declares the primary key and a set of required and optional properties, and defines indexes to support lookups by token hash and by user for revoke/monitoring operations.
+Configures how the RefreshToken entity is persisted by EF Core. It specifies the table name, primary key, required fields, optional fields, and two indices that optimize refresh-token lookups and per-user scans. Use this configuration when you want to keep the database schema in sync with the RefreshToken domain entity, ensuring that tokens are stored with creation and expiration timestamps, and that revocation or replacement can be represented without breaking existing data.
 
 ## Remarks
-This abstraction centralizes persistence concerns for the RefreshToken aggregate, decoupling schema decisions from the domain model. By combining table mapping, key constraints, and targeted indexes, it optimizes common refresh-token workflows (validation by hash and user-scoped revocation scans) while keeping the domain entity simple.
-
-## Example
-```csharp
-// Typical usage in your DbContext
-protected override void OnModelCreating(ModelBuilder modelBuilder)
-{
-    base.OnModelCreating(modelBuilder);
-    modelBuilder.ApplyConfiguration(new RefreshTokenConfiguration());
-}
-```
+This abstraction centralizes persistence rules for refresh tokens, reducing drift between the domain model and the database. By anchoring the table name, constraints, and indices in one place, migrations become predictable and the querying paths (by token hash and by user) stay performant across contexts.
 
 ## Notes
-- Ensure hashing of the refresh token yields a string within the TokenHash max length (128).
-- RevokedAt and ReplacedByTokenId are nullable to support pending or historical states; account for nulls in queries.
-- The unique index on TokenHash enforces that each refresh token hash is stored exactly once, while the UserId index supports efficient user-scoped revocation scans.
+- TokenHash is required and has a maximum length of 128 characters; ensure your hashing output conforms to this limit to avoid runtime failures.
+- A unique index on TokenHash enables fast, collision-resistant lookups and enforces token uniqueness at the database level.
+- CreatedAt and ExpiresAt are required, while RevokedAt and ReplacedByTokenId are optional, supporting revocation and token replacement scenarios without forcing data loss.
+- The table is named RefreshTokens to align with conventional pluralized naming; if a different naming is required, migrations or a different configuration approach should be used.

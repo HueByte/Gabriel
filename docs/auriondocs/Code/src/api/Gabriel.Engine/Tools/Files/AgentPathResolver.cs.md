@@ -8,22 +8,18 @@ public sealed class AgentPathResolver : IAgentPathResolver
 ```
 
 
-AgentPathResolver encapsulates the logic for turning a potentially relative path into an absolute, project-scoped path while enforcing a strict root boundary. It supports two rooted contexts through PathRootMode: Host (the operator's host workspace) and Project (the current conversation's project directory). When ResolveAsync is called with a path and mode, it first resolves the appropriate root, converts the input into an absolute path, ensures the path cannot escape the root, and returns a ResolvedPath containing the computed absolute path, a user-friendly relative display, the root used, and the mode.
+AgentPathResolver centralizes the logic for turning a provided path (relative or absolute) into a fully qualified path that stays within a sandbox root. It supports Host mode, which targets a configured host root, and Project mode, which resolves within the current conversation's project directory. It validates the input, resolves the appropriate root, normalizes and verifies the final path to prevent escaping the root, and returns a ResolvedPath containing the absolute path, a display-friendly relative path, the root, and the mode. Use this class to enforce consistent, safe path handling wherever the agent operates on file-system resources, rather than duplicating validation logic in disparate call sites.
 
 ## Remarks
-Centralizes path boundary checks and normalization to prevent directory traversal outside the permitted root. It abstracts host vs. project roots behind PathRootMode, coordinating with IToolExecutionContext and IProjectFileService to locate the right root. The returned ResolvedPath provides a stable, display-friendly path that can be safely presented to users or consumed by downstream tooling without reimplementing the resolution logic.
+The abstraction isolates environment-specific root scoping (host vs project) and centralizes security checks to prevent path traversal. It is intentionally stateless, relying on injected services, which makes it easy to unit-test and reuse across the agent tooling. It codifies OS-aware path comparisons and prefix checks, ensuring predictable behavior on Windows and UNIX-like systems and providing a consistent, copy-pasteable display path (normalized to forward slashes).
 
 ## Example
 ```csharp
-// Resolve a path within the current project sandbox
-var resolver = new AgentPathResolver(context, projectFiles, options);
-var resolvedProj = await resolver.ResolveAsync("assets/logo.png", PathRootMode.Project, ct);
-
-// Resolve a path relative to the operator's host workspace
-var resolvedHost = await resolver.ResolveAsync("config/server.json", PathRootMode.Host, ct);
+// Example usage: resolve a path within the current project sandbox
+var resolved = await resolver.ResolveAsync("docs/guide.md", PathRootMode.Project, ct);
 ```
 
 ## Notes
-- Path traversal attempts that escape the configured root will throw DomainException to prevent unauthorized access.
-- The root boundary check is platform-aware: Windows uses a case-insensitive comparison, while POSIX systems are case-sensitive.
-- If PathRootMode.Host is requested but HostRoot is not configured, a DomainException is thrown; callers should either configure HostRoot or switch to PathRootMode.Project.
+- Throws DomainException when the input path is empty.
+- Throws DomainException if Host mode is requested but HostRoot is not configured, or if Project mode is requested without an attached project context.
+- Throws DomainException when the resolved absolute path escapes the allowed root.

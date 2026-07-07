@@ -2,60 +2,58 @@
 
 > *Workflow template auto-derived from 7 existing exemplar(s).*
 
-Adding a new service
+When you need to add a new business/service layer that encapsulates domain logic and is consumed by controllers or other services, add a pair of types (an interface and its implementation) alongside the existing services. The repository already follows a small, consistent pattern for these services; model your new service on the existing interfaces and implementations shown below.
 
-When you need a small, testable boundary that encapsulates domain logic, orchestrates repositories, and returns DTOs for the rest of the app, add a service. Services in this codebase live in the core services folder and follow a simple interface + implementation pattern so they are easy to register with DI and mocked in tests.
-
-## Scaffold
+## Reference implementation
 
 ```csharp
-namespace YourProject.Services;
-
-public interface IFooService
+// Service layer over IMemoryRepository. Pulls UserId from ICurrentUser so
+// controllers and tools don't pass it everywhere; enforces user-scoping at
+// this boundary so a tool can't accidentally cross-read another user's
+// memory by manipulating its arguments.
+public interface IMemoryService
 {
-    Task<FooDto?> GetAsync(Guid id, CancellationToken ct);
-}
+    // All memories the calling user has in the given scope. Pass projectId=null
+    // for user-scope only.
+    Task<IReadOnlyList<MemoryEntry>> ListAsync(Guid? projectId, CancellationToken ct = default);
 
-public class FooService : IFooService
-{
-    private readonly IFooRepository _repository;
-    private readonly ILogger<FooService> _logger;
+    // What the agent should see for a given conversation: user-scope memories
+    // plus (if applicable) the conversation's project-scope memories. Returned
+    // sorted in display order (Type, then Name).
+    Task<IReadOnlyList<MemoryEntry>> ListForConversationAsync(Guid? projectId, CancellationToken ct = default);
 
-    public FooService(IFooRepository repository, ILogger<FooService> logger)
-    {
-        _repository = repository;
-        _logger = logger;
-    }
+    Task<MemoryEntry?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
-    public async Task<FooDto?> GetAsync(Guid id, CancellationToken ct)
-    {
-        var entity = await _repository.GetAsync(id, ct);
-        return entity is null ? null : new FooDto(entity.Id, entity.Name);
-    }
+    // Upsert: creates a new entry if (UserId, ProjectId, Name) is free, or
+    // updates the existing one in place. Returns the saved entity either way.
+    // Idempotent — calling twice with the same spec is a no-op apart from
+    // bumping UpdatedAt.
+    Task<MemoryEntry> SaveAsync(MemoryEntrySpec spec, CancellationToken ct = default);
+
+    // Returns false if no entry matched (vs. true on actual delete) so the
+    // memory_remove tool can give the model a clear "wasn't there" response.
+    Task<bool> RemoveAsync(Guid id, CancellationToken ct = default);
+    Task<bool> RemoveByNameAsync(Guid? projectId, string name, CancellationToken ct = default);
 }
 ```
 
 ## Where it lives
 
-Place the new interface and implementation in the core services folder used by the project: src/api/Gabriel.Core/Services. Follow the established naming convention visible in the exemplars: the interface is prefixed with I (for example IChatService.cs) and the concrete implementation uses the corresponding name with the Service suffix (for example ChatService.cs). Use the same namespace pattern as other services in that folder.
+Place the service interface and its implementation in the src/api/Gabriel.Core/Services folder. The repository shows interfaces named I{Name}Service (for example, IChatService, IMemoryService, IProjectService) and concrete implementations named {Name}Service (for example, ChatService, MemoryService, ProjectService); mirror that naming and location for your new service.
 
-## DI wiring
+## Wiring
 
-Register the new service in the composition root alongside the other services (where existing services like ChatService, MemoryService, and ProjectService are registered). Add a single registration line that mirrors the existing pattern, for example:
-
-services.AddScoped<IFooService, FooService>();
-
-Match the service lifetime (Scoped/Singleton/Transient) to the surrounding registrations — add the line in the same file where other service registrations are performed so your new service is picked up at startup.
+Detected wiring-site files: src/api/Gabriel.Core/DependencyInjection.cs and src/api/Gabriel.API/Controllers/ConversationsController.cs. Inspect src/api/Gabriel.Core/DependencyInjection.cs to see how existing services are registered, and look at src/api/Gabriel.API/Controllers/ConversationsController.cs for an example of a controller consuming services; use those files as the places to add registration and to verify consumption.
 
 ## Existing examples
 
-- [ChatService.cs](Code/src/api/Gabriel.Core/Services/ChatService.cs.md)
-- [IChatService.cs](Code/src/api/Gabriel.Core/Services/IChatService.cs.md)
-- [IMemoryService.cs](Code/src/api/Gabriel.Core/Services/IMemoryService.cs.md)
-- [IProjectFileService.cs](Code/src/api/Gabriel.Core/Services/IProjectFileService.cs.md)
-- [IProjectService.cs](Code/src/api/Gabriel.Core/Services/IProjectService.cs.md)
-- [MemoryService.cs](Code/src/api/Gabriel.Core/Services/MemoryService.cs.md)
-- [ProjectService.cs](Code/src/api/Gabriel.Core/Services/ProjectService.cs.md)
+- [`ChatService`](../../Code/src/api/Gabriel.Core/Services/ChatService.cs.md)
+- [`IChatService`](../../Code/src/api/Gabriel.Core/Services/IChatService.cs.md)
+- [`IMemoryService`](../../Code/src/api/Gabriel.Core/Services/IMemoryService.cs.md)
+- [`IProjectFileService`](../../Code/src/api/Gabriel.Core/Services/IProjectFileService.cs.md)
+- [`IProjectService`](../../Code/src/api/Gabriel.Core/Services/IProjectService.cs.md)
+- [`MemoryService`](../../Code/src/api/Gabriel.Core/Services/MemoryService.cs.md)
+- [`ProjectService`](../../Code/src/api/Gabriel.Core/Services/ProjectService.cs.md)
 
 ---
-*Synthesised by Aurion on 2026-06-08 22:36:41 UTC*
+*Synthesised by Aurion on 2026-07-07 21:08:57 UTC*

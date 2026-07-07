@@ -11,23 +11,11 @@ public class SequenceController : ControllerBase
 ```
 
 
-SequenceController exposes sequence-scoped endpoints that are not tied to a specific conversation or project. Today it hosts the skin-picker catalog, accessible via GET /sequence/catalog. The endpoint returns a catalog of pattern and palette identifiers that clients can pin as a skin override on a project or conversation. The data is static and inexpensive to fetch, so clients should retrieve it once per session and cache it for UI rendering.
+Returns the catalog of pattern and palette identifiers that clients can pin as a skin override on a project or conversation. The lists are static and inexpensive to fetch, so clients typically retrieve them once per session to populate a skin picker UI. The endpoint lives under the Gabriel-Sequence-scoped surface and is not tied to any specific conversation or project; it simply delivers the available skin options. Access is restricted to authenticated users via the Authorize attribute, ensuring that only authorized clients can retrieve the catalog.
 
 ## Remarks
-This controller provides a lean, static surface dedicated to the skin system, decoupled from per-entity controllers. By isolating the catalog from ConversationsController and ProjectsController, the API surfaces a stable resource that can be cached and reused across sessions without depending on any particular conversation or project state. The endpoint is protected by authorization, reflecting that skin configuration is part of the authenticated user experience rather than public data.
-
-## Example
-```csharp
-// Fetch the catalog (requires authentication)
-using var http = new HttpClient { BaseAddress = new Uri("https://api.example.com/sequence/") };
-http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<token>");
-var resp = await http.GetAsync("catalog");
-resp.EnsureSuccessStatusCode();
-var catalog = await resp.Content.ReadFromJsonAsync<SequenceCatalogResponse>();
-// Use catalog.Patterns and catalog.Palettes to populate UI
-```
+By centralizing skin data in SequenceCatalog, this endpoint ensures consistency of options across all clients and surfaces. The controller acts as a thin façade over the catalog, decoupling the UI's skin choices from entity-specific logic. If you need to validate client-supplied names, reference SequenceCatalog's validation helpers (IsKnownPattern/IsKnownPalette) in the API's broader surface.
 
 ## Notes
-- The catalog data is static and does not change per request; changes require redeploys or explicit cache invalidation.
-- This endpoint is read-heavy and side-effect free; avoid issuing excessive requests beyond session-wide caching.
-- Access requires authentication due to the [Authorize] attribute on the controller.
+- The catalog is static; updates require changing SequenceCatalog and redeploying the service.
+- There are no query parameters or filtering support at this time; to support filtering or pagination, consider extending the API in a future iteration.

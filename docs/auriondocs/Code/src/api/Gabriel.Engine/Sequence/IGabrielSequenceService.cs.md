@@ -8,19 +8,20 @@ public interface IGabrielSequenceService
 ```
 
 
-The IGabrielSequenceService interface provides a single integration point for obtaining GabrielSequence objects used to render conversation visuals. It abstracts away the details of repository access and generator orchestration by loading the appropriate AvatarSeed and ConversationState before handing them to the sequence generator. The two methods express the different scoping guarantees: GetForConversationAsync returns a sequence tailored to one specific conversation, while GetForProjectAsync uses the project's AvatarSeed and aggregates Live State from the project-wide latest active conversation (falling back to a neutral state if no conversations exist). Controllers should depend on this interface rather than directly interacting with repositories or the generator to keep concerns well separated and ensure consistent sequence rendering across UI layers. 
+IGabrielSequenceService provides asynchronous access to GabrielSequence data needed for rendering sequences tied to either a single conversation or an entire project. It hides the details of data retrieval and generation behind a simple API surface: GetForConversationAsync loads the user-scoped AvatarSeed and ConversationState for a given conversation and passes them to the generator; GetForProjectAsync uses the project's AvatarSeed so all conversations in that project render with the same identity, aggregating Live State from the most recently active conversation, or falling back to a neutral default if the project has no conversations yet.
 
 ## Remarks
-
-This abstraction centralizes the logic for selecting identity (AvatarSeed) and state (ConversationState or Live State) and routes both per-conversation and per-project sequencing through a single surface. By offering both scopes, it enables consistent project-wide visuals while preserving per-conversation customization when needed. It also isolates the UI/API boundary from the details of how sequences are sourced and produced, making future changes to data access or the generator transparent to callers.
+This interface acts as a boundary between controllers and the underlying repositories and sequence generator. By centralizing how AvatarSeed and ConversationState are loaded and handed to the generator, it reduces duplication and helps enforce a consistent visual identity across conversations within a project.
 
 ## Example
 ```csharp
-// Common usage
-GabrielSequence seqForConv = await gabrielSequenceService.GetForConversationAsync(conversationId, cancellationToken);
-GabrielSequence seqForProj = await gabrielSequenceService.GetForProjectAsync(projectId, cancellationToken);
+// Obtain a sequence for a conversation
+var sequence = await gabrielSequenceService.GetForConversationAsync(conversationId, cancellationToken);
+
+// Obtain a sequence for a project-wide identity (shared AvatarSeed)
+var projectSequence = await gabrielSequenceService.GetForProjectAsync(projectId, cancellationToken);
 ```
 
 ## Notes
-- Ensure the provided CancellationToken is observed by the caller; the implementation respects the token and may cancel pending work.
-- The per-project variant relies on the project's AvatarSeed and the most recently active conversation for Live State; if no conversations exist yet, rendering falls back to a neutral state, which may affect initial visuals until activity is recorded.
+- The methods are asynchronous and accept a CancellationToken to support cancellation in calling code; pass a token from the caller to enable cooperative cancellation.
+- GetForProjectAsync relies on the project's latest active conversation to derive Live State; if the project has no conversations yet, a neutral default state is used.

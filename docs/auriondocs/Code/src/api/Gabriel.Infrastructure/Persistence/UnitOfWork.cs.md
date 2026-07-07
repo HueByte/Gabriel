@@ -8,12 +8,12 @@ public class UnitOfWork : IUnitOfWork
 ```
 
 
-UnitOfWork is a minimal implementation of IUnitOfWork that wraps AppDbContext and delegates persistence to EF Core. It exposes a single asynchronous SaveChangesAsync operation, which commits all tracked changes to the database, enabling callers to coordinate multiple repository operations within a single unit of work without depending directly on the DbContext.
+UnitOfWork wraps an AppDbContext and implements IUnitOfWork by delegating its SaveChangesAsync method to the underlying context. It exposes a single asynchronous SaveChangesAsync method, acting as a persistence boundary that commits all tracked changes in one operation rather than scattering SaveChanges calls across repositories. Developers reach for this wrapper to depend on IUnitOfWork instead of a concrete DbContext, enabling easier testing and a cleaner separation of concerns around data access.
 
 ## Remarks
-By depending on IUnitOfWork instead of the EF Core DbContext, services can be tested with mocks or stubs and the underlying persistence mechanism can be swapped in the future without touching higher layers. This class does not implement explicit transaction management; it relies on AppDbContext.SaveChangesAsync to perform the commit within the surrounding DI scope. The lifetime of the DbContext is managed by the DI container, so disposal is handled at the appropriate scope boundary.
+By abstracting the persistence surface behind IUnitOfWork, this class helps isolate business logic from EF Core internals and provides a natural place to add coordination or transactional behavior in one layer later. In this specific implementation, there is no explicit transaction management beyond EF Core's SaveChangesAsync; any multi-repository coordination would be implemented at a higher layer or extended here.
 
 ## Notes
-- No explicit transaction management is implemented here; SaveChangesAsync commits changes in a single database transaction per call (as provided by the DbContext).
-- This is a thin wrapper; it does not expose repository methods or read/query capabilities. If you need richer data access patterns, introduce dedicated repositories or extend the abstraction.
-- Ensure AppDbContext is registered with a compatible lifetime so the UnitOfWork and context share a consistent scope (avoiding multiple contexts or disposed instances).
+- This is a thin wrapper; it does not coordinate transactions across multiple repositories by itself.
+- Make sure the AppDbContext's lifetime is aligned with the UnitOfWork; sharing or disposing it unexpectedly can cause disposed-context errors.
+- Pass a CancellationToken when calling SaveChangesAsync to support cancellation of long-running saves.

@@ -8,12 +8,13 @@ public class GrokChatProvider : IChatProvider
 ```
 
 
-Streams chat completions from xAI's OpenAI-compatible /v1/chat/completions endpoint and yields incremental ChatProviderEvent items (text deltas, reasoning deltas, tool call events, finish/error). Use this provider when you need low-latency, token- or chunk-level streaming from Grok models and want the HTTP plumbing (base URL, timeout, auth) managed via a named HttpClient configured in DI.
+Streams chat completions from xAI's OpenAI-compatible /v1/chat/completions endpoint and exposes them via `IAsyncEnumerable<ChatProviderEvent>`. Use this provider when you need token- or delta-level streaming (including partial reasoning content and tool-call fragments) rather than waiting for a final non-streaming completion. The provider resolves a named HttpClient (HttpClientName = "Grok") from an IHttpClientFactory on each StreamAsync call and emits ChatProviderEvent instances as the server sends incremental chunks.
 
 ## Remarks
-GrokChatProvider encapsulates the HTTP streaming mechanics and event parsing so callers receive a sequence of high-level events instead of raw HTTP/SSE frames. It resolves a named HttpClient from IHttpClientFactory per call to preserve handler health and DNS refresh semantics, and exposes a snapshot of available models from GrokOptions for UI model selection. The implementation accumulates piecewise tool-call fragments (indexed by call) and emits complete tool call events only when the provider receives the terminal chunk, which simplifies consumers that react to tool invocations.
+This class is a thin, streaming adapter between Gabriel's IChatProvider abstraction and xAI's streaming chat API. It parses server-sent event (SSE)-style lines, deserializes StreamChunk payloads, emits incremental events for reasoning and text deltas, and accumulates piecewise tool-call fragments until a completion chunk indicates the tool call is finished. Creating the HttpClient via IHttpClientFactory per call preserves connection pooling and handler lifetime behavior (DNS refresh, handler recycling) while snapshotting the configured model catalog at construction time exposes a stable Models list for UI consumption.
 
 ## Notes
-- The stream is read line-by-line and expects server lines prefixed with "data:"; malformed JSON chunks are logged and skipped rather than failing the whole stream.
-- If the HTTP response is not successful the provider logs the response body, yields a FinishEvent with FinishReason.Error, and ends the stream.
-- Models is a snapshot taken at construction from configuration; updates to the underlying options after construction are not reflected in the Models property.
+- Enumeration is lazy/cold: the HTTP request is made when you start iterating the IAsyncEnumerable returned by StreamAsync.  
+- Non-success HTTP responses are logged and cause the provider to yield a FinishEvent with FinishReason.Error and then complete.  
+- Malformed JSON chunks are skipped with a warning; the stream continues unless the server signals completion ("[DONE]").  
+- Tool call fragments are accumulated by index and only emitted once the provider receives the final chunk that completes the tool call; consumers should not expect fully-formed tool-call events for every intermediate chunk.

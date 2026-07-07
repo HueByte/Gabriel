@@ -21,26 +21,24 @@ async function postRefresh(): Promise<boolean>
 **Returns:** `Promise<boolean>`
 
 
-Calls the server-side refresh endpoint to re-establish authentication by sending an empty refreshToken in the request body while including credentials. The function returns true when the HTTP response indicates success (res.ok) and false if the network call fails or an exception occurs. It relies on the server reading the actual token from an HttpOnly cookie; the body field exists solely to satisfy model validation on the controller, which requires a non-nullable string member in FromBody.
+The function initiates a server-side refresh of the user’s authentication state by sending a POST request to the backend refresh endpoint. It relies on the server’s cookie-based refresh flow: if an HttpOnly refresh token cookie is present, the server reads it from the cookie; otherwise it falls back to the value of body.refreshToken. To satisfy the server’s binding rules, the body always includes a refreshToken field (even when empty), which allows the controller’s non-nullable string member to pass validation and enables the cookie-based path to be taken. The call returns true when the HTTP response is OK, and false if the request fails or the server responds with an error status. It does not inspect or parse the response payload. 
 
 ## Remarks
-postRefresh encapsulates a cookie-based refresh-token flow behind a simple boolean API. It keeps callers from dealing with cookie management or API-controller validation intricacies, and centralizes the edge case where the refresh token lives in a server-side HttpOnly cookie. A successful refresh results in a truthy return value; a failure (due to missing cookie, network error, or server-side rejection) yields false, allowing the caller to decide whether to prompt re-authentication or take alternative action.
+Isolates the refresh handshake behind a small, reusable helper so the front end consistently triggers the server’s refresh logic without duplicating cookie handling or binding concerns. The implementation guarantees a non-null refreshToken field in the request body to satisfy model binding, while still preferring the HttpOnly cookie when available. This centralization reduces drift between clients and ensures a predictable refresh flow across the app. 
 
 ## Example
-```typescript
-// Most common usage: attempt to refresh session and branch accordingly
-const ok = await postRefresh();
-if (ok) {
-  // refresh succeeded, continue user flow
+```ts
+// Typical usage: attempt a refresh and react based on the result
+if (await postRefresh()) {
+  // Refresh succeeded; continue with authenticated actions
 } else {
-  // refresh failed — prompt user to re-authenticate or show login
+  // Refresh failed; redirect to login or show an error
 }
 ```
 
 ## Notes
-- The function swallows exceptions and returns false on error; callers should not rely on exceptions for flow control.
-- It relies on credentials being included (credentials: 'include'); if cookies are blocked or cross-site requests are restricted, refresh may fail.
-- The body must include the refreshToken field, even if empty, because the server-side model requires a non-nullable string in the body; omitting or omitting the field can cause a 400 before the cookie-based fallback is considered.
+- The function returns a simple boolean: true for a successful, OK HTTP response; false for network errors or non-OK responses. It does not throw on failure and does not expose server-side error details. 
+- Because credentials: 'include' is used, the request will carry cookies (e.g., HttpOnly refresh tokens). Ensure the server is configured to receive and validate cookies appropriately, and that CORS/privacy settings allow credentialed requests when necessary.
 
 ---
 
@@ -55,33 +53,21 @@ export function refreshSession(): Promise<boolean>
 **Returns:** `Promise<boolean>`
 
 
-refreshSession ensures only a single session refresh is in-flight at a time and returns a `Promise<boolean>` for the refresh result. Use it when you need to refresh authentication without spawning multiple concurrent refresh requests; if a refresh is already in progress, the function reuses the existing promise.
+refreshSession ensures a single in-flight refresh; if a refresh is already in progress, callers obtain the same Promise instead of starting another, and once it completes the internal cache is cleared so future calls may refresh again.
 
 ## Remarks
-Centralizes refresh logic to prevent duplicate network calls and race conditions during token renewal. It relies on a shared refreshing cache and a postRefresh() helper; the in-flight promise is cleared in a finally block, allowing subsequent refreshes to be started after completion. This pattern is useful anywhere multiple components may need a fresh session without coordinating refreshes themselves.
+Conceptually, this function acts as a tiny concurrency gate around the refresh operation. It consolidates multiple refresh requests into a single network call and exposes a simple boolean result to callers. The finally handler resets the cache regardless of success or failure, allowing new refresh attempts later. This abstraction hides boilerplate of managing a shared refresh promise and reduces race conditions around re-authentication flows.
 
 ## Example
 ```typescript
-// Only one actual refresh will be performed even if called from multiple places
-async function ensureSession() {
-  const ok = await refreshSession();
-  if (!ok) {
-    throw new Error("Session refresh failed");
-  }
-  // proceed with authenticated work
-}
-
-// Concurrent usage example
+// Two callers trigger a refresh simultaneously; only one postRefresh runs.
 const a = refreshSession();
 const b = refreshSession();
-const [okA, okB] = await Promise.all([a, b]);
+const [resA, resB] = await Promise.all([a, b]);
 ```
 
 ## Notes
-- If postRefresh rejects, the returned promise rejects, but the finally block clears the in-flight flag so future calls can retry.
-- The in-flight cache (refreshing) must be initialized (to null/undefined) so the first call can start a refresh.
-- Do not rely on the value of postRefresh beyond the boolean it returns; refreshSession merely propagates that result to callers and manages concurrency.
-
+- The internal cache only stores the in-flight Promise; after completion, refreshing becomes null again, so subsequent calls may trigger a fresh refresh instead of reusing the previous result.
 
 ---
 
@@ -96,20 +82,13 @@ export function signalSessionExpired(): void
 **Returns:** `void`
 
 
-Dispatches a browser Event signaling that the current user session has expired. Call this function when your authentication logic determines the token is no longer valid, so that any part of the app listening for SESSION_EXPIRED_EVENT can respond in a centralized way (e.g., redirecting to login, clearing user data, or prompting a token refresh). It provides a single, observable signal and hides the exact event name behind a small API surface, reducing duplication of window.dispatchEvent calls across the codebase.
+Dispatches a global SESSION_EXPIRED_EVENT on the window to signal that the current user session has expired. Use this helper when your authentication flow detects expiry and you want to notify any interested UI components in a decoupled way without wiring them directly to the refresh logic.
 
 ## Remarks
-This helper encapsulates cross-cutting session-expiration signaling. By emitting a window-level Event, it enables decoupled subscribers to react without the signaling code needing to know about who handles the expiration. Tests can spy on window.dispatchEvent, and consumers can attach listeners anywhere in the app that has access to the window object.
-
-## Example
-```typescript
-// Trigger a global session-expired signal
-signalSessionExpired();
-```
+This symbol acts as a lightweight broadcast mechanism for session-expiry state. By emitting a window Event, it enables disparate parts of the UI to react (e.g., redirect to login, clear tokens) without requiring tight coupling to the refresh code. Listeners subscribe via window.addEventListener(SESSION_EXPIRED_EVENT, handler). Note: The Event is a plain Event with no payload; if you need to pass extra data, consider using CustomEvent with a detail payload.
 
 ## Notes
-- The event is a plain Event with type SESSION_EXPIRED_EVENT and carries no payload by design.
-- Listeners should register via window.addEventListener(SESSION_EXPIRED_EVENT, handler) before the signal is dispatched; remember to remove listeners to avoid leaks.
-- If you need to convey extra information about the expiration, consider using a CustomEvent instead of Event.
+- This uses a browser-global Event; in non-browser environments, guard with a check for window.
+- If you need to pass data with the signal, switch to CustomEvent and include a detail object.
 
 ---

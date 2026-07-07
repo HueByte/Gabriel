@@ -8,12 +8,13 @@ internal sealed class UserPreferencesService : IUserPreferences
 ```
 
 
-This internal sealed class exposes and persists a small set of user preferences directly on ApplicationUser, avoiding an extra table by using the Identity store as its backing. It implements IUserPreferences and provides GetAsync for reading the current user’s PreferredProvider and PreferredModel and SetPreferredModelAsync for updating them, with authentication required for writes and graceful handling when there is no authenticated user during reads.
+Implements IUserPreferences by reading and writing a tiny set of fields directly on ApplicationUser. GetAsync returns the current user’s preferred provider and model (or defaults if there is no authenticated user), and SetPreferredModelAsync updates those fields for the authenticated user, normalizing empty inputs to null so the catalog can treat the preference as unset.
 
 ## Remarks
-By colocating preferences on ApplicationUser, the service minimizes complexity and leverages existing persistence and validation paths. Empty or whitespace strings are normalized to null to ensure the catalog's unset path is consistent regardless of input. Reads are resilient in contexts without an authenticated user (e.g., background tasks) and simply yield unset values instead of throwing; writes are guarded by authentication and will fail fast if the user cannot be located or the update fails. All persistence goes through UserManager, which ties the behavior to the Identity stack's lifecycle and error reporting.
+This thin wrapper stores the small set of user preferences directly on the ApplicationUser to avoid a separate table; it keeps a simple, low-cost representation while avoiding friction for authenticated edits. It normalizes empty inputs to null so the catalog can consistently treat a preference as unset, and it degrades gracefully in non-authenticated contexts by returning defaults for reads while requiring authentication for updates.
 
 ## Notes
-- GetAsync returns UserPreferences with null values when no authenticated user or user cannot be found; callers must interpret this as "unset".
-- SetPreferredModelAsync requires an authenticated user; attempting to call while unauthenticated throws UnauthorizedAccessException.
-- The cancellation token ct is accepted but not propagated to FindByIdAsync/UpdateAsync in the current implementation (potential cancellation improvement).
+- GetAsync returns a UserPreferences instance with nulls when there is no authenticated user or the user cannot be found, enabling callers to observe a neutral default.
+- SetPreferredModelAsync requires an authenticated user; otherwise it throws UnauthorizedAccessException.
+- When updating, if the UserManager.UpdateAsync call fails, the exception includes all error descriptions joined by '; ' for easier diagnostics.
+- Empty or whitespace provider/model values are normalized to null to signal an explicit 'unset' to downstream consumers.

@@ -21,17 +21,15 @@ interface CompactingOverlayProps
 ```
 
 
-CompactingOverlayProps defines the optional presentation parameters for the CompactingOverlay component. It exposes two concerns: a color palette (paletteStops) used to color-match the swirl to the avatar, and a count of folded messages (messageCount) displayed in the overlay caption.
+CompactingOverlayProps defines the props accepted by the CompactingOverlay component. It carries optional presentation data: paletteStops supplies the conversation's color stops used to color-match the swirl to the avatar, and messageCount indicates how many messages are folded and should be reflected in the overlay caption. Both properties are optional, allowing the overlay to render with sensible defaults when these details are not provided.
 
 ## Remarks
-
-This interface exists to separate visual presentation from behavior: it offers a typed contract for optional UI refinements that can be supplied by consumers or higher-level components without changing the underlying overlay logic. By making both properties optional, the component can render with sensible defaults when they are not provided, while allowing precise customization when needed.
+This interface isolates theming data (paletteStops) from content state (messageCount) and the rendering logic of CompactingOverlay. By making paletteStops optional and readonly, it supports theme-aware overlays that can visually align with different avatars without requiring callers to mutate color data. The messageCount field, when provided, communicates folding state to the caption without forcing content-level changes.
 
 ## Notes
-
-- paletteStops is optional and may be null. When provided, it is a readonly array of RGB values; callers should not mutate it.
-- messageCount is optional and, if present, indicates how many messages are folded and should be reflected in the caption.
-- There is no runtime contract here about the range or validation of the values (e.g., non-negativity for messageCount); callers should ensure values align with the UI’s expectations and perform validation if necessary.
+- paletteStops may be undefined or null; callers should handle absence gracefully.
+- paletteStops is readonly; callers must not mutate the array.
+- messageCount is optional; when present it should be reflected in the overlay's caption; otherwise, the caption behavior is left to the component's defaults.
 
 ---
 
@@ -44,29 +42,15 @@ interface SwirlProps
 ```
 
 
-SwirlProps defines the props for rendering the swirl portion of the compacting overlay. It exposes an optional paletteStops property—a read-only array of RGB values—that specifies the color stops used to drive the swirl's gradient when rendering.
+SwirlProps describes the props for a swirl visualization in the CompactingOverlay component. It declares a single optional field, paletteStops, which is a readonly array of RGB values. When provided, these values establish the sequence of color stops the swirl will use; when omitted, the component relies on its default color configuration.
 
 ## Remarks
-Palette configuration is kept separate from rendering logic to allow reusing the swirl across different overlays with different color schemes. By using a readonly array, SwirlProps communicates that callers should not mutate the color stops after they are created, preserving immutability in rendering pipelines.
-
-## Example
-```typescript
-// Example usage with a custom color palette
-const customStops: readonly RGB[] = [
-  { r: 255, g: 0, b: 0 },
-  { r: 255, g: 165, b: 0 },
-  { r: 255, g: 255, b: 0 },
-  { r: 0, g: 128, b: 255 }
-];
-
-const props: SwirlProps = {
-  paletteStops: customStops
-};
-```
+SwirlProps encapsulates color configuration separate from rendering logic, enabling reuse of the swirl visual with different palettes. The use of readonly on the array communicates that callers should not mutate the palette list; while the array is immutable, the contained RGB objects may still be mutable depending on the RGB type definition.
 
 ## Notes
-- The paletteStops property is optional; provide it when you want to customize the swirl colors.
-- Treat the RGB values as opaque color stops; do not mutate the values after creation.
+- The paletteStops property is optional; the consumer should handle undefined if not provided.
+- The array is readonly; do not mutate the array or rely on mutating its elements to alter the palette. If a different palette is needed, pass a new array.
+- Ensure the RGB values you supply conform to the project's RGB type definition.
 
 ---
 
@@ -79,7 +63,14 @@ export function CompactingOverlay(
 ```
 
 
-CompactingOverlay is a React functional component that receives a props object containing paletteStops and messageCount. The signature indicates it renders UI that depends on these two values, typically overlaying a visualization of color stops alongside a counter of messages. Without the full implementation, the precise rendering, interactivity, and styling cannot be determined from the signature alone.
+CompactingOverlay is a React function component that accepts two props: paletteStops and messageCount. It provides a compact, overlay-style UI element intended to visualize a compaction or consolidation phase without taking the user to a new view. The paletteStops prop implies a color-based indicator (such as a gradient or segmented bar) while messageCount conveys the scale of work involved, allowing the component to communicate progress or workload succinctly within the current screen.
+
+## Remarks
+By isolating this visual pattern into its own component, the codebase gains a single, reusable representation of the 'compacting' state. It reduces duplication where multiple views need to signal ongoing cleanup or consolidation, and it centralizes any tweaks to color ramps or sizing in one place.
+
+## Notes
+- Ensure accessibility: provide appropriate ARIA attributes and avoid trapping focus if the overlay is non-modal.
+- Validate props at compile-time and runtime: ensure paletteStops is an array-like structure and messageCount is a non-negative integer; handle missing values gracefully.
 
 ---
 
@@ -92,21 +83,14 @@ function Core(
 ```
 
 
-Core is an internal render helper inside CompactingOverlay.tsx that receives a paletteStops prop and participates in rendering the portion of the UI that reflects those color stops. Use it when you need to understand or adjust how color stops influence the overlay’s visuals without altering the public API of the surrounding component.
+Core is a React function component within the CompactingOverlay UI. It accepts a single prop named paletteStops and is responsible for rendering the color-stop visuals that illustrate the current palette used by the overlay.
 
 ## Remarks
-Core keeps color-stop rendering isolated from layout, making the visual logic easier to reason about and test. It’s a private implementation detail of CompactingOverlay.tsx, so changes to Core can evolve without affecting external consumers of the component.
-
-## Example
-```typescript
-// Most common usage inside CompactingOverlay
-<Core paletteStops={paletteStops} />
-```
+By isolating the palette-stop rendering into Core, the UI code keeps concerns separated: Core concentrates on the palette visualization, while the surrounding overlay handles layout and interaction. This makes the palette rendering easier to test, reuse, and swap with alternative representations (for example, static stops or dynamically computed stops) without touching the parent component.
 
 ## Notes
-- Do not mutate paletteStops; treat props as immutable to preserve predictable rendering.
-- If paletteStops is large or expensive to compute, consider memoizing its source to avoid unnecessary re-renders of Core.
-
+- The shape and type of paletteStops aren't shown in the snippet; ensure proper typings to avoid runtime errors.
+- If paletteStops changes frequently, consider memoization or stable keys to minimize re-renders.
 
 ---
 
@@ -119,12 +103,8 @@ function Swirl(
 ```
 
 
-Swirl is a React function component defined in CompactingOverlay.tsx. It accepts a single prop named paletteStops, which by convention carries color stop data used to render a swirl-style visual. In this codebase, Swirl is likely used to render a decorative gradient or animation within the CompactingOverlay UI, allowing callers to customize its appearance by supplying different color stops rather than hardcoding colors.
+Swirl is a React function component defined in the CompactingOverlay context. The snippet indicates it accepts a single destructured prop named paletteStops, but the function body is not shown. Because only the signature is available, the actual rendered output, interactions, and side effects cannot be determined from this fragment alone. To understand what Swirl renders or how paletteStops influences its behavior, you would need the full implementation.
 
-## Remarks
-Swirl encapsulates a visual motif as a reusable unit, enabling consistent styling across the overlay while isolating color-stop logic from layout concerns. It fits alongside other overlay components by exposing a simple, domain-specific prop (paletteStops) to control its rendering.
 
-## Notes
-- The exact shape and type of paletteStops are not visible in the snippet; verify the corresponding type/interface in the source to avoid mismatches.
 
 ---

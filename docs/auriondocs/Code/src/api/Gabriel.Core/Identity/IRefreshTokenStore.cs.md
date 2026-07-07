@@ -8,22 +8,12 @@ public interface IRefreshTokenStore
 ```
 
 
-IRefreshTokenStore is the persistence boundary for refresh tokens. It provides asynchronous operations to locate a token by its hash, persist a new token, and bulk-revoke tokens for a user, with the rotation of tokens implemented atomically when saved through a unit of work.
+IRefreshTokenStore defines the persistence boundary for refresh tokens. It abstracts how tokens are stored and retrieved by their hash, added to the store, and revoked, with all writes routed through a unit of work so a rotation (mark-old-replaced + insert-new) commits atomically.
 
 ## Remarks
-This abstraction decouples the domain logic (for example, the JwtTokenService) from the details of how tokens are stored, enabling easier testing and the ability to swap storage backends without changing business logic. The FindByHashAsync/AddAsync trio supports the typical refresh-token rotation workflow, where an old token is replaced with a newly issued one within a single transactional boundary, and RevokeAllForUserAsync offers a bulk operation used in security-sensitive flows (such as theft-detection) to invalidate all tokens associated with a user.
-
-## Example
-```csharp
-// Common rotation path: the store handles marking the old token as replaced and inserting the new one atomically
-var newToken = new RefreshToken(userId, newHash, expiresAt);
-await tokenStore.AddAsync(newToken, ct);
-
-// Theft-detection path: invalidate all tokens for a user in one operation
-await tokenStore.RevokeAllForUserAsync(userId, ct);
-```
+IRefreshTokenStore exists to decouple refresh-token persistence from the authentication flow and the JwtTokenService. It enables safe rotation and bulk revocation through a single, atomic write path, reducing the risk of torn-writes during renewal or theft-detection scenarios. By operating on token hashes rather than plaintext tokens and exposing dedicated methods for finding, adding, and revoking tokens, it provides a focused API that enforces the security lifecycle of refresh tokens.
 
 ## Notes
-- FindByHashAsync returns null if the token hash is not found; callers should handle the possibility of a null result.
-- RevokeAllForUserAsync is a bulk operation; use it with care, as it invalidates all tokens for the specified user across devices.
-- All operations are designed to participate in a unit-of-work; token rotation relies on the store to commit the old-and-new state atomically.
+- The FindByHashAsync method relies on a consistent hash of the input token; hash the presented token in the same way before lookup.
+- All methods accept a CancellationToken to support cooperative cancellation.
+- Ensure the implementor routes all mutations through the unit of work to preserve atomicity of rotation and revocation operations.

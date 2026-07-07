@@ -8,11 +8,12 @@ export function AuthLayout()
 ```
 
 
-AuthLayout is a compact layout component that renders nested routes via an Outlet and provides a global ToastContainer for notifications. Use it to establish a consistent layout wrapper for a section of your route tree while enabling toast messages to appear across all nested pages without adding a ToastContainer in each page.
+AuthLayout is a compact layout component that renders an Outlet for nested routes and a globally available ToastContainer. The ToastContainer is pre-configured to show toasts at the bottom-right corner, auto-dismissing after 4000 milliseconds, with new toasts appearing on top, and a dark theme with a custom CSS class of gbr-toast. This component is meant to be used as a shared wrapper around authentication-related routes (or any set of pages) so that child pages can trigger toasts without each page including its own toast container.
 
 ## Remarks
-AuthLayout centralizes the combination of route rendering and toast presentation, providing a single, reusable scaffold for pages that share a common layout and global notifications. By housing Outlet and ToastContainer together, it ensures consistent toast positioning (bottom-right), theming, and interaction defaults across all nested routes.
+AuthLayout centralizes toast presentation and route rendering so individual pages only focus on content. It provides a consistent bottom-right toast experience across all routes rendered within it, decoupling toast behavior from page logic. Keeping a single ToastContainer here helps avoid duplicate overlays and inconsistent styling.
 
 ## Notes
-- Avoid placing another ToastContainer elsewhere if you want a single toast stream; multiple containers can duplicate toasts.
-- The className "gbr-toast" relies on project CSS; ensure the corresponding styles are loaded for correct appearance.
+- If you render AuthLayout multiple times in the app, you may end up with multiple ToastContainers; prefer a single root layout or ensure only one instance is mounted.
+- The ToastContainer uses a dark theme and a custom class; ensure you have corresponding CSS to avoid unstyled toasts.
+- Toasts auto-close after 4 seconds; if you need longer notifications, override per-toast options when creating the toast.

@@ -2,56 +2,50 @@
 
 > *Workflow template auto-derived from 8 existing exemplar(s).*
 
-Reach for this pattern when you need to add a new HTTP endpoint surface to the API: create a controller class that handles requests, takes its collaborators via constructor injection, and returns ActionResult-wrapped DTOs. This pattern is used for small, focused REST controllers that delegate business logic to services and rely on ASP.NET Core MVC for routing and model binding.
+Adding a new controller is the pattern to use when you need to expose a new set of HTTP endpoints in the API surface alongside the existing controllers. Reach for this pattern when the endpoints are a cohesive group (e.g., project-level, conversation-level, or cross-cutting sequence endpoints) and can be modelled after an existing controller. The examples in src/api/Gabriel.API/Controllers show the shape and attributes commonly used for controllers in this codebase.
 
-## Scaffold
+## Reference implementation
+
+The following is real code from src/api/Gabriel.API/Controllers/SequenceController.cs that a new controller can be modelled on:
 
 ```csharp
-using Microsoft.AspNetCore.Mvc;
-
-namespace YourProject.Controllers;
-
-/// <summary>
-/// Replace the summary with what this controller is for.
-/// </summary>
+// Gabriel-Sequence-scoped endpoints that aren't anchored to a specific
+// conversation or project. Today: the skin-picker catalog. The per-conversation
+// / per-project sequence endpoints stay on their respective controllers
+// (ConversationsController, ProjectsController) so they sit alongside the rest
+// of those entities' surface.
 [ApiController]
-[Route("v1/[controller]")]
-public class FooController : ControllerBase
+[Authorize]
+[Route("sequence")]
+public class SequenceController : ControllerBase
 {
-    private readonly IFooService _fooService;
-
-    public FooController(IFooService fooService)
-    {
-        _fooService = fooService;
-    }
-
-    [HttpGet("{id:guid}")]
-    public async Task<ActionResult<FooDto>> Get(Guid id, CancellationToken ct)
-    {
-        var result = await _fooService.GetAsync(id, ct);
-        return result is null ? NotFound() : Ok(result);
-    }
+    // Returns the catalog of pattern + palette identifiers a client can pin
+    // on a project / conversation as a "skin" override. The lists are static
+    // and cheap - clients can fetch once per session.
+    [HttpGet("catalog")]
+    public ActionResult<SequenceCatalogResponse> GetCatalog()
+        => Ok(new SequenceCatalogResponse(SequenceCatalog.Patterns, SequenceCatalog.Palettes));
 }
 ```
 
 ## Where it lives
 
-Controllers live in the API project's Controllers folder: src/api/Gabriel.API/Controllers. Files follow the "NameController.cs" convention (for example, AuthController.cs, ConversationsController.cs, DiagnosticsController.cs), and each file contains a class named {Name}Controller (e.g., AuthController) decorated with [ApiController] and routed under v1/[controller].
+Controllers in this area of the codebase live under src/api/Gabriel.API/Controllers. The existing files use a "{Name}Controller.cs" filename pattern (for example, SequenceController.cs, ProjectsController.cs) with the primary symbol named accordingly (e.g., SequenceController, ProjectsController).
 
-## DI wiring
+## Wiring
 
-ASP.NET Core will discover controller classes automatically, so you do not need to register controllers by hand. What you do need to register are the service dependencies injected into your controller (e.g., IFooService). Add a single service registration in the API project's composition root where other services are registered — for example, add a line like services.AddScoped<IFooService, FooService>(); to the API project's service registration area so the container can resolve the controller's constructor parameter.
+A specific registration or composition site for controllers was not detected in the provided inputs. If you need to wire a new controller into the running app, consult the existing controllers listed below as examples for how they are organized and referenced; the precise registration location was not identified from the symbol graph provided.
 
 ## Existing examples
 
-- [AuthController.cs](Code/src/api/Gabriel.API/Controllers/AuthController.cs.md)
-- [ConversationsController.cs](Code/src/api/Gabriel.API/Controllers/ConversationsController.cs.md)
-- [DiagnosticsController.cs](Code/src/api/Gabriel.API/Controllers/DiagnosticsController.cs.md)
-- [MemoriesController.cs](Code/src/api/Gabriel.API/Controllers/MemoriesController.cs.md)
-- [ModelsController.cs](Code/src/api/Gabriel.API/Controllers/ModelsController.cs.md)
-- [ProjectFilesController.cs](Code/src/api/Gabriel.API/Controllers/ProjectFilesController.cs.md)
-- [ProjectsController.cs](Code/src/api/Gabriel.API/Controllers/ProjectsController.cs.md)
-- [SequenceController.cs](Code/src/api/Gabriel.API/Controllers/SequenceController.cs.md)
+- [`AuthController`](../../Code/src/api/Gabriel.API/Controllers/AuthController.cs.md)
+- [`ConversationsController`](../../Code/src/api/Gabriel.API/Controllers/ConversationsController.cs.md)
+- [`DiagnosticsController`](../../Code/src/api/Gabriel.API/Controllers/DiagnosticsController.cs.md)
+- [`MemoriesController`](../../Code/src/api/Gabriel.API/Controllers/MemoriesController.cs.md)
+- [`ModelsController`](../../Code/src/api/Gabriel.API/Controllers/ModelsController.cs.md)
+- [`ProjectFilesController`](../../Code/src/api/Gabriel.API/Controllers/ProjectFilesController.cs.md)
+- [`ProjectsController`](../../Code/src/api/Gabriel.API/Controllers/ProjectsController.cs.md)
+- [`SequenceController`](../../Code/src/api/Gabriel.API/Controllers/SequenceController.cs.md)
 
 ---
-*Synthesised by Aurion on 2026-06-08 22:36:22 UTC*
+*Synthesised by Aurion on 2026-07-07 21:08:34 UTC*

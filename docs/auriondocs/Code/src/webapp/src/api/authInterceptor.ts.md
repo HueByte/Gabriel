@@ -8,12 +8,12 @@ export function installAuthInterceptor()
 ```
 
 
-installAuthInterceptor wires an Axios response interceptor to transparently refresh an expired access token when the server responds with 401, but only for non-auth endpoints. It compares the request URL against AUTH_PATHS and will skip refresh attempts for authentication calls to avoid a refresh loop. When a 401 occurs and a refresh is possible, it triggers refreshSession(), marks the original request as retried to prevent infinite retries, and then retries the original request with axios(original). If the refresh fails or the request has already been retried, it signals session expiration via signalSessionExpired() to drive the logout flow and rejects the error so the error propagates to callers. This function is a side-effect initializer; call it during application startup to install the interceptor.
+Installs a global Axios response interceptor that automatically refreshes the user’s session when a 401 Unauthorized response is encountered and retries the original request if the refresh succeeds. It avoids refreshing authentication endpoints to prevent loops, and signals session expiry if the refresh fails or if a retried request still returns 401.
 
 ## Remarks
-By centralizing the token-refresh behavior, this interceptor keeps authentication concerns out of individual API calls and ensures a consistent logout path when tokens are no longer usable. It cooperates with AuthContext to clear local state and trigger logout when tokens are unusable, while preserving the user experience by transparently retrying a single refresh before failing.
+This symbol centralizes the session-renewal flow so individual API calls don’t duplicate refresh logic. It coordinates with refreshSession to obtain a new access token and with signalSessionExpired to trigger logout and client-state cleanup when recovery is not possible. It guards against refresh loops by skipping known auth-endpoints and by marking retried requests with a _retried flag to ensure a single retry attempt per request.
 
 ## Notes
-- Call installAuthInterceptor() once during application initialization; calling it multiple times will attach multiple interceptors unless guarded.
-- Relies on AUTH_PATHS, refreshSession, and signalSessionExpired; misconfiguration may cause refresh to be skipped or fail unexpectedly.
-- Designed for axios-based HTTP flows; adapting to a different HTTP client requires equivalent interceptor/wrapper logic.
+- Install guard: calling installAuthInterceptor more than once will attach multiple interceptors; call once during app startup.
+- Mutation: the code writes a non-standard _retried property on the request config; ensure your TypeScript typings allow augmenting AxiosRequestConfig or avoid strict type constraints where needed.
+- Logout trigger: when the refresh cannot redeem tokens, signalSessionExpired is invoked to perform logout cleanup on both client and server sides.

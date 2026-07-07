@@ -8,11 +8,26 @@ export function RegisterPage()
 ```
 
 
-RegisterPage is a React function that renders the user registration screen and wires the form controls to local UI state. It presents email and password inputs, a live avatar preview with a seed that can be rerolled, and a password visibility toggle, while handling submission via the authentication context and routing on success. It guards against duplicate submissions with a busy flag and surfaces server or client errors inline.
+RegisterPage is a React function component that renders a self-contained registration screen for creating a new user account. It presents a form with email and password fields, a visual avatar preview seeded for each visit, a password visibility toggle, and a responsive submit experience that prevents duplicate submissions. On successful registration, it redirects to the home page; on failure, it displays an inline error message.
 
 ## Remarks
-RegisterPage encapsulates the sign-up UX and delegates authentication to a shared context, keeping API details out of the UI. The avatar seed is purely visual—server-side account avatar generation occurs after registration—so the reroll on each visit is a user-experience flourish rather than a identity cue. The component uses navigate with replace to prevent returning to the registration screen after a successful sign-up and disables inputs while processing to avoid duplicate requests.
+This component encapsulates the onboarding UI and delegates authentication to a hook, keeping the UI and business logic loosely coupled. The avatar seed is purely cosmetic and refreshed on each visit to create a lively feel, while the actual account seed is assigned server-side during registration. The busy state and input disabling ensure idempotent interactions, and accessibility considerations (aria-labels and role="alert" for errors) improve usability for assistive technologies. This pattern makes it straightforward to swap out the authentication mechanism without altering the registration UI.
+
+## Example
+```typescript
+import React from 'react';
+import { RegisterPage } from './src/webapp/src/pages/RegisterPage';
+
+export function App() {
+  return (
+    <div>
+      <RegisterPage />
+    </div>
+  );
+}
+```
 
 ## Notes
-- The avatar seed is visual only; the real avatar seed is assigned server-side during registration.
-- This component relies on the presence of the auth context providing a register function; without it, registration cannot complete.
+- The avatar seed is regenerated on mount and can be re-rerolled via the UI; the server assigns the real avatar seed during registration. 
+- The form fields are marked required and the submit button is disabled while busy or when inputs are empty, preventing accidental submissions.
+- The error handling displays a concise message and leaves the form usable for retry without a full page reload.

@@ -8,20 +8,12 @@ public class GlobalRoutePrefixConvention : IApplicationModelConvention
 ```
 
 
-GlobalRoutePrefixConvention is an ASP.NET Core MVC application model convention that prepends a fixed route prefix to every controller route. It centralizes routing concerns by defining the base path in one place (for example "api") and applying it to all controllers, so endpoints share a consistent base URL without repeating the prefix on each Route attribute. During application model construction, it iterates all controllers and their selectors and either assigns the prefix when a controller has no explicit route, or combines the prefix with the existing route using AttributeRouteModel.CombineAttributeRouteModel.
+Applies a single, fixed prefix to every controller route by implementing IApplicationModelConvention, ensuring all endpoint routes share a centralized prefix without duplicating it in each [Route] attribute. Use it when you want a consistent API root (for example 'api') across all controllers and to avoid repeating the prefix in every Route attribute.
 
 ## Remarks
-By moving the base path into this convention, teams avoid drift between controllers and simplify versioning or scoping of APIs. It collaborates with other MVC conventions and the Route attribute system by layering the prefix under the existing route definitions, rather than replacing them.
-
-## Example
-```csharp
-// Common usage
-services.AddControllers(options =>
-{
-    options.Conventions.Add(new GlobalRoutePrefixConvention("api"));
-});
-```
+GlobalRoutePrefixConvention centralizes routing concerns by turning a per-controller prefix into a shared policy. If a controller already defines its own route, the convention merges the new prefix with the existing route via CombineAttributeRouteModel, preserving existing routing semantics. Because it operates at the ApplicationModel level, the convention applies uniformly across all controllers without modifying individual action attributes.
 
 ## Notes
-- All routes defined on controllers and actions will be prefixed with the base path (e.g. "api/values").
-- There is no per-action opt-out in this convention; to bypass the prefix you would need a different approach or custom convention.
+- If a controller has no Route attribute, the prefix becomes the controller's route.
+- If a controller defines an existing Route attribute, the prefix is merged with it via CombineAttributeRouteModel, preserving the original routing semantics.
+- Changing the prefix requires restarting the application to rebind routes.

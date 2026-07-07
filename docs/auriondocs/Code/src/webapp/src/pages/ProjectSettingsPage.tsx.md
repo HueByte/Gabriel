@@ -18,21 +18,16 @@ export function ProjectSettingsPage()
 ```
 
 
-The ProjectSettingsPage component renders the user interface for editing a project's metadata and managing its files. It reads the projectId from the route, loads the project data on mount, and initializes local form state (name, description, systemPrompt) from the server. Users can modify these fields and save; the save operation PATCHes only the fields that have changed to avoid overwriting other metadata, and it provides immediate feedback via toasts. The page also supports uploading new files to the project, listing current files, and deleting files with confirmation, updating the UI as changes succeed or fail. Separate loading flags (saving, uploading, skinSaving) ensure actions do not race with each other, and an AbortController cancels in-flight requests when the route changes, preventing stale data.
+ProjectSettingsPage is a React function component that renders the user interface for viewing and editing a single project's metadata and assets. It derives the target project from the route parameter projectId, fetches the project via ProjectsService, and initializes local form state for name, description, systemPrompt, and the project’s files. Users can modify the project's name, description, and system prompt, upload new files, delete existing files, and adjust skin/appearance settings. Changes to metadata are sent using a PATCH request that only includes fields that actually changed, reducing unintended overwrites; file uploads and skin changes are performed through dedicated flows. The component coordinates loading, optimistic updates, and error handling to provide a cohesive project-admin experience within the web app.
 
 ## Remarks
-This component acts as a thin view-model that ties together UI state and server persistence for a project's settings. By computing a precise dirty state and performing a partial PATCH, it prevents unintended data loss while minimizing payloads. It also centralizes concerns around project metadata and asset management, delegating actual persistence to dedicated services (ProjectsService and ProjectFilesService) to improve testability and future reuse.
-
-## Example
-```typescript
-// Usage within router
-<Route path="/projects/:projectId/settings" element={<ProjectSettingsPage />} />
-```
+ProjectSettingsPage centralizes the project-editing lifecycle on the web UI, encapsulating loading, mutation, and persistence in one place. By computing a dirty flag and PATCHing only changed fields, it minimizes network chatter and guards against inadvertently overwriting unrelated metadata. The file-management and appearance customization flows are kept close to the related UI controls to ensure a responsive, single-page experience while delegating server interactions to the respective services. It also uses abort signals to cancel in-flight requests when the route changes or the component unmounts, preventing stale state updates.
 
 ## Notes
-- Deleting a file prompts the user for confirmation before performing the API call.
-- After selecting a file for upload, the input value is reset to allow re-uploading the same file if needed.
-- The patch payload includes only fields that have changed; unchanged fields are omitted to avoid unintended resets.
+- The dirty flag depends on the initially loaded project; until loading completes, the Save action remains inert to avoid sending partial data.
+- Aborting the load via AbortController prevents state updates after unmount or route changes, reducing a class of race conditions.
+- The PATCH payload sends only fields that differ from the original values; due to this, intentionally clearing a field (e.g., description) requires providing a new value, since unchanged empty strings are treated as non-differences. This ensures unrelated metadata is not overwritten by simultaneous edits.
+
 
 ---
 
@@ -53,14 +48,13 @@ function formatBytes(bytes: number): string
 **Returns:** `string`
 
 
-Converts a numeric byte count into a human-friendly string for display, using binary units. It selects B, KB, MB, or GB based on the magnitude of the input and applies specific decimal precision: values under 1024 are shown as an integer with a ' B' suffix; values under a megabyte are shown in kilobytes with one decimal place; values under a gigabyte are shown in megabytes with one decimal place; and larger values are shown in gigabytes with two decimal places. This utility is commonly used when presenting file sizes in the UI to ensure consistent, readable formatting across the application.
+Converts a numeric byte count into a human-friendly string using binary units (B, KB, MB, GB). It yields "N B" for small values, "N.N KB" for kilobytes, "N.N MB" for megabytes, and "N.NN GB" for gigabytes, choosing the largest unit that keeps the number readable. KB and MB are shown with one decimal place, while GB uses two decimals.
 
 ## Remarks
-This function centralizes size formatting to avoid duplicating the same logic across components. By using 1024-based thresholds and fixed decimal precision, it provides predictable, readable output that remains consistent across the UI. If you anticipate sizes above a gigabyte, consider extending the function (e.g., adding a TB branch) or adding a separate formatter for very large values.
+formatBytes serves as a small, reusable formatter for byte counts used anywhere the UI needs a human-friendly size. It codifies a consistent boundary at 1024-based thresholds and a uniform decimal precision, so developers don’t have to replicate the logic. By centralizing the formatting, it helps keep the UI consistent and makes future adjustments straightforward.
 
 ## Notes
-- This implementation uses 1024-based boundaries, so KB/MB/GB reflect binary sizes rather than decimal prefixes.
-- KB and MB are shown with one decimal place; GB is shown with two decimal places.
-- There is no explicit TB branch; extremely large values will still render as GB (with two decimals), which may be misleading for very large datasets.
+- Locale and i18n: the function is locale-agnostic and uses a period as the decimal separator; if localization is required, adapt the formatting to the target locale.
+- Negative values are not validated; negative byte counts will yield a negative size string (e.g., "-1 B").
 
 ---

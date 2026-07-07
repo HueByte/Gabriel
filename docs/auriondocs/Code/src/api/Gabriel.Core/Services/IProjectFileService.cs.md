@@ -8,27 +8,11 @@ public interface IProjectFileService
 ```
 
 
-IProjectFileService is a per-project file-management contract that provides asynchronous operations for listing, retrieving, streaming, and modifying files within a single project, while enforcing sandboxing under the project's root directory (no absolute paths or traversal outside the project). Implementations should favor streaming over loading entire files into memory and expose a clear separation between file metadata (ProjectFile) and content streams.
+IProjectFileService defines the asynchronous contract for managing a project's uploaded files. It exposes operations to list, inspect metadata, stream-into-downloading content, read text safely, upload new files, delete existing ones, and locate the absolute directory where a project's files live, all scoped to a single project to enforce isolation.
 
 ## Remarks
-
-Why this abstraction exists: it centralizes concerns around project-scoped file access, authorization, and efficient I/O behind a stable API surface that controllers and tooling can rely on. OpenAsync returns both the file metadata and an open content stream that the caller must dispose; this enables low-memory downloads even for large files. ReadTextAsync provides a safe path to read text content with a maximum byte limit and returns null for non-text-like content.
-
-## Example
-
-```csharp
-// Example: open a file and read text if possible
-var (file, stream) = await projectFileService.OpenAsync(projectId, fileId, ct);
-using (stream)
-{
-    using var reader = new StreamReader(stream, Encoding.UTF8);
-    string? text = await reader.ReadToEndAsync();
-    // use text if not null
-}
-```
+By centralizing file I/O behind this interface, implementations can enforce authorization, per-project sandboxing, and streaming semantics that avoid loading entire files into memory. OpenAsync returns a tuple of metadata and an open Stream that the caller must dispose, which enables efficient downloads and streaming tools.
 
 ## Notes
-
-- The Content stream in OpenAsync must be disposed by the caller to release unmanaged resources.
-- ReadTextAsync may return null if the file isn't text-like; handle null accordingly.
-- GetProjectDirectoryAsync enforces authorization and returns the absolute on-disk directory; callers should rely on this when integrating with tooling, and avoid assuming a particular layout outside the project sandbox.
+- The Content stream returned by OpenAsync must be disposed by the caller to release file handles and resources.
+- ReadTextAsync returns null if the file content is not text-like, so callers should handle null accordingly.

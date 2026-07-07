@@ -8,35 +8,40 @@ public class Message
 ```
 
 
-Represents a single turn (or observation) in a conversation and carries role-specific payloads used by the chat/agent system. Use this entity when persisting or passing conversation messages between components; instances are created via the internal Create factory which applies per-role validation and initializes identity/metadata.
+Represents a single turn in a conversation (user, assistant, system, or tool). Use this entity when persisting or manipulating conversation history inside the application — it centralizes role-specific payloads (content, tool call references, raw tool-calls JSON) and metadata used for regeneration and UI presentation.
 
 ## Remarks
-This class centralizes the shape and invariants of messages produced by users, system, assistants, and tools. It distinguishes several payload scenarios: plain textual content, tool-call references, assistant-initiated tool call requests (stored as raw JSON), and an optional "reasoning" stream captured separately from the visible content. VariantGroupId and IsActiveVariant provide a lightweight way to group regenerated assistant responses so a single logical turn can have multiple candidate variants; Create defaults the group to the message's own Id so non-regenerated messages are singleton groups.
+The class enforces per-role payload rules at construction: user and system messages must have non-empty content; assistant messages must provide either content or a tool-calls JSON array; tool messages require both a toolCallId and an observation (content). Id and CreatedAt are assigned automatically. VariantGroupId groups alternative/regenerated assistant replies (defaults to the message's own Id so non-regenerated messages are their own singleton group) and IsActiveVariant marks which variant is currently active. ReasoningContent is stored separately from Content so agent "thinking" streams can be persisted and displayed independently of the main answer body; ToolCallsJson is stored verbatim to allow exact replay.
 
 ## Example
 ```csharp
-// Create a user message (content required)
-var userMessage = Message.Create(conversationId: convoId, role: MessageRole.User, content: "What's the weather?");
+// Create a user message (inside the same assembly where Create is accessible)
+var convoId = Guid.NewGuid();
+var userMsg = Message.Create(convoId, MessageRole.User, content: "What's the weather today?");
 
-// Create an assistant message that requested tool calls (toolCallsJson present)
-var assistantWithToolRequest = Message.Create(
-    conversationId: convoId,
-    role: MessageRole.Assistant,
+// Create an assistant message that requested tool calls (store raw tool-calls JSON)
+var assistantMsg = Message.Create(
+    convoId,
+    MessageRole.Assistant,
     content: null,
-    toolCallsJson: "[{ \"name\": \"getWeather\", \"args\": {...} }]"
+    toolCallsJson: "[ { \"id\": \"forecast\", \"args\": { ... } } ]"
+);
+// Attach reasoning captured by the agent loop (empty string is normalized to null)
+assistantMsg.SetReasoningContent("Searching cached forecasts and weighing recent observations...");
+
+// Create a tool observation message that answers a specific tool call
+var toolObservation = Message.Create(
+    convoId,
+    MessageRole.Tool,
+    content: "Observed: clear skies, 18°C",
+    toolCallId: "forecast-call-123"
 );
 
-// Create a tool observation (requires toolCallId and content)
-var toolObservation = Message.Create(
-    conversationId: convoId,
-    role: MessageRole.Tool,
-    content: "Sunny, 72 F",
-    toolCallId: someToolCallId
-);
+// Mark a variant inactive when a regenerated reply replaces it
+userMsg.MarkInactiveVariant();
 ```
 
 ## Notes
-- Create enforces role-specific payload rules and throws ArgumentException when requirements are not met (e.g., User/System require non-empty content; Tool requires both toolCallId and content; Assistant requires either content or toolCallsJson).
-- Id and CreatedAt are set automatically; VariantGroupId defaults to the new Id when not provided.
-- SetReasoningContent normalizes empty strings to null; reasoning is stored separately from Content so UIs can render a thinking/reasoning panel without altering the persisted answer body.
-- MarkActiveVariant / MarkInactiveVariant only toggle the boolean on this instance; the invariant "exactly one active variant per VariantGroupId" is implied by the model but not enforced by this type across multiple Message instances (repository or caller code must ensure group-level uniqueness).
+- Create enforces role-specific validation and throws ArgumentException for missing required payloads; callers must handle or avoid those conditions.
+- Variant grouping logic (VariantGroupId / IsActiveVariant) is a coordination mechanism for consumers — the type does not enforce global invariants across multiple Message instances (e.g., ensuring exactly one active variant per group across a store).
+- SetReasoningContent normalizes empty strings to null; CreatedAt is assigned with DateTimeOffset.UtcNow at construction.

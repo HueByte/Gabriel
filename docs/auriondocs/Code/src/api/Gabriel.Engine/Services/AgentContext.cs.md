@@ -35,23 +35,7 @@ public record AgentContext(
 | `Tools` | `IReadOnlyList<ToolDescriptor>` | — |
 
 
-AgentContext is a record that encapsulates all the context the chat provider needs for a single turn. It combines the agent persona, an optional project prompt, an optional memory block, the turn summary, the filtered sequence of messages, and the available tool descriptors into a single, immutable object used by both the live provider path and the UI metrics path. Build constructs this context from a Conversation and the prompt fragments, applying filtering and orphaned-tool-message cleanup so callers always operate on a consistent view.
-
-## Remarks
-Architecturally, this abstraction centralizes the logic for what is shared between the actual provider invocation and the metrics UI. Previously, two inline assemblies diverged; merging them into AgentContext ensures tool results tied to active tool calls are preserved across both paths and that inactive or orphaned messages are dropped early. It also isolates the transformation from high-level prompt fragments to a provider-ready history, simplifying future changes to how prompts are composed.
-
-## Example
-```csharp
-// Most common usage
-var context = AgentContext.Build(conversation, personaPrompt, projectPrompt, memoryBlock, tools);
-var history = context.ToProviderHistory();
-```
-
-## Notes
-- Build trims messages using SummarizedThroughMessageId if present; if the summary marker cannot be found, no trimming occurs (startIdx remains 0).
-- Only active variant messages are kept; tool messages are retained only if their ToolCallId appears in the set of active tool_call IDs gathered from active assistant messages.
-- ProjectPrompt is optional; when it is null or whitespace, the corresponding system block is omitted from the provider history.
-
+AgentContext is a C# record that captures all inputs and derived messages that are sent to the chat provider for a single turn. It serves as the single source of truth for what a turn sends to the provider by consolidating the PersonaPrompt, optional ProjectPrompt, MemoryBlock, Summary, the Messages being considered, and the Tools into a stable value object. The static Build method constructs an AgentContext from a Conversation and the prompts and tooling prepared for this turn, performing variant filtering and orphaned-tool-message cleanup so callers don’t have to reimplement that logic. It also collects the set of active tool_call.ids referenced by active assistant messages and filters tool messages so only relevant tool results survive, ensuring live interactions and metrics observe identical data. ToProviderHistory then materializes the exact provider-facing message sequence by prefixing system messages in a fixed order: persona, optional project context, saved memories, rolling summary, and finally the filtered conversation, guaranteeing deterministic model behavior and parity between the live call and any UI-based metrics.
 
 ---
 
@@ -86,6 +70,12 @@ public record AgentContextBreakdown(
 | `ConversationTokens` | `int` | — |
 
 
-Documentation submitted for symbol AgentContextBreakdown. The narrative covers its purpose, rationale, and practical notes; no example block included.
+AgentContextBreakdown is a record that captures per-category token totals from a single AgentContext snapshot. It exposes six token counters (SystemPromptTokens, ProjectPromptTokens, MemoryTokens, SummaryTokens, ToolsTokens, ConversationTokens) and a computed Total that aggregates them. This breakdown is used by the AgentService during its compact decision and is surfaced publicly as ContextMetrics.CurrentTokens, enabling callers to reason about overall and category-specific token usage without recomputing sums.
+
+## Remarks
+The abstraction decouples token accounting from the decision logic, providing a stable, immutable view of token usage that can be passed across components, logged, or displayed in diagnostics. If new token categories are needed in the future, the record can be extended without altering consumer code that relies on the existing shape.
+
+## Notes
+- Be aware of potential integer overflow if token counts ever approach 2,147,483,647; in practice, counts are far smaller.
 
 ---

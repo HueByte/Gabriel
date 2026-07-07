@@ -19,16 +19,22 @@ internal static class ToolCallBlockParser
 ```
 
 
-ToolCallBlockParser scans a text tail for <tool_call> blocks emitted by the tool bridge, validates each block, and converts them into ParsedToolCall entries containing an id, a name, and a raw JSON payload of arguments. The extraction is all-or-nothing per turn: a single malformed block causes the whole extraction to throw ToolCallParseException to drive the retry loop.
+Parses embedded <tool_call> blocks from the text stream produced by ToolCallStreamSplitter and converts each into a structured ParsedToolCall with a synthetic id. Use this when you need to turn a textual stream containing tool invocations into a typed collection that downstream components can feed to tools.
 
 ## Remarks
-The id on each ParsedToolCall is synthesized locally to maintain a stable mapping for downstream state tracking (AgentContext tool_call_id matching) across the round-trips of tool execution. The implementation uses a deterministic-ish generation pattern that prefixes with emu_ and appends a short GUID-derived segment plus the block index, ensuring uniqueness within a turn while signaling its origin in logs and persistence.
+ToolCallBlockParser scans for <tool_call>...</tool_call> blocks, validates that the body is a JSON object with a string 'name' and an optional 'arguments' object, and preserves the raw JSON of the 'arguments'. Missing 'arguments' becomes an empty object ("{}"). Each parsed call is assigned a synthetic, deterministic-ish id of the form emu_<12-char-guid>`_<index>`, intended to help correlation within a single turn while clearly signaling synthetic origin. If a block is unterminated or the JSON inside cannot be parsed, a ToolCallParseException is thrown to drive the retry flow and surface a precise diagnostic. This parser deliberately does not attempt to interpret the tool name or arguments beyond validation and raw serialization, leaving execution to downstream collaborators.
+
+## Example
+```csharp
+// Basic extraction from a string with a single block
+var text = "<tool_call> {\"name\":\"echo\",\"arguments\":{\"text\":\"hi\"}} </tool_call>";
+var calls = ToolCallBlockParser.Extract(text);
+```
 
 ## Notes
-- Unterminated <tool_call> blocks raise a ToolCallParseException with context, forcing a retry.
-- If the block contains an 'arguments' value, it must be an object; otherwise a JsonException is raised and wrapped as ToolCallParseException.
-- When 'arguments' is absent, {} is used as the default payload, allowing tools with no parameters to execute.
-- The extraction is performed by a straightforward scan for the OpenTag and CloseTag markers; blocks are processed in order and accumulated into a single `IReadOnlyList<ParsedToolCall>` unless an error occurs.
+- Unterminated <tool_call> blocks cause a ToolCallParseException with a descriptive message to aid retry logic.
+- If 'arguments' is present, it must be a JSON object; otherwise a JsonException is thrown and wrapped in ToolCallParseException.
+- When 'arguments' is absent, the parser uses "{}" to allow tools with no parameters to run.
 
 
 ---
@@ -42,15 +48,17 @@ internal sealed class ToolCallParseException : Exception
 ```
 
 
-ToolCallParseException is an internal sealed exception that signals a malformed tool_call block found in the buffered turn text. It is thrown when a block is missing a closing tag, contains invalid JSON, or does not conform to the expected shape, and it is caught by GabrielToolBridge to prompt the model to repair the previous response and retry up to GabrielToolBridge.MaxParseRetries times before giving up. The exception carries OffendingBlock, the raw offending fragment (or partial block), which is echoed back to the model in the fix-up message to guide the repair.
+Thrown when at least one <tool_call> block in the buffered turn text is malformed (missing close tag, invalid JSON, or incorrect shape). It exposes the exact offending block via the OffendingBlock property so the fix-up mechanism can prompt the model to repair it and retry parsing, up to GabrielToolBridge.MaxParseRetries attempts.
 
 ## Remarks
-By isolating parse errors into a dedicated exception type, the system cleanly separates parsing concerns from normal control flow and enables a targeted retry boundary. OffendingBlock provides actionable context to the repair step, ensuring the model sees the exact fragment that failed, which improves the chances of a correct repair on subsequent attempts.
+
+ToolCallParseException is a focused error type that travels the parse failure from the parser to the repair orchestrator without leaking implementation details. The OffendingBlock property makes the failure actionable by enabling precise repair prompts and diagnostics. The class is internal and sealed to emphasize its role as a simple, immutable signal in the error-handling pipeline, while the optionally chained inner exception preserves the original parsing error for debugging.
 
 ## Notes
-- OffendingBlock may be the entire failed block or a partial fragment, so the repair prompt should not assume a complete, well-formed piece of JSON.
-- The class is internal to the assembly and not part of the public API.
-- The exception's state is limited to the OffendingBlock property (in addition to the standard Message and InnerException).
+
+- The OffendingBlock may contain large payloads or sensitive content; avoid logging or displaying it in user-visible channels without sanitization.
+- This exception participates in a retry policy governed by GabrielToolBridge.MaxParseRetries; changing that value alters how many times a malformed block is repaired and retried.
+
 
 ---
 
@@ -71,20 +79,13 @@ internal sealed record ParsedToolCall(string Id, string Name, string ArgumentsJs
 | `ArgumentsJson` | `string` | — |
 
 
-ParsedToolCall is an internal, immutable data carrier that encapsulates the result of parsing a tool invocation within the ToolBridge workflow. It stores the call's identifier (Id), the tool name (Name), and a JSON string of the arguments (ArgumentsJson), enabling downstream components to treat a parsed invocation as a single, passable unit.
+It is an immutable record that captures the essential components of a parsed tool invocation: Id, Name, and ArgumentsJson. It serves as a compact, transportable snapshot used within the ToolBridge parsing pipeline to carry a single parsed call from the parser toward execution, while preserving the raw JSON payload for arguments.
 
 ## Remarks
-This record acts as a lightweight boundary between the parsing layer and the execution/dispatch logic. Its value-based equality and deconstruction support straightforward testing and convenient access to individual fields. Because it is internal, its shape is a constraint of the ToolBridge pipeline rather than a public contract. The ArgumentsJson field provides a flexible, schema-less representation of parameters that can be consumed by JSON parsers when needed.
-
-## Example
-```csharp
-var call = new ParsedToolCall("42", "RunAnalysis", "{\"dataset\":\"sales\",\"metrics\":[\"revenue\",\"growth\"]}");
-(string id, string name, string argumentsJson) = call; // deconstructs the record
-```
+Because it uses a record, ParsedToolCall benefits from value-based equality, deconstruction, and concise equality semantics, which simplifies testing and pattern matching on parsed calls. The internal sealed accessibility reinforces the boundary of the parsing layer, ensuring this detail remains encapsulated within the ToolBridge implementation. Storing ArgumentsJson as a JSON string decouples the call's argument shape from this type, enabling evolution of argument schemas without changing the record's surface.
 
 ## Notes
-- ArgumentsJson must be well-formed JSON; invalid JSON may surface as a failure downstream.
-- Id should be treated as an opaque identifier for the parsed call; do not rely on its structure.
-- Since ParsedToolCall is a record, you can create a modified copy with a with-expression if needed (e.g., var updated = call with { Id = newId }).
+- ArgumentsJson is a raw JSON payload; deserialise it at the point of use with proper validation to avoid security or runtime issues.
+- Id and Name act as routing and correlation metadata; this type does not enforce any mapping guarantees beyond carrying those values as parsed from the source.
 
 ---

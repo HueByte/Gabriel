@@ -32,22 +32,22 @@ function fbm(x, y, seed, octaves)
 | `octaves` | — | — |
 
 
-Computes fractal Brownian motion by layering multiple octaves of value-noise at increasing frequency and decreasing amplitude, producing smoother, more natural-looking 2D noise. Given coordinates x and y, a seed, and a number of octaves, fbm combines each octave with doubling frequency and halving amplitude, then normalizes the result by the total amplitude to keep outputs consistent across octave counts. Use fbm when you need richer terrain or texture variation than a single valueNoise sample, while preserving deterministic results via the seed.
+fbm computes fractal Brownian motion by summing multiple octaves of 2D value noise with increasing frequency and decreasing amplitude, then normalizing by the total amplitude. Use it when you want natural-looking texture detail derived from a single noise source, adjustable via seed and octaves rather than composing several noises manually.
 
 ## Remarks
-FBM is a standard technique in procedural generation for creating natural-looking variation. This implementation decorrelates octaves by offsetting the per-octave seed (seed + i * 17) and uses a lacunarity of 2 with a persistence of 0.5 (amplitude halved each step). Normalizing by the sum of amplitudes ensures the final value remains within a predictable range regardless of how many octaves are combined, making it a robust building block for textures and terrain maps.
+fbm is a standard technique for creating richer procedural patterns: layering octaves produces both large-scale structure and fine detail. The normalization by the sum of amplitudes keeps the output in a predictable range as more octaves are added. Each octave uses a distinct seed (seed + i * 17) to decorrelate scales, ensuring higher-frequency details do not simply repeat lower-frequency patterns.
 
 ## Example
 ```javascript
-// Example usage demonstrating typical invocation
-const n = fbm(10.2, 5.7, 42, 6);
-console.log(n);
+// Example usage
+const value = fbm(0.1, 0.2, 1234, 6);
 ```
 
 ## Notes
-- Octaves must be >= 1; passing 0 or a negative value will cause division by zero and yield NaN.
-- This function relies on valueNoise being defined in scope; ensure valueNoise is available and returns bounded results for stable normalization.
-- The per-octave seed offset (i * 17) helps decorrelate octaves; keep valueNoise implementation consistent across platforms to preserve determinism.
+- The function is deterministic for a given (x, y, seed, octaves) input.
+- Performance scales with the number of octaves.
+- Output range depends on the underlying valueNoise; normalization helps keep results comparable across different octave counts.
+
 
 ---
 
@@ -68,22 +68,22 @@ function hash2(x, y, seed)
 | `seed` | — | — |
 
 
-Computes a deterministic, per-coordinate pseudo-random value in [0, 1) from three 32-bit inputs x, y, and seed. It folds the inputs into a single accumulator using 32-bit integer arithmetic (via Math.imul and |0 coercions) and two rounds of mixing to produce a stable float in the [0, 1] range. Use this function when you need repeatable variation tied to a grid location (x, y) and a seed, without relying on a global RNG like Math.random.
+hash2 is a compact, deterministic hash helper that maps three integers (x, y, and seed) to a floating-point value in the range [0, 1]. It uses 32-bit integer arithmetic via Math.imul along with bitwise shifts to mix the inputs into a single value and then normalizes it to a [0, 1] result. The output is fully deterministic for a given triple, making this suitable as a lightweight source of seeded randomness for procedural generation or sampling tasks without pulling in a heavier PRNG.
 
 ## Remarks
-hash2 is a compact, stateless primitive intended for procedural pattern generation where deterministic, coordinate‑dependent randomness is required. By avoiding any shared RNG state, it ensures that the same inputs always yield the same output across calls and across runs. It relies on Math.imul for 32-bit multiplies and a sequence of bitwise operations to mix the bits; this keeps it fast while producing good dispersion for typical grid-based usage.
+Hash2 is a tiny, stateless primitive: for the same (x, y, seed) inputs, it always returns the same number. It is intended as a fast helper for deriving a seeded value from coordinates or identifiers rather than as a security primitive. The two-stage mixing—an initial combination using three multiplications, followed by a second mixing step (h ^ (h >>> 16))—helps reduce simple correlations between nearby inputs and yields a value distributed across the [0, 1] range when normalized.
 
 ## Example
 ```javascript
-// Deterministic value for grid cell (x, y) with a chosen seed
-const value = hash2(x, y, seed);
+// Example usage: derive a deterministic value from coordinates and a seed
+const v = hash2(12, 34, 56);
+console.log(v); // v is a number in [0, 1]
 ```
 
 ## Notes
-- Inputs x, y, seed are coerced to 32-bit integers via x | 0, y | 0, seed | 0; non-integer inputs are truncated.
-- The function is non-cryptographic and should not be used for security or cryptographic purposes.
-- The result is a deterministic floating-point value in the range [0, 1] for the given inputs.
-
+- Inputs x, y, and seed are coerced to 32-bit integers via |0; non-numeric values (e.g., NaN or strings) will be treated as 0.
+- This function is not cryptographically secure. Use a proper cryptographic hash if security properties are required.
+- The return value is a JavaScript number in [0, 1]; in rare cases the result can be exactly 1 because the final normalization divides by 4294967295.
 
 ---
 
@@ -102,21 +102,21 @@ function pick(arr)
 | `arr` | — | — |
 
 
-Returns a random element from the provided array by selecting a uniform index with Math.random. Use this helper when you simply need one item from a list at random, rather than implementing a loop or shuffle yourself.
+pick(arr) returns a random element from arr by indexing at Math.floor(Math.random() * arr.length). If arr is empty, the result is undefined.
 
 ## Remarks
-This tiny function centralizes the common pattern of sampling a single item from an array, delegating the randomness to Math.random. It improves readability at call sites and ensures a single, obvious place to change how random selection is performed if needed. Keep in mind that Math.random() is not cryptographically secure, so replace it if you need unpredictable randomness for security-sensitive cases.
+Tiny utility that centralizes the common task of picking a random item from a list. It relies on the global Math.random(), so it is suitable for non-critical randomness but not for security-sensitive decisions. It does not validate input beyond the existing array protocol, so an empty array yields undefined and non-array inputs may throw at runtime.
 
 ## Example
 ```javascript
-const colors = ['red', 'green', 'blue'];
-const color = pick(colors); // e.g. 'green'
+const items = ["apple", "banana", "cherry"];
+const choice = pick(items);
 ```
 
 ## Notes
-- If arr.length === 0, the function returns undefined because there is no valid index.
-- Passing a non-array-like value (e.g., null or undefined) will throw a TypeError when attempting to read .length.
-- This function uses Math.random(); for cryptographic randomness, use a proper RNG.
+- Returns undefined for empty arrays.
+- Not suitable for cryptographic randomness; for secure randomness, use a cryptographic RNG.
+- No input validation: passing non-array inputs may throw at runtime; ensure you pass a proper array.
 
 ---
 
@@ -135,26 +135,27 @@ function pickPattern(name)
 | `name` | — | — |
 
 
-pickPattern resolves a pattern definition from the PATTERNS registry and returns it in a consistent object shape. When a valid name is supplied and PATTERNS contains that key, it returns { name, def } for that pattern. If the name is provided but not found, it logs a warning listing available patterns and falls back to a randomly chosen pattern. If no name is supplied, the function also selects a random pattern. Use this helper when you want a safe, uniform way to obtain a pattern definition by name, with a sane fallback rather than risking a missing key error.
+pickPattern returns the pattern object for a given name from the PATTERNS registry and yields an object with the shape { name, def }. If the provided name exists in PATTERNS, the exact named pattern is returned; if the name is missing or unknown, a console warning is emitted and a randomly selected pattern from PATTERNS is returned instead. This function is useful when a caller needs a concrete pattern by name, with a safe fallback to a random pattern when the requested entry does not exist.
 
 ## Remarks
-pickPattern encapsulates the lookup and fallback logic for PATTERNS, so callers do not need to duplicate code to handle unknown keys or to fall back to a random choice. It enforces a uniform return shape ({ name, def }) and makes it straightforward to either select a specific pattern or retrieve a valid random one when input is unavailable or invalid.
+pickPattern acts as a lightweight adapter over the PATTERNS registry, standardizing the output as { name, def } and shielding callers from the registry’s internal structure. The warning path communicates that the requested key wasn’t found and a random alternative was chosen, which helps maintain stable downstream behavior without throwing.
 
 ## Example
 ```javascript
-// Known pattern
-const pKnown = pickPattern('uniform');
-console.log(pKnown.name); // 'uniform'
-console.log(pKnown.def);  // PATTERNS['uniform']
+// Known pattern lookup
+const a = pickPattern('Plasma');
+console.log(a.name); // 'Plasma'
+console.log(a.def);  // PATTERNS['Plasma']
 
-// Unknown pattern triggers warning and random fallback
-const pUnknown = pickPattern('doesNotExist');
-console.log(pUnknown.name); // some random pattern name
+// Unknown pattern falls back to a random pattern
+const b = pickPattern('UnknownPattern');
+console.log(b.name); // name of a randomly selected pattern
 ```
 
 ## Notes
-- If PATTERNS is empty, the random path yields { name: undefined, def: undefined }.
-- The function uses Math.random for the fallback, so results are not deterministic across invocations.
+- If PATTERNS is empty, the random fallback will attempt to select from an empty set, which may yield undefined results for name/def.
+- The warning side-effect (console.warn) is informational and may be silenced in some environments; do not rely on it for control flow.
+- The random fallback is non-deterministic; tests requiring a specific pattern should mock Math.random or PATTERNS accordingly.
 
 ---
 
@@ -174,17 +175,22 @@ function rand(min, max)
 | `max` | — | — |
 
 
-Returns a random floating-point number uniformly distributed in the half-open interval [min, max) by computing min + Math.random() * (max - min). Use this tiny helper when you need a quick, in-range random value without pulling in a larger randomness utility.
+Returns a uniformly distributed floating-point number in the half-open range [min, max) by scaling Math.random(). It's a tiny convenience wrapper around Math.random() that lets you write rand(min, max) instead of repeating the calculation. Use it when you need a quick, readable way to sample a number within a numeric interval; note that max is exclusive, so the returned value will never equal max.
 
 ## Remarks
+This function is stateless and has no side effects. It relies on the global Math.random() for randomness. In tests or scenarios requiring reproducible results, consider injecting a custom RNG or mocking Math.random, or build a seeded RNG utility for deterministic behavior.
 
-Rand abstracts the arithmetic for mapping a unit random value to a numeric range, making call sites clearer and intent explicit. It relies on Math.random() and does not validate input, so it assumes numeric bounds and that max is greater than min for predictable results.
+## Example
+```javascript
+// Example: generate a value in [1, 10)
+const value = rand(1, 10);
+console.log(value); // e.g. 6.742138...
+```
 
 ## Notes
-
-- No input validation: max <= min yields an ill-defined range; callers should ensure min < max.
-- Upper bound is exclusive: max is never reached; to include max, adjust the formula accordingly.
-
+- Ensure min <= max; if max is less than min, the computed range becomes inverted and the result may be outside the expected bounds.
+- Math.random() is not cryptographically secure; do not use this for security-sensitive randomness.
+- The function has no built-in seeding, so for tests you may want to mock RNG behavior or replace Math.random during testing.
 
 ---
 
@@ -203,27 +209,14 @@ function smooth(t)
 | `t` | — | — |
 
 
-smooth(t) implements the cubic smoothstep easing curve. It maps t to a value in [0,1] according to t^2(3 - 2t), yielding a gentle ease-in and ease-out when interpolating between two endpoints.
+This function implements the classic smoothstep easing curve for transitions. Given a normalized input t in [0,1], it returns t * t * (3 - 2 * t), producing an S-shaped progression that starts and ends with zero slope. Use it to replace linear t in animations, interpolations, or progress calculations when a gentle acceleration and deceleration are desirable.
 
 ## Remarks
-Use this function when you want a smooth transition between values (for animations, UI motion, or shading) without linear progress. It produces a monotonic increase on [0,1], with zero slope at both ends, making transitions feel natural and continuous when blending from start to end. Centralizing this nonlinearity in a single helper helps maintain consistency across modules.
-
-## Example
-```javascript
-// Common usage: interpolate between start and end with easing
-const interpolate = (start, end, t) => {
-  const s = smooth(Math.max(0, Math.min(1, t)));
-  return start + (end - start) * s;
-};
-
-// Example: from 0 to 100 with t = 0.4
-console.log(interpolate(0, 100, 0.4)); // ~35.2
-```
+This is a pure, side-effect-free utility that encodes a common easing pattern. It yields deterministic results for the same input and is monotonic on [0,1], with zero slope at both endpoints, which makes it ideal for smoothly guiding transitions without abrupt starts or stops. Centralizing this logic in a tiny helper promotes consistency across call sites that perform interpolations or progress calculations.
 
 ## Notes
-- Does not clamp t to [0,1]; values outside this range will extrapolate beyond 0–1.
-- The derivative at t=0 and t=1 is zero, enabling a smooth start and end but not a constant rate.
-- If you need a different curve, consider other easing strategies (e.g., linear, ease-in, ease-out) or library-provided functions.
+- Assumes t is in [0,1]; inputs outside this range can produce values outside [0,1]. If you need clamping, apply a clamp before or after calling smooth.
+- Low computational cost: only a handful of arithmetic operations, suitable for hot paths.
 
 ---
 
@@ -244,20 +237,21 @@ function valueNoise(x, y, seed)
 | `seed` | — | — |
 
 
-Calculates a smooth 2D value-noise value at coordinates (x, y) using a deterministic seed. It samples the values at the four corners of the cell containing (x, y) with hash2, then blends them after applying a smoothing function to the fractional offsets, producing a smoothly varying scalar field. This is a simple, fast alternative to gradient noise for generating procedural textures or height maps, where repeatable, seed-driven patterns are desirable.
+ValueNoise computes a smoothly interpolated 2D value noise value at coordinates (x, y) by sampling pseudo-random corner values at the surrounding lattice points and performing a bilinear interpolation with a smoothing function. The four corner values are produced via hash2 at (xi, yi), (xi + 1, yi), (xi, yi + 1), and (xi + 1, yi + 1), where xi = Math.floor(x) and yi = Math.floor(y); the fractional offsets xf = x - xi and yf = y - yi are passed through a smoothing function to yield interpolation weights u and v, and the final value blends the four corners accordingly. Use this when you need a deterministic, smoothly varying scalar field (e.g., textures or terrain) derived from a simple hash-based randomness, with the seed allowing multiple independent noise patterns.
 
 ## Remarks
-Value noise stores a pseudo-random value at each lattice point and interpolates between them; because the corner values come from hash2 with a fixed seed, the pattern is deterministic for given x, y, and seed. It serves as a foundational primitive for procedural texture and terrain generation and can be combined at multiple frequencies to approximate fractal noise.
+Value noise abstracts a common procedural pattern: randomness confined to lattice corners is smoothed into continuous data over the plane, avoiding hard edges that would occur with simple random sampling. It is designed to plug into terrain generation, textures, or other procedural effects, and it separates concerns by letting hash2 handle randomness and smooth handle interpolation. The function is fully deterministic for a given (x, y, seed), enabling repeatable results across runs.
 
 ## Example
 ```javascript
-// Common usage: sample noise at a point with a given seed
-const n = valueNoise(12.34, 56.78, 42);
+// Example: sample noise at a point with a fixed seed
+const v = valueNoise(3.25, 7.75, 42);
+console.log(v);
 ```
 
 ## Notes
-- The output range depends on the range of hash2; if you need a specific range, clamp/normalize accordingly.
-- If you need tiling, align coordinates to tile boundaries or implement a tileable hash function.
-- Ensure that hash2 and smooth are pure, deterministic functions to preserve reproducible results for a given seed.
+- The value changes smoothly within a single lattice cell due to the smoothing of xf and yf, and only shifts significantly when crossing integer boundaries to sample a different corner.
+- For richer textures, combine multiple octaves of valueNoise with different scales and seeds.
+- This function relies on the helpers hash2 and smooth; changes to those implementations will affect outputs and determinism.
 
 ---

@@ -8,7 +8,10 @@ public class InfisicalConfigurationSource : IConfigurationSource
 ```
 
 
-InfisicalConfigurationSource acts as a minimal adapter that plugs Infisical into the .NET configuration system. It captures InfisicalOptions at construction and, when Build is called, returns an InfisicalConfigurationProvider configured with those options. This allows developers to add this source to an IConfigurationBuilder and access Infisical-related configuration values through the standard configuration APIs without manually wiring the provider.
+InfisicalConfigurationSource is a lightweight IConfigurationSource that captures InfisicalOptions and creates an InfisicalConfigurationProvider when Build is called. It serves as the bridge between the application's configuration pipeline and the Infisical provider, allowing Infisical to supply configuration data through the standard configuration builder without leaking provider construction details into startup code.
 
 ## Remarks
-InfisicalConfigurationSource is a thin adapter that decouples option setup from the provider creation. By storing the options and creating the provider in Build, it enables reuse of the same configuration setup across different parts of an application and keeps the provider creation logic centralized in one place. It follows the common IConfigurationSource pattern used by other configuration providers, making Infisical configuration consistent with the rest of the system.
+InfisicalConfigurationSource centralizes the Infisical integration behind the IConfigurationSource interface. Callers add this source to the configuration builder; at build time, the provider is instantiated with the stored options, keeping concerns separated between wiring and data retrieval. The Build method ignores the incoming builder beyond constructing the provider, which keeps the source predictable and side-effect free.
+
+## Notes
+- If InfisicalOptions is mutable and shared after construction, changes will affect the provider since the field holds a reference; prefer treating options as immutable after wiring.

@@ -8,27 +8,12 @@ public class MemoryRepository : IMemoryRepository
 ```
 
 
-A repository implementation that provides query and basic mutation operations for MemoryEntry entities scoped to a user and (optionally) a project. Use this when you need to list, find, add, update or remove memory entries from the application's AppDbContext while enforcing user and project scoping rules; it does not itself persist changes to the database (SaveChanges must be called on the DbContext).
+A concrete EF Core repository implementation of IMemoryRepository that reads and mutates MemoryEntry entities from an AppDbContext. Use this when you want the repository-backed persistence operations (listing, finding, adding, updating, removing) for a specific user's memories; it delegates to the DbContext's MemoryEntries DbSet and applies user/project scoping and ordering logic.
 
 ## Remarks
-MemoryRepository encapsulates common persistence patterns for MemoryEntry: user-scoped access, optional project scoping, and an "agent"-focused listing that returns both global (user-level) and project-level memories in one efficient query. The specialized ListForAgentAsync method builds a single IQueryable that conditionally includes project-scoped entries alongside user-scoped (null project) entries and orders them so user-scope entries appear first, which keeps round-trips to the database predictable and minimal.
-
-## Example
-```csharp
-// Typical read use from a service with the repository injected
-var memories = await memoryRepository.ListForAgentAsync(userId, projectId, cancellationToken);
-
-// Adding a new entry and persisting it via the DbContext
-await memoryRepository.AddAsync(new MemoryEntry { /* ... */ }, cancellationToken);
-await appDbContext.SaveChangesAsync(cancellationToken);
-
-// Updating or removing
-memoryRepository.Update(existingEntry);
-memoryRepository.Remove(existingEntry);
-await appDbContext.SaveChangesAsync(cancellationToken);
-```
+MemoryRepository exists as a thin persistence adapter over AppDbContext: it centralizes common queries that enforce user scoping and the repository's project scoping rules. The important behavioral difference between ListAsync and ListForAgentAsync is intentional: ListAsync returns entries that match the provided projectId exactly (including null), while ListForAgentAsync returns the user's global (projectId == null) entries plus, optionally, entries for a specific project in a single query and orders global entries before project-scoped ones so an agent's UI can display user-scope items first.
 
 ## Notes
-- The repository methods (AddAsync, Update, Remove) only affect the DbContext state; callers must call SaveChanges/SaveChangesAsync on the AppDbContext to persist changes.
-- AppDbContext (and therefore this repository) is not thread-safe. Do not use the same MemoryRepository instance concurrently from multiple threads.
-- Equality and ordering behavior (e.g. FindByNameAsync exact string match, projectId null handling, and the conditional OrderBy in ListForAgentAsync) are delegated to the underlying database provider and its collation/translation rules; results may vary with provider semantics.
+- ListAsync filters with m.ProjectId == projectId — passing null returns only user-scope (ProjectId == null) entries; it does not return both user-scope and all projects.
+- ListForAgentAsync uses a single query with an OR to include user-scope plus (optionally) a specific project's entries, and explicitly orders user-scope entries first (ProjectId == null) before sorting by Type and Name.
+- This class manipulates the DbContext's DbSet but does not call SaveChanges/SaveChangesAsync; callers must persist changes on the AppDbContext. Also, AppDbContext/DbContext is not thread-safe — do not share the same context instance concurrently across threads.

@@ -4,7 +4,7 @@
 
 ## Contents
 
-- [DependencyInjection_overview](#dependencyinjection_overview)
+- [DependencyInjection](#dependencyinjection)
 - [AddChatProvider](#addchatprovider)
 - [AddDocsLookup](#adddocslookup)
 - [AddInfrastructure](#addinfrastructure)
@@ -15,7 +15,7 @@
 
 ---
 
-## DependencyInjection_overview
+## DependencyInjection
 > **File:** `src/api/Gabriel.Infrastructure/DependencyInjection.cs`  
 > **Kind:** class
 
@@ -24,17 +24,15 @@ public static class DependencyInjection
 ```
 
 
-DependencyInjection_overview is a central static class that wires infrastructure services into the DI container. It orchestrates project-file storage registration, a shared HttpClient-based web fetcher, and a configurable web-search wiring system that can merge multiple providers or fall back to a default provider.
+Centralizes the bootstrapping of the infrastructure layer. Call AddInfrastructure on your IServiceCollection to register project-file storage, a configured web-fetch HttpClient, and the multi-provider web-search wiring (including instrumentation, fallbacks, and per-provider lifecycle considerations) so the application can access persistent storage, fetch web content, and perform searches through multiple providers.
 
 ## Remarks
-
-This abstraction encapsulates cross-cutting infrastructure concerns behind a single entry point, enabling the rest of the application to remain agnostic to concrete implementations. It coordinates provider wiring with instrumentation so per-provider failures and performance metrics can be observed via the InstrumentedWebSearch decorator and the diagnostics endpoints. Configuration-driven behavior is evident in how web-search providers are selected (Tools:Web:Active) and how the composite vs. single-provider path is chosen.
+This abstraction isolates infrastructure concerns from business logic, enabling environment-specific wiring without touching core application code. It enables a pluggable WebSearch strategy: multiple providers can be registered and wrapped with a metrics/decorator to surface per-provider health while preserving a single, unified search path; a safe fallback prevents total failure if configuration is incomplete or invalid. The AddInfrastructure method coordinates internal builders (AddWebFetch, AddWebSearch) so future providers or wiring strategies can be introduced with minimal impact to consumer code.
 
 ## Notes
-
-- Unknown provider keys in Tools:Web:Active are dropped with a warning, so typos won’t crash startup or derail the web-search wiring.
-- When configured for a single provider, the provider is wrapped with InstrumentedWebSearch to preserve metrics without incurring the composite merge overhead.
-- A long-lived HttpClientHandler with a CookieContainer is used for the web fetch/provider clients; altering lifetimes or cookie handling can impact session persistence and response behavior.
+- If Tools:Web:Active is missing or contains unknown keys, the wiring falls back to DuckDuckGo to keep search functionality available; verify config if you rely on specific providers.
+- Do not create HttpClient instances manually; rely on IHttpClientFactory so the long-lived handler and cookie state described in the comments are preserved.
+- The web-fetch HttpClient wiring accounts for UA string handling and redirect behavior to avoid blocks from major sites and to support the SSRF guard logic described in the comments.
 
 ---
 
@@ -56,18 +54,7 @@ private static void AddChatProvider(IServiceCollection services, IConfiguration 
 **Returns:** `void`
 
 
-AddChatProvider wires up chat providers into the DI container, always registering a MockChatProvider as a safe fallback and conditionally wiring a Grok-based provider when a Providers:Grok section exists in configuration with at least one model. Use this during startup to centralize provider wiring and configuration validation rather than sprinkling provider setup across the codebase.
-
-## Remarks
-
-Centralizes provider wiring and configuration: discovery of Grok settings, binding of options, and setup of authentication and HTTP clients are encapsulated behind a single entry point. The method enforces configuration requirements (ApiKey, BaseUrl, TimeoutSeconds, and valid model definitions) at startup, while keeping secrets handling isolated from codegen/migration paths. It uses environment-based gating (SKIP_DB_INIT) to avoid false failures in tooling scenarios, ensuring normal startup validation occurs only when secrets are available. If Grok is not configured, the method yields a safe default by leaving only the MockChatProvider registered.
-
-## Notes
-
-- At most one IsActive model is allowed; enabling multiple default models will fail validation.
-- BaseUrl must be a valid absolute URL ending with '/'.
-- During code generation or migrations, the code may skip certain validations if SKIP_DB_INIT is set; ensure this is intentional in those scenarios.
-
+Registers chat providers into the DI container. It always registers a default MockChatProvider to guarantee a provider is available and to support UI picker fallbacks; it conditionally wires the Grok provider when a Grok section exists in configuration and contains at least one model. When Grok is enabled, the method binds the GrokOptions from configuration and applies a battery of validations on startup: ApiKey must be present, BaseUrl must be a valid absolute URL, TimeoutSeconds must be positive, at most one active model is allowed, and each model entry must have a non empty Name and a positive ContextWindowTokens. If the environment variable SKIP_DB_INIT is not set to true, these validations are executed at startup. The code also reads a startup timeout from the Grok section, registers a GrokAuthHandler as a transient service, and registers a named HttpClient for GrokChatProvider so per request authorization is applied by the handler rather than DefaultRequestHeaders. This design centralizes provider discovery and keeps a safe fallback path for UI components.
 
 ---
 
@@ -89,21 +76,14 @@ private static void AddDocsLookup(IServiceCollection services, IConfiguration co
 **Returns:** `void`
 
 
-Configures the dependency injection container to wire up the model-facing documentation lookup system. It registers a LocalDocsLookup as the primary source and a GitHubDocsLookup as a fallback, then exposes a CompositeDocsLookup as IDocsLookup that queries local entries first and falls back to GitHub if needed. This method is intended to be invoked during application startup (e.g., in ConfigureServices) to ensure downstream components can resolve IDocsLookup-backed docs without knowing about the underlying sources. It also configures two HttpClients for the GitHub source (one for the API listing and one for raw content) and wires up the corresponding options.
+Sets up the documentation lookup pipeline by wiring LocalDocsLookup and GitHubDocsLookup behind a CompositeDocsLookup with local-first priority. This method configures their options, HTTP clients, and DI registrations so a consumer querying IDocsLookup will first consult local docs and fall back to GitHub when needed.
 
 ## Remarks
-By composing multiple lookups, this abstraction hides the complexity of where docs come from and provides graceful fallback. The order of resolution deliberately prioritizes the local, LLM-native docs to minimize network calls and ensure deterministic results; if the local docs are missing or outdated, the composite seamlessly consults GitHub. The pattern improves resilience and testability by isolating configuration of HttpClients and options.
-
-## Example
-```csharp
-// Within startup DI configuration (in the same class that can access the private method)
-AddDocsLookup(services, Configuration);
-```
+Why this wiring exists is to decouple the source of truth for docs from the consumption site. The composite pattern encapsulates multiple sources so callers always use a single, stable interface (IDocsLookup) while the underlying sources can evolve independently. LocalDocsLookup acts as the primary source for performance and offline availability, with GitHubDocsLookup serving as a robust fallback.
 
 ## Notes
-- Ensure LocalDocsOptions and GitHubDocsOptions sections exist in the configuration so the options bind correctly.
-- GitHub token is optional; if provided, the Authorization header is added to requests.
-- The resolution order (Local first, then GitHub) and the named HttpClients influence which sources are queried and how requests are authenticated; altering these can change docs availability and performance.
+- This is a private helper invoked during startup; external code should not call it directly.
+- GitHub token is optional; omitting it uses unauthenticated access (subject to GitHub API rate limits).
 
 ---
 
@@ -125,15 +105,16 @@ public static IServiceCollection AddInfrastructure(this IServiceCollection servi
 **Returns:** `IServiceCollection`
 
 
-Registers infrastructure services into the DI container, configuring the AppDbContext with SQLite using a Default connection string (falling back to a local gabriel.db) and registering repositories and a UnitOfWork as scoped services. It also wires up disk-backed project file storage via ProjectFilesOptions, and initializes several cross-cutting providers (Chat, WebSearch, WebFetch, DocsLookup) through their respective Add* calls.
+Configures and wires the app's infrastructure services into the DI container. It creates and configures the SQLite-backed AppDbContext (using the Default connection string from configuration, with a local fallback), registers repositories and a unit of work, binds options for disk-based project file storage, and wires up the chat, web search, fetch, and docs lookup providers. Call this extension method during startup to centralize infrastructure bootstrap and maintain consistent lifetimes and configurations across the infrastructure layer.
 
 ## Remarks
-Centralizes all infrastructure bootstrapping in one place, decoupling startup concerns from application logic. The AddInfrastructure extension ensures per-request scope for the DbContext-derived services and repositories, promoting transactional consistency within a request. It also reads configuration for the File storage options, enabling environment-specific paths without code changes. The modular AddChatProvider, AddWebSearch, AddWebFetch, and AddDocsLookup calls illustrate a pluggable infrastructure that can be extended or replaced without touching consuming components.
+
+By centralizing infrastructure registrations, AddInfrastructure provides a single bootstrap point for persistence, repositories, and external providers. It relies on IConfiguration to adapt to different environments without code changes, and binds ProjectFilesOptions to configure disk storage for project files (root path, size limits, allowed extensions, and content type prefixes). The chained AddChatProvider, AddWebSearch, AddWebFetch, and AddDocsLookup calls illustrate how infrastructure concerns are extended with optional capabilities, all wired from this entry point.
 
 ## Notes
-- Fallback connection string uses a local SQLite file (gabriel.db); ensure the hosting environment permits file creation or provide a concrete connection string in configuration.
-- Repositories and UnitOfWork are registered as scoped; their DbContext lifetime aligns with a single request, so avoid storing DbContext instances beyond the scope of a request.
-- Disk-based project file storage persists under {Root}/{ProjectId:N}; ensure the root path is writable and that project IDs are available and correctly configured in ProjectFilesOptions.
+- The SQLite connection string falls back to Data Source=gabriel.db when a named connection string is not found in configuration. Ensure this fallback is appropriate for your environment.
+- ProjectFilesOptions.SectionName must point to a valid configuration section; otherwise the DiskProjectFileService will receive default values.
+- Calling AddInfrastructure more than once can register duplicate services; invoke it once during application startup.
 
 ---
 
@@ -154,15 +135,14 @@ private static void AddWebFetch(IServiceCollection services)
 **Returns:** `void`
 
 
-It configures a named HttpClient for the web-fetching pipeline and wires a concrete URL fetcher into the dependency injection container. It applies browser-like defaults (a realistic User-Agent and Accept-Language) and a 15-second timeout, and it allows redirects so the final destination can be validated by the SSRF guard in request hooks.
+Configures Dependency Injection to provide a browser-like HTTP fetcher by registering a named HttpClient and wiring HttpUrlFetcher as the IUrlFetcher implementation. It applies a 15-second timeout and browser-style headers (a Chrome-like User-Agent and Accept-Language) to improve compatibility with real web pages, and it allows redirects while the SSRF guard validates the final destination via request hooks.
 
 ## Remarks
-By centralizing HttpClient configuration here, the code avoids scattering HTTP defaults across callers and enables reuse of the HttpClient through the IUrlFetcher abstraction. The named client (HttpClientName) isolates these settings from other HTTP usage and leverages HttpClientFactory’s lifetime management, reducing socket exhaustion and simplifying testing by keeping networking concerns behind IUrlFetcher.
+Centralizes outbound web fetch configuration, ensuring consistent behavior across all components that depend on IUrlFetcher. By binding IUrlFetcher to a concrete HttpUrlFetcher and sharing the same HttpClient instance via IHttpClientFactory, the app gains testability and a single point of change for fetch-related behavior. The redirects are allowed because the SSRF guard inspects the final destination after redirection, balancing practicality with safety.
 
 ## Notes
-- The HttpClient is registered under a specific name (HttpUrlFetcher.HttpClientName); changes here affect only that named client.
-- The 15-second timeout is per-request; long-fetch scenarios may require adjusting this value or introducing retry/backoff behavior.
-- Redirects are allowed; ensure any downstream security or SSRF checks rely on the final destination as noted in the comments.
+- Ensure the HttpUrlFetcher.HttpClientName constant matches the name used here; a mismatch prevents DI from resolving the client.
+- This method is private; its usage is confined to the DI bootstrap. If you need to customize it from outside, consider refactoring into a public extension.
 
 ---
 
@@ -184,15 +164,16 @@ private static void AddWebSearch(IServiceCollection services, IConfiguration con
 **Returns:** `void`
 
 
-Configures and wires web search providers into the dependency injection container according to runtime configuration. It reads Tools:Web:Active from the configuration (defaulting to ddg) to determine which providers to enable, wires each selected provider with its HttpClient and options, and registers the concrete provider types as singletons. If only one provider is enabled, that provider is registered directly as IWebSearch; if multiple providers are enabled, their implementations are composed behind a CompositeWebSearch to merge and rank results. Per-provider usage is recorded via InstrumentedWebSearch, so diagnostics can query how each provider performed without changing provider implementations.
+Configures and wires the web search providers at application startup. It reads the Tools:Web:Active setting (defaulting to 'ddg' if missing), registers the HTTP clients and concrete search services for each known provider (Brave, Tavily, and DuckDuckGo), and returns the concrete types for decoration. The final IWebSearch is wrapped by InstrumentedWebSearch to enable metrics collection, and the set of registered providers is exposed to the composite search when multiple sources are enabled.
 
 ## Remarks
-Architecturally, this function centralizes all provider wiring and instrumentation, enabling pluggable search backends without client code changes. It hides provider-specific HttpClient configuration behind a common interface and defers to CompositeWebSearch for result fusion. The InstrumentedWebSearch decorator isolates telemetry concerns from the providers themselves.
+This method centralizes provider wiring behind a config-driven switch, so enabling or disabling providers is as simple as editing configuration rather than code. Each provider gets its own HttpClient configuration (base URL, timeout, and necessary headers) and a dedicated implementation registered as a singleton, allowing clean separation of concerns and straightforward testing.
+Instrumentation is applied via InstrumentedWebSearch, so every search action is recorded by IMetricRecorder without changing the caller code. Downstream composition with CompositeWebSearch enables merging or ranking results across multiple enabled providers.
 
 ## Notes
-- Unknown keys in Tools:Web:Active are ignored with a warning (non-fatal).
-- If multiple providers are enabled, their results are merged and ranked by CompositeWebSearch; with a single provider, the concrete IWebSearch implementation is used directly.
-
+- Unknown provider keys are ignored with a warning (the code path drops unknown keys rather than crashing), so typos in Tools:Web:Active are tolerated but should be corrected for predictability.
+- If Tools:Web:Active is not supplied, the method defaults to registering DuckDuckGo (ddg) automatically.
+- When enabling Brave or Tavily, ensure their respective configuration sections BraveSearchOptions and TavilySearchOptions exist and are wired, since the method reads SectionName, BaseUrl, ApiKey, and TimeoutSeconds to configure HttpClient behavior.
 
 ---
 
@@ -213,21 +194,15 @@ private static void ConfigureDdgHttpClient(IServiceCollection services)
 **Returns:** `void`
 
 
-Configures and registers a named HttpClient for the DuckDuckGoWebSearch integration, centralizing transport setup so the active-providers path and the empty-config fallback share a single source of truth.
-
-It uses a long-lived HttpClientHandler with a dedicated CookieContainer to preserve cookies across requests, enabling session continuity during multi-turn interactions, and sets a 15-second timeout and automatic decompression.
-
-Per-request headers are applied on each HttpRequestMessage; DefaultRequestHeaders here would pin a single User-Agent for the lifetime of the handler, which is avoided.
+Registers the named HttpClient used by DuckDuckGoWebSearch and centralizes its configuration so both the active-providers path and the empty-config fallback share a single source of truth. The registered HttpClient uses a long-lived HttpClientHandler with a CookieContainer to persist session cookies across requests, and it applies a 15-second timeout. Automatic decompression is enabled to correctly decode compressed responses, and the handler lifetime is set to one hour to avoid losing session state during multi-turn interactions. Per-request headers (such as User-Agent rotation) are applied by DuckDuckGoWebSearch on each HttpRequestMessage; setting DefaultRequestHeaders here would pin a single UA for the lifetime of the client and break UA rotation.
 
 ## Remarks
-
-Decouples HTTP transport concerns from higher-level logic, enabling consistent session behavior and header rotation across the different configuration paths. It also preserves cookies across requests to mirror a real browser session, reducing the likelihood of DDG heuristics triggering on subsequent requests during a chat flow.
+This abstraction groups HttpClient configuration in one place to ensure consistency across DI paths and to preserve session continuity with DuckDuckGoWebSearch by maintaining cookies and a refreshed handler lifetime. It helps minimize first-request anomalies when transitioning from homepage pre-warm to subsequent searches. Note that per-request headers are responsible for UA rotation, so the client itself does not fix a single User-Agent for its entire lifetime.
 
 ## Notes
-
-- Do not rely on DefaultRequestHeaders to rotate User-Agent; per-request headers are set on each request to support UA rotation and contextual headers.
-- CookieContainer persists cookies across requests for the duration of the handler; if per-user isolation is required, consider separate named HttpClients or resetting the cookie container appropriately.
-- Endpoints in this scenario are absolute for different subdomains (html/ vs lite/); sharing a single BaseAddress would not be appropriate.
+- Do not pin a User-Agent or other default headers in this method; UA rotation is implemented per request by DuckDuckGoWebSearch.
+- The HttpClient is registered under a specific named client; ensure the same name is used when injecting or consuming the client.
+- Tuning the handler lifetime or cookie strategy can affect session persistence and DNS freshness; coordinate such changes with the surrounding session management logic.
 
 ---
 
@@ -249,9 +224,13 @@ private static void ConfigureGrokResilience(HttpStandardResilienceOptions opts, 
 **Returns:** `void`
 
 
-This method configures a standard resilience pipeline specifically tuned for Server-Sent Events (SSE) chat streams. It adjusts the default timeout settings, which are otherwise too short for non-trivial streaming operations, by setting both the total request timeout and per-attempt timeout based on a provided duration. Additionally, it configures the circuit breaker sampling duration to be twice the total timeout to comply with framework validation rules and ensure proper circuit breaker behavior.
+Configures the resilience policy for the SSE Grok streaming path by aligning the overall request timeout, per-attempt timeout, and circuit-breaker sampling with a single total duration. This helper is intended for internal dependency-injection wiring and ensures long-running streaming generations aren’t terminated mid-stream by default timeouts, while still allowing pre-stream retries. Specifically, it applies the provided totalTimeout to both TotalRequestTimeout and AttemptTimeout, and sets the CircuitBreaker.SamplingDuration to twice the total timeout to satisfy the framework’s rule that SamplingDuration >= 2 * AttemptTimeout.
 
 ## Remarks
-The method addresses the challenge of maintaining long-lived streaming connections without premature termination by aligning timeouts with provider-specific settings. It also ensures that retries only occur before the response stream starts, allowing network or initial server errors to be retried while leaving ongoing token streams uninterrupted. The extended circuit breaker sampling duration helps avoid false positives in circuit breaking during these extended streaming attempts.
+Centralizes streaming-focused resilience tuning so streaming scenarios behave predictably under long-lived token streams, reducing the risk of mid-stream termination. By mutating the supplied HttpStandardResilienceOptions to a streaming-friendly profile, it ensures consistency across callers during DI setup and avoids ad-hoc timeout configurations scattered throughout the codebase.
+
+## Notes
+- Mutates the provided HttpStandardResilienceOptions instance; ensure you pass the correct options object from the DI container.
+
 
 ---

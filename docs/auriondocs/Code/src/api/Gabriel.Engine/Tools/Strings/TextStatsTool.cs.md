@@ -8,19 +8,11 @@ public sealed partial class TextStatsTool : ITool
 ```
 
 
-TextStatsTool measures a given block of text, returning counts for characters, words, lines, sentences, and paragraphs, plus an estimated reading time and a rough token count. Use it when you need a precise, reproducible answer to how long a text is, rather than guessing; it is a pure function of the input text with no I/O or external dependencies.
+TextStatsTool exposes a compact, deterministic way to measure a block of text by returning a human-readable summary of characters, words, lines, sentences, and paragraphs, plus an estimated reading time and token rough count. Use it when you need a quick, Unicode-aware text size metric (for previews, editors, or content tooling) instead of counting manually, and note that sentence/paragraph counts are heuristic.
 
 ## Remarks
-TextStatsTool provides a centralized, deterministic analytics primitive used by editors, dashboards, or consoles to surface text length metrics consistently across the codebase. It counts characters as Unicode code points (so emoji and CJK characters count as one each) and uses simple heuristics to estimate sentences and paragraphs, ensuring behavior is predictable but not perfect for all languages. Because it is implemented as a small, self-contained tool implementing ITool, it can be composed with other tools in the Gabriel.Engine toolchain to create data-driven workflows.
-
-## Example
-```csharp
-// Common usage: measure a short paragraph
-var tool = new TextStatsTool();
-var json = "{\"text\": \"Hello world. This is a sample sentence.\"}";
-var result = await tool.ExecuteAsync(json, CancellationToken.None);
-```
+TextStatsTool is a pure utility that computes its metrics via a straightforward, heuristic approach and delegates linguistic splits to underlying helpers (Words, Sentences, CountParagraphs). It validates input and enforces a maximum length (1,000,000 characters) to avoid unbounded work, returning an error string when input is invalid rather than throwing. The output is a single, human-readable summary string suitable for display in dashboards or quick QA checks, and the description explicitly notes that it is not intended for hashing or arithmetic.
 
 ## Notes
-- The token estimate is a rough heuristic and should not be used for precise tokenization or cryptographic purposes.
-- The reading time uses a default 200 words-per-minute baseline and may vary by language, content, and reader.
+- Characters are counted as Unicode code points; emoji and CJK characters contribute a single unit per code point, which may differ from user-perceived grapheme clusters in edge cases.
+- Sentence and paragraph counts are heuristic; use this tool for rough sizing rather than exact linguistic analysis.

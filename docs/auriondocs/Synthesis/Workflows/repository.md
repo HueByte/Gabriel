@@ -2,52 +2,50 @@
 
 > *Workflow template auto-derived from 4 existing exemplar(s).*
 
-Adding a new repository
+When you need to add a new repository abstraction to the codebase — for example to surface storage operations for a new aggregate or entity — follow the repository-pattern instances already present under Gabriel.Core. The examples below show the minimal surface area the rest of the code expects (async getters, list operations, Add/Update/Remove, and any bulk helpers). Model your new interface on the reference implementation and then wire it into the places where repositories are referenced.
 
-When you need to encapsulate database access for a new entity (read, list, and similar query operations) add a repository following the existing project pattern. This keeps data access consistent, testable, and discoverable across the codebase.
+## Reference implementation
 
-## Scaffold
+Real code from src/api/Gabriel.Core/Repositories/IProjectRepository.cs that a new instance can be modeled on:
 
 ```csharp
-namespace YourProject.Repositories;
-
-public interface IFooRepository
+public interface IProjectRepository
 {
-    Task<FooEntity?> GetAsync(Guid id, CancellationToken ct);
-    Task<List<FooEntity>> ListAsync(CancellationToken ct);
-}
+    Task<Project?> GetByIdAsync(Guid id, Guid ownerUserId, CancellationToken ct = default);
+    Task<Project?> GetByIdWithFilesAsync(Guid id, Guid ownerUserId, CancellationToken ct = default);
+    Task<IReadOnlyList<Project>> ListAsync(Guid ownerUserId, CancellationToken ct = default);
+    Task<Project?> GetFirstByNameAsync(Guid ownerUserId, string name, CancellationToken ct = default);
 
-public class FooRepository : IFooRepository
-{
-    private readonly AppDbContext _db;
+    Task AddAsync(Project project, CancellationToken ct = default);
+    void Update(Project project);
+    void Remove(Project project);
 
-    public FooRepository(AppDbContext db)
-    {
-        _db = db;
-    }
-
-    public Task<FooEntity?> GetAsync(Guid id, CancellationToken ct)
-        => _db.Foos.FirstOrDefaultAsync(f => f.Id == id, ct);
-
-    public Task<List<FooEntity>> ListAsync(CancellationToken ct)
-        => _db.Foos.OrderBy(f => f.CreatedAt).ToListAsync(ct);
+    // Bulk-assign every project-less conversation of a user to the given project.
+    // Used by the Default-project lazy backfill on first project interaction.
+    Task<int> AssignOrphanConversationsAsync(Guid ownerUserId, Guid projectId, CancellationToken ct = default);
 }
 ```
 
 ## Where it lives
 
-Place the repository interface (I{Name}Repository) and its implementation ({Name}Repository) alongside the other repositories in src/api/Gabriel.Core/Repositories. The existing files follow an interface-first naming convention such as IConversationRepository.cs, IMemoryRepository.cs, IMetricRepository.cs, and IProjectRepository.cs; mirror that pattern so other developers can quickly find and recognize repository types.
+Repository interfaces live in the src/api/Gabriel.Core/Repositories folder. Existing repository interface names shown in the exemplars are IConversationRepository, IMemoryRepository, IMetricRepository, and IProjectRepository; use a similar name pattern (the interfaces start with `I` and end with `Repository`) so callers can find and consume the abstraction the same way the exemplars do.
 
-## DI wiring
+## Wiring
 
-Register your new repository in the application's dependency-injection composition root where other repositories are registered by adding a single line that maps the interface to the implementation. For example: services.AddScoped<IFooRepository, FooRepository>();. To find the correct file to edit, search the codebase for an existing repository symbol (for example IConversationRepository) and add the same registration alongside the other repository registrations you find there.
+The following files were detected as wiring sites or places that reference multiple repository exemplars; inspect them to see how repositories are referenced and to add your new repository where appropriate:
+
+- src/api/Gabriel.Infrastructure/DependencyInjection.cs
+- src/api/Gabriel.Core/Services/ChatService.cs
+- src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs
+
+Open those files and follow how the existing repository types are used and composed. The exemplars listed below show the interface shape to match; the wiring sites above are the places you will need to update or consult when connecting your new repository to the rest of the system.
 
 ## Existing examples
 
-- [IConversationRepository.cs](Code/src/api/Gabriel.Core/Repositories/IConversationRepository.cs.md)
-- [IMemoryRepository.cs](Code/src/api/Gabriel.Core/Repositories/IMemoryRepository.cs.md)
-- [IMetricRepository.cs](Code/src/api/Gabriel.Core/Repositories/IMetricRepository.cs.md)
-- [IProjectRepository.cs](Code/src/api/Gabriel.Core/Repositories/IProjectRepository.cs.md)
+- [`IConversationRepository`](../../Code/src/api/Gabriel.Core/Repositories/IConversationRepository.cs.md)
+- [`IMemoryRepository`](../../Code/src/api/Gabriel.Core/Repositories/IMemoryRepository.cs.md)
+- [`IMetricRepository`](../../Code/src/api/Gabriel.Core/Repositories/IMetricRepository.cs.md)
+- [`IProjectRepository`](../../Code/src/api/Gabriel.Core/Repositories/IProjectRepository.cs.md)
 
 ---
-*Synthesised by Aurion on 2026-06-08 22:37:02 UTC*
+*Synthesised by Aurion on 2026-07-07 21:09:18 UTC*

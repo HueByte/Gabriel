@@ -8,11 +8,11 @@ public class GitHubDocsOptions : IConfigSection<GitHubDocsOptions>
 ```
 
 
-GitHubDocsOptions is a configuration container for the docs tooling that fetches project documentation from a GitHub repository. It exposes the repository owner, repository name, branch, the path within the repo where docs live, an optional authentication token, and a cache duration for the list of docs, all with sensible defaults to enable out-of-the-box operation.
+GitHubDocsOptions is a configuration container used by the documentation tooling to locate and fetch Markdown-based documentation from a GitHub repository. It implements [`IConfigSection<GitHubDocsOptions>`](IConfigSection.cs.md), enabling it to be loaded from a shared configuration source. It exposes the repository details (Owner, Repo, Branch), the path within the repository where Markdown docs live (DocsPath), and optional authentication via a Personal Access Token (Token). The ListCacheMinutes setting controls how long the docs list responses are cached, ensuring responsive lookups while keeping edits fresh.
 
 ## Remarks
-GitHubDocsOptions exists to decouple the docs lookup logic from hard-coded details and to support testing and multi-environment configurations. By implementing [`IConfigSection<GitHubDocsOptions>`](IConfigSection.cs.md) and exposing a static SectionName, it participates in the application's configuration binding and allows values to be supplied from config sources (JSON, environment variables, etc.) without changing code. The Token property is intended for secure credentials, and can be provided via a secret store or environment variable to raise GitHub API rate limits when needed.
+At a conceptual level, this type abstracts away the specifics of a GitHub-backed docs store from the rest of the toolchain. It centralizes defaults that align with the upstream canonical repo, while allowing overrides per deployment. Because it implements IConfigSection, it participates in the configuration lifecycle and can be validated alongside other config sections. Practically, components that need to read docs can rely on this strongly-typed configuration object rather than ad-hoc strings or scattered literals.
 
 ## Notes
-- Unauthenticated requests are rate-limited by GitHub; provide a Token to increase the allowed request quota for docs operations.
-- ListCacheMinutes governs caching of the repository's docs list; changes to docs may not be reflected immediately due to caching, so adjust ListCacheMinutes accordingly if freshness is critical.
+- List caching applies to list responses; individual document reads are not cached to reflect in-flight edits promptly.
+- Token is optional; if omitted, the tooling may hit GitHub's unauthenticated rate limits. Provide a Personal Access Token via Token to increase available request quotas when performing heavy lookups.

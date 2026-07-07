@@ -46,15 +46,16 @@ public record MessageResponse(
 | `ReasoningContent` | `string?` | `null` |
 
 
-Represents a single message response in the Gabriel API messaging model, including identity, role, content, and timing, together with metadata that tracks regenerated variants and tool-invocation details. Use this instead of plain message data when you need to handle alternate replies (VariantGroupId, VariantIndex, VariantCount, VariantSiblingIds) and any associated ToolCalls, ToolCallId, or ReasoningContent.
+MessageResponse represents a single chat message along with variant-generation and tool-interaction metadata. Use it when you need to store or propagate a complete turn in a regenerable conversation, including all sibling variants, any attached tool calls, and optional reasoning content, rather than just the raw text.
 
 ## Remarks
-Why this exists: it centralizes both the content and the lifecycle metadata for a message, enabling clients to navigate and render regenerated variants. The VariantGroupId groups siblings that belong to the same turn, while VariantIndex and VariantCount describe the ordering and count of those siblings, and VariantSiblingIds provides the exact sequence. ToolCallId and ToolCalls tie tool invocations to the corresponding assistant message, and ReasoningContent exposes optional internal reasoning when provided by capable providers.
+This record groups related variants via VariantGroupId and VariantSiblingIds, and it tracks the position and total count of a variant among its siblings. The VariantIndex and VariantCount enable consumers to present or iterate through regenerated turns in a deterministic order. ToolCallId and ToolCalls capture tool usage events associated with a turn, while ReasoningContent exposes optional model-provided thinking when available. The nullable Content field reflects cases where a turn is tool-only or otherwise without visible text.
 
 ## Notes
-- Content may be null for messages that deliver only tool results or reasoning content; rely on ReasoningContent or ToolCalls in that case.
-- VariantGroupId is equal to Id for singleton (non-regenerated) turns; for regenerated turns, all siblings share the same VariantGroupId.
-- ToolCalls is non-empty only for assistant messages that requested tool calls; ToolCallId is set on messages with a tool role.
+- VariantGroupId is shared across all siblings in a regeneration group; for non-regenerated turns, VariantGroupId equals Id.
+- ToolCallId is populated for messages that involve a tool invocation (tool-role messages); ToolCalls contains the actual tool invocation details when applicable.
+- VariantSiblingIds are ordered by CreatedAt to reflect the generation sequence of variants.
+
 
 ---
 
@@ -75,19 +76,22 @@ public record MessageToolCall(string Id, string Name, string ArgumentsJson)
 | `ArgumentsJson` | `string` | — |
 
 
-MessageToolCall is an immutable record that packages the essential information to invoke a messaging tool: the tool's identifier (Id), the tool's name (Name), and a JSON-encoded set of arguments (ArgumentsJson). Developers create this object when they need to dispatch a tool invocation through a dispatcher or runner rather than calling the tool directly, enabling consistent transport and logging of tool invocations.
+MessageToolCall is a small, immutable data holder that represents a single tool invocation embedded within a message-based workflow in the Gabriel API. It carries the tool's unique identifier, the tool's logical name, and a JSON string encoding the arguments to pass to that tool. Use this symbol when you need to transport or persist a tool-call intent across system boundaries or construct messages that trigger tool execution, rather than invoking the tool directly.
 
 ## Remarks
-MessageToolCall acts as a lightweight value object that represents a tool invocation boundary. By storing ArgumentsJson as a string, the system can evolve the argument schema without changing the type structure, while Id/Name identify the target and operation for the tool runner.
+By encapsulating Id, Name, and ArgumentsJson, this type decouples the transport format from the execution logic. It acts as a lightweight contract that downstream components can interpret to locate and execute the appropriate tool, given the serialized arguments. It fits with other message-related contracts in the API by providing a stable, version-tolerant shape for tool invocations.
 
 ## Example
 ```csharp
-var call = new MessageToolCall("tool-123", "SendMessage", "{\"recipient\":\"user42\",\"text\":\"Hello\"}");
+var call = new MessageToolCall(
+    Id: "tool-translate",
+    Name: "TranslateText",
+    ArgumentsJson: "{\"text\":\"Hello, world!\",\"to\":\"fr\"}"
+);
 ```
 
 ## Notes
-- ArgumentsJson must be valid JSON; otherwise the tool may fail to execute.
-- Id should uniquely identify the targeted tool invocation to avoid routing confusion.
-- Be careful with sensitive data in ArgumentsJson; avoid leaking it through logs or telemetry.
+- As a record, MessageToolCall is immutable; to change any field, construct a new instance rather than mutating an existing one.
+- The ArgumentsJson field is free-form JSON. Ensure it conforms to the expected schema for the target tool to avoid runtime errors during deserialization or execution.
 
 ---

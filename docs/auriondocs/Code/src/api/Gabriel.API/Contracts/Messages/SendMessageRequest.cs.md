@@ -14,18 +14,11 @@ public record SendMessageRequest(string Content)
 | `Content` | `string` | — |
 
 
-SendMessageRequest is a simple, immutable record that represents the payload required to send a message. It carries a single property, Content, which holds the text of the message to be delivered.
+SendMessageRequest is an immutable data carrier defined as a C# 9 record. It represents the payload for sending a message, carrying a single string property, Content. As a record, it provides value-based equality and straightforward serialization/deserialization across API boundaries, making it a simple, predictable DTO for messaging endpoints.
 
 ## Remarks
-Being a record, SendMessageRequest provides value-based equality and immutable semantics, making it easy to compare and create variants with a with-expression. It serves as a clean contract between the client and the messaging API, separating message content from transport concerns. If future API changes require more fields (such as recipient or metadata), introduce a dedicated request type rather than expanding this one.
-
-## Example
-```csharp
-var request = new SendMessageRequest("Hello, world!");
-// You can create a modified copy with 'with':
-var next = request with { Content = "Hello again!" };
-```
+Use this abstraction when you want a clean, transport-friendly contract to carry message content across layers or over HTTP. The positional record captures Content as its sole data point, enabling concise deconstruction and easy pattern matching. Because it is a value-based data carrier, two requests with the same Content compare as equal.
 
 ## Notes
-- Content is provided via the constructor and is non-nullable in nullable-enabled contexts; ensure you supply a non-null value.
-- This type is immutable; to produce a variation, use the with-expression to create a new instance.
+- This type is a pure data transfer object with no behavior; validation should occur at the API boundary if required.
+- As a positional record, Content is set at construction time; to derive a modified payload, use the with-expression (e.g., var next = existing with { Content = "new" };).

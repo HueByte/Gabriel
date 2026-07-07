@@ -28,27 +28,14 @@ interface MenuAnchor
 ```
 
 
-MenuAnchor describes the geometric descriptor used to anchor a UI element (such as a dropdown or popup) to a reference point in the screen layout. It captures the anchor's position with top and left coordinates and its horizontal extent via width. By wrapping these three numbers in a single interface, it allows layout and rendering code to communicate anchor geometry without relying on DOM specifics.
+MenuAnchor is a small TypeScript interface that describes where a dropdown-like menu should appear relative to its triggering element. It captures the vertical position (top), horizontal position (left), and the anchor's width to enable precise alignment in the ProjectPicker component.
 
 ## Remarks
-This interface serves as a minimal contract for positioning logic, decoupling measurement from rendering. It enables reusable placement helpers to operate on a simple, testable data shape and makes it easy to mock anchor geometry in tests. In the context of UI components like ProjectPicker.tsx, MenuAnchor provides the concise geometry needed to align menus with their trigger element without exposing DOM details throughout the codebase.
-
-## Example
-```typescript
-const anchor: MenuAnchor = { top: 120, left: 32, width: 240 };
-// Example usage: apply anchor to a popover's inline styles (conceptual)
-const style = {
-  position: 'absolute' as const,
-  top: anchor.top,
-  left: anchor.left,
-  width: anchor.width
-};
-```
+By encapsulating placement data in a single object, MenuAnchor decouples layout concerns from the menu rendering logic, making it easier to reuse the same anchoring contract wherever a popover is needed within the UI. It also eases testing by providing a stable shape that consumers can rely on, and it can be extended with additional metadata in the future without changing callers.
 
 ## Notes
-- The values are numbers, typically representing pixels; maintain consistent units when applying to CSS.
-- Height is not represented; if vertical sizing is needed, consider extending the interface with a height field.
-- Ensure the top/left coordinate space matches the intended offset container (e.g., viewport vs. containing element) to avoid misplacement.
+- Interfaces in TypeScript are erased at runtime; ensure values are validated at runtime since type checks are compile-time only.
+- Top/left assume a consistent coordinate space with the menu system (e.g., relative to the containing view); mismatches can cause misaligned menus.
 
 ---
 
@@ -61,17 +48,17 @@ interface ProjectPickerProps
 ```
 
 
-ProjectPickerProps defines the props that the ProjectPicker component expects. It includes the current active project's ID (activeProjectId: string | null), a callback to set a new active project (onActiveProjectChange: (projectId: string | null) => void), and two optional members: onActiveProjectMetaChange, which receives the full active-project metadata as a ProjectResponse whenever the picker resolves the active project, and refreshKey, a number that, when incremented, triggers a refetch of the picker’s data. This interface enables a parent to react to user interactions and to align navigation or UI state with the picker’s active project context.
+ProjectPickerProps defines the props contract for the ProjectPicker component. It requires activeProjectId: string | null to reflect the currently active project (null when none is active). It exposes onActiveProjectChange: (projectId: string | null) => void to notify the parent when the user selects a different project. The optional onActiveProjectMetaChange?: (project: ProjectResponse | null) => void fires with the full active-project metadata whenever the picker resolves a new active project, enabling the parent to coordinate routing or diagnostics behavior. The optional refreshKey?: number lets the parent trigger a refetch by bumping the key; the picker will refetch on its own mutations as well.
 
 ## Remarks
 
-This interface encapsulates the contract between the ProjectPicker and its consumer, enabling the parent to stay synchronized with the selected project and, when available, the full project metadata needed for routing or context-sensitive UI decisions (such as choosing the correct diagnostics view). The optional refreshKey offers a lightweight mechanism to force the picker to re-fetch data without requiring parent-managed state changes.
+The interface decouples the picker UI from the app's routing and diagnostics logic. By providing onActiveProjectMetaChange, the parent gains visibility into the selected project's full metadata, enabling it to switch between project-scoped and conversation-scoped flows (for example, which diagnostics URL to open from a chat action). The refreshKey prop provides an explicit signal to reload data after mutations, without requiring the picker to manage its entire data-fetch lifecycle.
 
 ## Notes
 
-- activeProjectId may be null to indicate no project is currently active; ensure UI handles an empty state.
-- If provided, onActiveProjectMetaChange will be invoked with a ProjectResponse when the active project is resolved; it may be invoked with null if there is no active project.
-- refreshKey: changing its value triggers a refetch; stable values may not cause a refresh.
+- The activeProjectId may be null; UI should render a 'no selection' state and handle transitions to and from null gracefully.
+- onActiveProjectMetaChange is optional; callers must handle the possibility of a null argument and avoid unnecessary re-renders or navigation changes.
+- refreshKey is a number that should be changed by the parent to trigger a refresh; do not reuse stale values to avoid missed updates.
 
 ---
 
@@ -84,25 +71,17 @@ export function ProjectPicker(
 ```
 
 
-ProjectPicker is a React function component that renders a user interface for selecting the active project within the application. It accepts the props activeProjectId, onActiveProjectChange, onActiveProjectMetaChange, and refreshKey to control its behavior. When a user selects a different project, the component signals the new selection through onActiveProjectChange, and it propagates any updated project metadata via onActiveProjectMetaChange. The refreshKey prop serves as a trigger for reloading the picker’s data, allowing the parent to refresh the list or metadata when needed.
+ProjectPicker is a React function component that renders a user interface for selecting an active project within the web application. It receives the currently active project identifier and two callbacks to notify the parent when the active project changes or when its metadata changes, plus a refreshKey to signal a reload. Use this symbol when you need a consistent, reusable pattern for project selection rather than wiring an ad-hoc select control in each page; it centralizes how the active project is chosen and reported upward, and it provides a clear hook for triggering refreshes from the outside.
 
 ## Remarks
-ProjectPicker encapsulates the project-selection UX, decoupling it from page-level state. It coordinates with its parent to keep the active project and its metadata in sync while giving the parent the authority to refresh data by altering refreshKey. This abstraction makes it easy to reuse the same picker across different pages or contexts without duplicating selection logic.
 
-## Example
-```typescript
-<ProjectPicker
-  activeProjectId={selectedProjectId}
-  onActiveProjectChange={setSelectedProjectId}
-  onActiveProjectMetaChange={setSelectedProjectMeta}
-  refreshKey={projectsRefreshKey}
-/>
-```
+ProjectPicker acts as a focused boundary between the page's UI and the project-domain data. It encapsulates the common pattern of selecting and reacting to changes in the active project, while delegating the actual data fetching and state management to the parent via callbacks. This separation makes pages easier to compose and test, and it keeps the active-project flow consistent across the application.
 
 ## Notes
-- Changing refreshKey should be used to trigger a data reload; ensure the parent increments it thoughtfully to avoid unnecessary reloads.
-- If activeProjectId is undefined, provide a clear UI prompt (e.g., "Select a project") to avoid an empty picker state.
-- Pass stable callback references from the parent to prevent unnecessary re-renders; consider wrapping callbacks with useCallback if needed.
+
+- Prefer stable callback references for onActiveProjectChange and onActiveProjectMetaChange to avoid unnecessary re-renders or effect reruns.
+- If refreshKey changes, expect the component to refresh its internal data; avoid changing refreshKey to a random value without cause.
+- The prop activeProjectId may be undefined while loading; ensure the parent handles loading state and renders a fallback UI.
 
 ---
 
@@ -115,21 +94,13 @@ const close = () => setMenu(null)
 ```
 
 
-Closes the ProjectPicker menu by resetting the menu state to null. This lightweight helper is used whenever the UI needs to hide the menu (for example after a selection is made or when the user clicks outside). It keeps the intent of closing the menu explicit and readable, and allows callers to pass a single, reusable callback instead of duplicating the state mutation.
+Closes the project picker menu by resetting the menu state to null through the outer setMenu function. This tiny helper provides a single-purpose action that you can attach to UI elements (for example, a close button or an outside-click handler) without duplicating setMenu(null) inline. Keeping the close logic in one place makes future changes to how the menu is dismissed easier, such as adding cleanup steps before hiding it.
 
 ## Remarks
-By encapsulating the close action, this symbol keeps event handlers concise and makes it straightforward to swap or extend closing behavior in one place without updating every caller. It fits a pattern of exposing small, purpose-driven state mutations as named helpers to improve readability and maintainability of UI state management.
-
-## Example
-```tsx
-// Most common usage: attach as a click handler to close the menu
-<button onClick={close}>Close Menu</button>
-```
+Isolating the close action communicates intent clearly: this function represents the concept of “closing” the menu as a reusable unit. It relies on setMenu being available in the lexical scope, effectively acting as a light wrapper around the state setter rather than introducing a separate state mechanism.
 
 ## Notes
-- Be mindful that this closes the menu by setting the state to null; if the state shape changes, update this helper accordingly.
-- If multiple menus exist, ensure this close function targets the intended menu state (i.e., align with the correct setter, not a different or shared one).
-
+- Assumes null is the sentinel value representing "closed" for the menu; if your UI uses a different sentinel, adjust this function accordingly.
 
 ---
 
@@ -142,15 +113,17 @@ const handleNew = async () =>
 ```
 
 
-Prompts the user for a new project name, creates the project through the API, and on success immediately activates it by refreshing the UI state, persisting the active project id, and notifying the relevant listeners. If the user cancels or submits an empty name, the operation is aborted; if the API call fails, an error notification is shown.
+Prompts the user for a new project name, creates the project via ProjectsService, and upon success refreshes the UI and activates the newly created project by persisting its id and notifying listeners. Use this function as the click/handler for a 'New project' action in the ProjectPicker UI.
 
 ## Remarks
-Centralizes the create-and-activate flow for projects in the ProjectPicker. It ensures the newly created project becomes the active context by coordinating API calls, local persistence, and callback invocations; it also forwards any returned metadata via onActiveProjectMetaChange when provided.
+
+handleNew centralizes the end-to-end flow of creating a project from user input to activation, keeping UI components focused on presentation. It coordinates with ProjectsService for persistence, local state refresh via setLocalRefresh, and activation hooks via persistActiveProjectId and onActiveProjectChange; an optional onActiveProjectMetaChange callback is also invoked to surface metadata to listeners. This abstraction helps unit tests focus on behavior rather than wiring together multiple concerns across the component.
 
 ## Notes
-- Prompts rely on window.prompt; in non-browser environments or testing, this can block or be unavailable.
-- The onActiveProjectMetaChange callback is optional; callers should provide it if they need to receive the created project's metadata.
-- Error handling uses a generic notifyError with a fixed message; consider expanding handling for known error shapes from ProjectsService.
+
+- It relies on a browser environment (window.prompt); in non-browser environments or during SSR/tests, mock or guard against window.prompt.
+- The input is trimmed and if empty after trimming, the operation aborts gracefully.
+- After a successful creation, the function immediately activates the project by persisting its id and invoking the relevant callbacks; ensure listeners can handle the new active project promptly.
 
 ---
 
@@ -165,14 +138,26 @@ export function loadActiveProjectId(): string | null
 **Returns:** `string | null`
 
 
-Loads the ID of the currently active project from the browser's localStorage. It reads the value stored under ACTIVE_PROJECT_KEY and returns it as a string, or null if the key is missing or if accessing localStorage fails.
+Reads the active project identifier from the browser's localStorage using the ACTIVE_PROJECT_KEY and returns the value as a string when available. If the item doesn't exist or access to localStorage throws (for example in non-browser environments or under strict privacy modes), it returns null. This helper is typically used by UI components to initialize or preselect the currently active project without forcing a page reload.
 
 ## Remarks
-Provides a safe, synchronous read of the active project identifier from client storage, hiding error handling from callers and preventing UI crashes when storage is unavailable. It complements the storage key constant and the ProjectPicker UI by giving a single, reusable way to obtain the currently selected project.
+This function centralizes access to the active project key and provides a safe fallback in environments where localStorage access may fail. By returning null instead of throwing, callers can treat "no active project" as a normal case and apply their own fallback or prompt logic. It also relies on the ACTIVE_PROJECT_KEY being defined in scope, encapsulating the storage key behind a single, reusable symbol.
+
+## Example
+```typescript
+// Typical usage: obtain the active project ID if one is saved
+const projectId = loadActiveProjectId();
+if (projectId) {
+  // proceed with the active project
+} else {
+  // no active project saved; prompt user to select one
+}
+```
 
 ## Notes
-- Null can indicate either 'no active project saved' or 'storage access failed', so callers should handle null explicitly.
-- This function is client-side only; environments without localStorage (SSR) will fall back to null without throwing.
+- The function returns null both when the key is missing and when localStorage access fails; callers should handle null as "no active project".
+- Ensure ACTIVE_PROJECT_KEY is defined in the scope where this function is used; a missing key constant could cause a compilation/runtime error.
+- This only works in environments with Web Storage (i.e., a browser); during server-side rendering or in non-browser contexts, the call will return null.
 
 ---
 
@@ -191,24 +176,14 @@ const onDown = (e: globalThis.MouseEvent) =>
 | `e` | `globalThis.MouseEvent` | — |
 
 
-Closes a dropdown-like UI when the user clicks outside the menu and its trigger. This function acts as a global mouse-down handler that returns early if the click target is contained within either the menu or the trigger; otherwise it calls close() to dismiss the UI.
+Handles a global mouse-down event to dismiss the Project Picker when the user clicks outside the menu and its trigger. It returns early if the click target is inside either element; otherwise, it calls close() to hide the picker.
 
 ## Remarks
-Centralizes outside-click dismissal logic for dropdown-style components by checking containment against both the menu and its trigger refs. This ensures interactions inside the component don’t inadvertently close it while outside clicks reliably close it, keeping open/close semantics consistent across usage scenarios.
-
-## Example
-```typescript
-// Common usage: attach a global mousedown listener to close the picker when clicking outside
-document.addEventListener('mousedown', onDown);
-
-// Remember to detach when the component unmounts or is no longer needed
-document.removeEventListener('mousedown', onDown);
-```
+This small handler centralizes the outside-click dismissal pattern for popover-like surfaces. It depends on DOM node references (menuRef and triggerRef) and a single close() action, keeping the interaction logic separate from rendering and reducing duplication across components that need similar behavior.
 
 ## Notes
-- Attach/detach the listener carefully to avoid memory leaks; if onDown is recreated on each render, memoize it to ensure the listener remains stable.
-- The checks tolerate unmounted refs (due to optional chaining); if refs are not yet mounted, the handler safely does nothing more than returning.
-- The behavior assumes close() is defined in scope and performs the actual UI dismissal; ensure it’s accessible from the handler’s context.
+- If menuRef.current or triggerRef.current are not mounted when the event fires, the containment checks won’t short-circuit, and close() may run on any outside click during initial render. Ensure proper mount order or guard close() accordingly.
+- This function uses a global MouseEvent context (not React’s synthetic event); ensure it’s wired to a document/window listener and cleaned up on unmount to avoid leaks.
 
 ---
 
@@ -227,24 +202,22 @@ const onKey = (e: globalThis.KeyboardEvent) =>
 | `e` | `globalThis.KeyboardEvent` | — |
 
 
-Handles a keyboard event to close the ProjectPicker when the Escape key is pressed. Use this small handler to provide keyboard dismissal for overlays, modals, or dropdowns by wiring it to a keydown listener.
+onKey is a small keyboard event handler that closes a UI surface when the Escape key is pressed. Developers reach for this when they want a lightweight, consistent way to dismiss components (like a project picker) without wiring up a full, custom key-handling flow.
 
 ## Remarks
-This tiny function encapsulates the Escape-to-close behavior, so the closing logic stays decoupled from presentation. By centralizing the handling, the same semantics can be applied consistently wherever the ProjectPicker is used, aiding accessibility and predictable UX. It also simplifies testing, since the close invocation can be verified in isolation.
+onKey centralizes Escape-key dismissal logic for UI overlays. It acts as a thin adapter that triggers the surrounding scope’s close() when Escape is pressed, enabling reuse across components that share the same UX. Its behavior is intentionally narrow (only Escape triggers close), so callers know exactly when the UI will close.
 
 ## Example
 ```typescript
-// Attach Escape-to-close behavior globally
-window.addEventListener('keydown', onKey);
-
-// Cleanup should be performed when the component unmounts
-window.removeEventListener('keydown', onKey);
+// Example usage: attach as a global keydown listener
+document.addEventListener('keydown', onKey);
+// When cleaning up (e.g., component unmount)
+document.removeEventListener('keydown', onKey);
 ```
 
 ## Notes
-- Ensure you clean up the listener to avoid leaks.
-- In some environments, different keys or key values may be reported; prefer e.key === 'Escape' for clarity.
-- If the focus is inside a child input, you may want to scope the listener or conditionally enable it to avoid interfering with normal typing.
+- The handler assumes a close() function exists in scope; if not, a runtime error can occur.
+- Attach/detach the listener in the appropriate lifecycle to avoid leaks.
 
 ---
 
@@ -257,14 +230,17 @@ const openSettings = () =>
 ```
 
 
-openSettings navigates to the active project's settings screen. It will no-op if no project is currently active and safely constructs the URL by encoding the project id before using navigate to update the route.
+openSettings is a concise navigation helper that takes the user to the active project’s settings screen. It guards against missing context by exiting early when there is no active project; when a project is present, it constructs a URL of the form /p/{encodedId}/settings using encodeURIComponent to ensure the ID is URL-safe, and delegates to the app’s navigation function to perform a client-side route transition.
 
 ## Remarks
-Centralizes the routing logic for the project settings flow, so callers don't need to assemble the path or worry about URL encoding. It ties the navigation action to the presence of an active project, ensuring a consistent user experience when a project is selected. This isolation also makes it easier to test and reuse the navigation behavior from multiple UI triggers within the ProjectPicker component or nearby UI.
+By encapsulating this routing logic, the UI can trigger settings navigation without duplicating path construction or encoding rules. It also centralizes the guard against null project context, reducing the chance of runtime errors in places where openSettings might be invoked without a selected project. The approach supports consistent user experience when switching between projects and ensures that IDs with special characters are safely transmitted in the URL.
 
-## Notes
-- Calling openSettings with no active project results in no navigation; this is a silent no-op. Guard callers or provide a user-facing cue if needed.
-- It assumes a router/navigation function is in scope; ensure the proper router context is present to avoid runtime errors.
+## Example
+```typescript
+// Navigate to the settings page of the currently active project
+openSettings();
+```
+
 
 ---
 
@@ -283,21 +259,25 @@ function persistActiveProjectId(id: string | null)
 | `id` | `string | null` | — |
 
 
-Persist the active project ID to localStorage so the user's selection persists across page reloads. Call this when the user selects a project. If a non-null id is provided, it is written under ACTIVE_PROJECT_KEY; if null (or an empty string, due to the falsy check) is provided, the key is removed. Any errors during storage are swallowed to avoid impacting the UI.
+Persists the currently active project identifier in the browser's localStorage. Call this helper instead of interacting with localStorage directly to ensure a consistent key and safe failure handling. When id is a non-null string, it stores the value under ACTIVE_PROJECT_KEY; when id is null, it removes that key. The storage operation is wrapped in a try/catch that swallows errors to avoid breaking the UI if storage is unavailable or blocked.
 
 ## Remarks
-This function acts as a tiny persistence adapter for the active project. It centralizes the storage key usage and error handling, so all parts of the UI share a single, predictable means of saving and clearing the active project.
+
+By centralizing how the active project is persisted, this function decouples storage concerns from UI components and makes it easier to change the persistence strategy later (for example, switching to sessionStorage or a different key) without touching call sites. It also enforces the rule that an explicit null clears the stored value, which matters for triggering a fresh selection when the app restarts.
 
 ## Example
+
 ```typescript
-persistActiveProjectId("proj-123"); // stores the active project id
-persistActiveProjectId(null); // clears the stored value
+persistActiveProjectId("proj-42");
+```
+
+```typescript
+persistActiveProjectId(null);
 ```
 
 ## Notes
-- Silent failures: storage errors are swallowed; if persistence failures matter in your scenario, consider surfacing them or returning a status.
-- Empty string or null clears the value; if you need to store an empty string, this function won't distinguish it from removal.
-- LocalStorage is browser-specific; in non-browser environments or privacy modes, this may be a no-op or throw, but the try/catch will swallow it.
+
+- Silent failures: localStorage errors are ignored, so persistence may appear to succeed while actually not storing.
 
 ---
 
@@ -316,24 +296,14 @@ const selectProject = (id: string) =>
 | `id` | `string` | — |
 
 
-selectProject updates the active project by id and triggers the associated side effects. It persists the chosen id, notifies listeners about the active project change, optionally provides the selected project's metadata to onActiveProjectMetaChange, and then closes the menu.
+selectProject orchestrates the actions that follow a user selecting a project: it persists the selected project's id, informs interested parties of the change, supplies optional project metadata to a callback if present, and closes the project picker menu.
 
 ## Remarks
-By funneling all project-selection side effects through a single function, this symbol decouples the UI from the data-layer and event-handling logic. It coordinates persistence, change notification, metadata provisioning, and UI state (menu visibility) in one place, reducing duplication across the component and its consumers.
-
-## Example
-```typescript
-// Typical usage in a click handler
-<button onClick={() => selectProject(project.id)}>
-  Use this project
-</button>
-```
+Acts as a small orchestrator that coordinates persistence, event notification, and UI state in response to a project selection. By reading the project metadata from the surrounding collection (projects) and passing it to onActiveProjectMetaChange when available, it decouples lookup and consumption from the UI handler. The optional chaining on onActiveProjectMetaChange makes the metadata callback a non-breaking extension point.
 
 ## Notes
-- If no matching project is found, onActiveProjectMetaChange receives null.
-- onActiveProjectMetaChange is optional; the function checks with ?. before invoking.
-- setMenu(null) closes the menu; if you need different behavior, adjust after calling selectProject.
-
+- If the selected id isn't present in the projects array, the metadata callback receives null, so listeners should handle that case.
+- There is no explicit error handling shown here; failures from persistActiveProjectId or from listener callbacks would propagate to the caller and may require additional guards in a real-world scenario.
 
 ---
 
@@ -346,21 +316,16 @@ const toggleMenu = () =>
 ```
 
 
-toggleMenu is a UI helper that toggles the visibility of a contextual menu anchored to a trigger element. When invoked, it closes the menu if it is already open by clearing the menu state; otherwise it reads the current trigger button from triggerRef, and if the button exists, computes the menu’s position from the button’s bounding rectangle and opens the menu just below the button with the same width.
+toggleMenu toggles a dropdown-like menu anchored to a trigger element. If the menu is already open, it closes it by resetting the menu state to null; otherwise it reads the trigger button's position from the DOM and opens the menu positioned just below the button, with the same width as the button to preserve alignment.
 
 ## Remarks
-This function centralizes the toggling and positioning logic for a dropdown anchored to its trigger, ensuring consistent placement across invocations and re-renders. It cleanly separates the concerns of showing/hiding the menu from the rendering of the menu itself, enabling the menu component to rely on a simple position object (top, left, width) provided by this helper.
 
-## Example
-```typescript
-// Typical usage inside a component
-<button ref={triggerRef} onClick={toggleMenu}>
-  Projects
-</button>
-```
+Encapsulates the common popover pattern: a trigger toggles a menu, and its opening position is anchored to the trigger's bounding rectangle. By capturing top, left, and width at open time, the menu remains visually aligned with the trigger; note that this does not handle edge collisions or dynamic repositioning.
 
 ## Notes
-- If triggerRef.current is null, or the button element is not mounted, the function exits gracefully without throwing.
-- The menu is positioned using the trigger element’s bounding client rectangle, offset slightly downward (bottom + 4) and stretched to the button’s width to align visually with the trigger.
+
+- The function exits early if btn is null (e.g., before the trigger is mounted).
+- The width is captured on open and won't adjust if the trigger resizes after opening.
+
 
 ---

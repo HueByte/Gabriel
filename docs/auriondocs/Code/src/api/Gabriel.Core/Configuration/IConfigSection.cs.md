@@ -18,36 +18,22 @@ public interface IConfigSection<TSelf> where TSelf : class, IConfigSection<TSelf
 ```
 
 
-Represents a contract for configuration section types bound from appsettings. Any POCO that binds a configuration section should implement `IConfigSection<TSelf>` to expose its SectionName as a static, type-level value. The static abstract SectionName member allows generic code (for example, configuration binders) to obtain the section name without creating an instance of the type, ensuring there is a single source of truth for the section name and reducing drift between the type and the configuration key.
+Defines a contract that every POCO bound from appsettings must implement so the configuration section name lives next to the type—the single source of truth for the section's identity. The static abstract SectionName member enables generic code to read the name without instantiating TSelf, leveraging C# 11's static interface members to support type-driven configuration binding.
 
 ## Remarks
-At the architectural level, this interface enables static polymorphism: generic code can read TSelf.SectionName to discover the corresponding appsettings section without instantiating the POCO. This centralizes the binding logic, reduces boilerplate, and minimizes the risk of mismatches between a type and its configuration key. The constraint `TSelf : class, IConfigSection<TSelf>` guarantees that the type participates in the static contract; if a type omits the static SectionName, code that relies on the contract will fail to compile. Leveraging C# 11 static abstract members, this pattern provides type-safe access to metadata directly from the type parameter.
+Co-locating the section name with the POCO prevents drift between the type and its configuration identity, simplifying refactoring and discovery. The self-referential generic constraint (TSelf : class, `IConfigSection<TSelf>`) and the static abstract member pattern empower strongly-typed, compile-time checks for the correct section name in generic configuration helpers. This approach requires a C# 11+ toolchain and compatible runtimes; ensure your project targets support for static interface members.
 
 ## Example
 ```csharp
-public class DatabaseSettings : IConfigSection<DatabaseSettings>
+public sealed class DatabaseSettings : IConfigSection<DatabaseSettings>
 {
     public static string SectionName => "Database";
-    // other properties bound from appsettings...
-}
-
-public static class ConfigBinder
-{
-    // Reads the section name from the type argument without instantiation
-    public static TSection Bind<TSection>(IConfiguration config)
-        where TSection : class, IConfigSection<TSection>
-    {
-        var section = config.GetSection(TSection.SectionName);
-        return section.Get<TSection>();
-    }
 }
 ```
 
 ## Notes
-- Requires C# 11 and static abstract interface members; your compiler and tooling must support this feature.
-- The SectionName value must correspond to a key in your appsettings under which the configuration for that POCO lives.
-- Access to SectionName is via the generic type parameter (e.g., TSection.SectionName) rather than an instance property; avoid calling on an instance to preserve the static contract.
-
+- Implementations must be reference types because of the 'class' constraint; attempting to implement with a struct will fail to compile.
+- SectionName is accessed statically as TSelf.SectionName; reading it from an instance is not applicable.
 
 ---
 
@@ -60,30 +46,16 @@ public static class ConfigSectionExtensions
 ```
 
 
-ConfigSectionExtensions.`ConfigureSection<TOptions>` is a compact DI helper that binds a strongly-typed options class to the configuration section named by TOptions.SectionName. It registers the options type with the options system and returns an `OptionsBuilder<TOptions>` so you can chain validators and additional configuration before consuming `IOptions<TOptions>`.
+Extends IServiceCollection with a strongly-typed helper to bind a configuration section directly to an options class. By using TOptions.SectionName to locate the section, it hides the repetitive GetSection(...).Bind(...) boilerplate and returns an `OptionsBuilder<TOptions>` so you can continue configuring the options (for example, adding validators) in a fluent chain.
 
 ## Remarks
-This abstraction centralizes the common pattern of binding an options POCO to a named configuration section, allowing consumers to keep startup code concise. It relies on TOptions exposing the SectionName (via `IConfigSection<TOptions>`) and yields an `OptionsBuilder<TOptions>` for fluent validation and further configuration, aligning with standard IOptions usage.
 
-## Example
-```csharp
-public interface IMySettings : IConfigSection<IMySettings>
-{
-    static string SectionName => "MySettings";
-    string Endpoint { get; set; }
-}
-
-public void ConfigureServices(IServiceCollection services, IConfiguration config)
-{
-    services.ConfigureSection<IMySettings>(config)
-            .Validate(o => !string.IsNullOrWhiteSpace(o.Endpoint),
-                      "Endpoint must be configured");
-}
-```
+By encapsulating the standard pattern into an extension, this symbol promotes consistent, centralized configuration of options across the application. It relies on TOptions implementing `IConfigSection<TOptions>` to supply the SectionName, ensuring the binding targets the intended configuration subtree and enabling per-options validators to be attached via the returned builder.
 
 ## Notes
-- The binding uses config.GetSection(TOptions.SectionName). If the section is missing, the options object will still be constructed with default values, so you may want to enforce presence via validation.
-- The extension returns an `OptionsBuilder<TOptions>`, enabling fluent validation and further options configuration before the container is built.
-- SectionName must be provided as a static member on TOptions (via `IConfigSection<TOptions>`); mismatches will surface as compile-time constraints.
+
+- If SectionName is incorrect or the configuration section is absent, the `Options<TOptions>` will bind to default values; pair with validators to surface misconfigurations.
+- The generic constraint enforces that only options types providing a SectionName participate, preventing accidental misbindings.
+- This method is a convenience wrapper; it does not introduce new binding semantics beyond what .`AddOptions<TOptions>`().Bind(section) provides.
 
 ---

@@ -18,14 +18,14 @@ export function IndexPage()
 ```
 
 
-IndexPage boots the chat experience by deciding which conversation to display on first render. It first attempts to restore the last active conversation; if found, it navigates to that chat’s page and replaces the current history entry. If not, it creates a new conversation by posting a request with a null title (letting the backend generate a unique identifier), then navigates to the new conversation page. While this bootstrap work runs, it renders a lightweight loading indicator.
+IndexPage bootstraps the chat experience on first load. It guards initialization with a ref to ensure the boot logic runs only once. If a previously loaded conversation exists, it navigates to /c/{encoded last} with replace; otherwise it creates a new conversation by posting { title: null } and then navigates to /c/{conv.id}. While these asynchronous steps complete, it renders a Loading… indicator.
 
 ## Remarks
-By centralizing this initialization logic in a dedicated page, the app guarantees a consistent entry point into a valid conversation view. The ranBootRef guard ensures the bootstrap runs only once per mount, preventing multiple navigations in development or with strict mode. Navigating with replace keeps the bootstrap step out of the user's history, so back navigation returns to the app root rather than the loading screen.
+IndexPage centralizes startup routing for the web app's chat feature, bridging persisted state, backend creation, and client-side navigation. It maintains a single bootstrap path that can be evolved to support additional startup policies (e.g., prefetching or preloading data) without duplicating navigation logic across pages.
 
 ## Notes
-- Passing title: null relies on the backend to assign a unique title or identifier; if this behavior changes, adjust payload accordingly.
-- The code uses encodeURIComponent when constructing the path to avoid issues with special characters in IDs.
+- The boot logic runs only once per mount due to ranBootRef, preventing multiple navigations during rerenders.
+- If the backend post call fails, notifyError surfaces the error to the user.
 
 ---
 
@@ -40,24 +40,23 @@ function loadLastConversation(): string | null
 **Returns:** `string | null`
 
 
-Loads the last conversation from the browser's storage by reading the ACTIVE_CONVERSATION_KEY and returning the stored string. If access to storage fails or the key is missing, it returns null, allowing callers to decide whether to resume a previous conversation or start anew.
+Reads the last conversation stored in the browser's localStorage and returns it as a string when present, or null if there is no saved value or if reading storage fails. This tiny helper centralizes access to the ACTIVE_CONVERSATION_KEY so the UI can gracefully fall back to a default state without throwing.
 
 ## Remarks
-Encapsulates storage access and error handling behind a small, reusable helper, so UI logic doesn't need to manage try/catch around localStorage directly. It provides a single place to define and change the storage key, and it makes testing easier by providing a predictable null outcome when nothing is stored or storage is unavailable.
+This function isolates persistence concerns from the page logic that renders the index view. By returning null on failure, it lets callers decide how to handle the absence of a saved conversation (e.g., starting a new chat). The small, synchronous surface keeps initialization simple and predictable.
 
 ## Example
 ```typescript
+// Retrieve and use the last conversation, if available
 const last = loadLastConversation();
 if (last !== null) {
-  resumeConversation(last);
-} else {
-  startNewConversation();
+  console.log("Loaded last conversation:", last);
 }
 ```
 
 ## Notes
-- The function swallows any error thrown by localStorage and returns null; callers cannot distinguish between "not stored" and "storage access failure" from the return value alone.
-- localStorage stores values as strings; if you stored a JSON object, parse it separately (e.g., JSON.parse(last)).
-- ACTIVE_CONVERSATION_KEY must be defined in scope; otherwise a runtime ReferenceError could occur before attempting to read storage.
+- Access to localStorage can fail in certain environments or privacy modes; the function handles this by returning null instead of throwing.
+- A null return indicates either the value is not stored or reading storage failed; callers should treat both as "no prior conversation".
+- The function is synchronous and relies on a browser-global, so it may be a no-op in non-browser environments or during server-side rendering unless guarded by environment checks.
 
 ---

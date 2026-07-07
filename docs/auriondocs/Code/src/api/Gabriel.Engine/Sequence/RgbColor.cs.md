@@ -39,16 +39,18 @@ public readonly record struct RgbColor(byte R, byte G, byte B)
 | `B` | `byte` | — |
 
 
-RgbColor is a compact, immutable RGB color value type with 8-bit channels designed to be embedded directly in color palettes without heap pressure. It exposes a helper FromHsv to convert standard HSV color components into an RGB color efficiently.
+RgbColor is a compact, immutable RGB color token stored as a three-byte triplet inside a value-type struct, ideal for palette entries and large inline color arrays where heap allocations must be avoided. When you need to derive a color from HSV values, FromHsv provides a standard HSV-to-RGB conversion and returns an RgbColor with 8-bit channels.
 
 ## Remarks
-As a readonly record struct, it offers value-based equality with cheap copying while remaining a small, stack-friendly value type. The FromHsv method implements a standard HSV-to-RGB conversion and returns a new color with clamped 0–255 channels, keeping the color representation simple and predictable for palette generation and rendering pipelines.
+Because it is a readonly record struct, it enjoys value semantics and cheap copying while remaining allocation-free. The color channels are exposed as R, G, and B bytes, making it straightforward to store in color palettes and pass around as a small token. The FromHsv method uses a conventional HSV-to-RGB mapping with hue in [0,1), and saturation/value in [0,1], clamping each resulting channel to the 0–255 range.
 
 ## Example
 ```csharp
-var red = RgbColor.FromHsv(0.0, 1.0, 1.0); // pure red
+var red = RgbColor.FromHsv(0.0, 1.0, 1.0);
+Console.WriteLine($"{red.R},{red.G},{red.B}"); // 255,0,0
 ```
 
 ## Notes
-- Hue values outside [0, 1) are normalized internally (wrapped) before conversion.
-- The resulting RgbColor channels are clamped to the 0–255 range, ensuring valid byte components even for extreme HSV inputs.
+- Hue is normalized to the [0,1) interval inside the conversion (hue % 1.0 + 1.0) % 1.0), while saturation and value are treated within [0,1].
+- Each channel is clamped to the 0–255 range after the HSV→RGB computation, so inputs that would overflow simply saturate at the extremes.
+- Saturation or value of 0 yields grayscale results; the mapping follows the standard HSV→RGB conversion semantics.}

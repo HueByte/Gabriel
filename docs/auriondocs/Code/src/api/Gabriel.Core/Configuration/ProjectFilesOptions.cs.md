@@ -8,26 +8,12 @@ public class ProjectFilesOptions : IConfigSection<ProjectFilesOptions>
 ```
 
 
-ProjectFilesOptions is a configuration container that centralizes the policies for storing and validating per-project uploaded files. It binds to the Projects:Files configuration section and exposes a Root path for per-project subfolders, a maximum file size for uploads, a conservative list of allowed extensions, and a read-time whitelist of text-content types used by ReadTextAsync. Developers reach for it when they need to tailor where project files live, how large uploads can be, and which file types are eligible for reading or inline display, all without touching runtime code.
+ProjectFilesOptions defines the policy for per-project file storage and access. It binds to the 'Projects:Files' configuration and provides a root directory for per-project subfolders, a maximum upload size, a whitelist of allowed extensions, and a set of text-content-type prefixes that ReadTextAsync will treat as readable text. The defaults (relative root './projects-data', 25 MiB limit, and conservative lists) are chosen to support developer convenience while offering basic safety in production.
 
 ## Remarks
-By isolating these concerns, the class decouples filesystem layout and content moderation from business logic. It documents the expected per-project subfolder structure and the read behavior controlled by TextContentTypePrefixes, ensuring consistent behavior across environments. Because the type implements [`IConfigSection<T>`](IConfigSection.cs.md), changes can be supplied via configuration without recompiling.
-
-## Example
-```csharp
-// Common binding in startup/host
-services.Configure<ProjectFilesOptions>(Configuration.GetSection(ProjectFilesOptions.SectionName));
-
-// Optional programmatic override
-var options = new ProjectFilesOptions
-{
-    Root = "/var/app/projects",
-    MaxFileBytes = 50 * 1024 * 1024,
-    AllowedExtensions = new List<string> { ".md", ".txt" }
-};
-```
+This abstraction centralizes storage policy to separate concerns between configuration and the runtime file-handling logic, enabling deployments to adjust behavior without touching code. The Root path is designed to be overridden via the GABRIEL_PROJECTS__FILES__ROOT environment variable, facilitating environment-specific configurations without recompilation. Text readability is controlled by TextContentTypePrefixes used by ReadTextAsync; non-text types may still be downloaded, but will not be rendered as text, reducing the risk of exposing binary data in text viewers.
 
 ## Notes
-- The Root path is relative to the application root by default; ensure the configured directory is writable by the app process in your deployment.
-- MaxFileBytes is a per-upload cap and does not reflect total storage usage; monitor disk consumption and adjust as needed for your workload.
-- TextContentTypePrefixes governs which MIME-like types ReadTextAsync will treat as text for inline reading; files outside this set can be downloaded but won’t be surfaced as text content.
+- The AllowedExtensions list acts as a whitelist; uploads with extensions not listed will be rejected by validation.
+- TextContentTypePrefixes governs which files ReadTextAsync will render as text; ensure content types are correctly set to enable the intended previews.
+- MaxFileBytes is a boundary check to prevent oversized uploads from exhausting disk space; adjust carefully in production to balance user needs and resource protection.

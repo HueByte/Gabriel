@@ -14,11 +14,32 @@ public enum MemoryEntryType
 ```
 
 
-MemoryEntryType is an enumeration that labels the category of a memory entry used by the agent's memory system. It defines four categories—User, Feedback, Project, and Reference—so memory can be categorized consistently and retrieved with a clear intent. Use MemoryEntryType when creating a memory record to indicate what kind of information is being stored: User captures facts about the person the agent is interacting with (role, expertise, preferences); Feedback records corrections or validations that should influence future behavior; Project stores information about ongoing work constraints, deadlines, or stakeholder considerations; Reference points to external information sources such as dashboards, ticket systems, Slack channels, or docs. The explicit mapping (User = 0, Feedback = 1, Project = 2, Reference = 3) helps with deterministic serialization across components.
+MemoryEntryType is an enumeration that categorizes a memory entry into one of four domains: User, Feedback, Project, or Reference. It is used when creating memory entries to tag their type and drive category-specific processing and storage.
 
 ## Remarks
-MemoryEntryType unifies memory classification and enables targeted retrieval and behavior tuning. By isolating these categories behind a single enum, the system can route memory entries to the appropriate subsystems (personalization, feedback loop, project planning, or external references) and extend the taxonomy in one place without touching business logic everywhere.
+MemoryEntryType provides a fixed taxonomy for memory items, allowing the system to categorize content as User, Feedback, Project, or Reference. This taxonomy enables consistent routing, filtering, and UI representation across the memory subsystem, decoupling the payload from its category. The explicit numeric values also support stable serialization and cross-component communication, so avoid reordering or removing existing members.
+
+## Example
+```csharp
+MemoryEntryType type = MemoryEntryType.User;
+
+switch (type)
+{
+    case MemoryEntryType.User:
+        // user-related memory
+        break;
+    case MemoryEntryType.Feedback:
+        // feedback-related memory
+        break;
+    case MemoryEntryType.Project:
+        // project-related memory
+        break;
+    case MemoryEntryType.Reference:
+        // reference-related memory
+        break;
+}
+```
 
 ## Notes
-- Be careful to classify content in the most specific category to avoid confusing retrieval.
-- If interop with other languages or services relies on numeric values, keep the explicit assignments in sync to prevent serialization drift.
+- Changing the underlying numeric values will break serialized data; treat values as stable identifiers.
+- When adding new categories, update downstream handlers and persistence mappings to recognize the new type.

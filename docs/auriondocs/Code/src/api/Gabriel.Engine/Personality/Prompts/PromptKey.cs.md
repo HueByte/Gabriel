@@ -8,12 +8,18 @@ public static class PromptKey
 ```
 
 
-PromptKey is a static container of string constants that serve as named keys into the prompt fragment registry. Each key identifies a specific fragment group (persona, memory, formatting, or mode behavior) and is declared as a const string to ensure they fold into switch arms or dictionary lookups at compile time, catching typos as build errors. The keys are organized by topic using dot-separated identifiers, and whenever a new mode or section is added, its key is defined here alongside the corresponding Fragments.* member.
+PromptKey is a static registry of string identifiers for every named prompt fragment the system can reference. It exposes a set of const string fields grouped by topic (persona, memory, formatting) and per-mode variants, enabling callers to use a single, compile-time-checked token instead of arbitrary literals when assembling prompts. The keys are defined as compile-time constants so they can be embedded directly into switch arms or dictionaries, catching typos at build time rather than at runtime. When new modes or sections land, add its key here and the matching `Fragments.*` constant it points at. This keeps the surface stable while the actual fragment content can evolve independently.
 
 ## Remarks
-By centralizing these keys, callers avoid scattering literal strings across code and gain compile-time validation. The abstraction also makes it straightforward to extend the prompt system: add a new mode by introducing a PromptKey constant and pairing it with a Fragments.* entry, without touching the lookup logic elsewhere. It helps keep prompt assembly modular: the consumer builds prompts by combining named fragments based on the current persona and mode.
+By declaring keys as const string, they can be embedded into switch arms and dictionary lookups at compile time, surfacing typos as build errors rather than runtime bugs. The design decouples identity (PromptKey) from content (Fragments), allowing content updates without touching call-sites. Per-mode behaviour snippets are selected by Conversation.Mode and appended to the static block per-turn, enabling consistent persona behavior without rewriting the whole prompt.
+
+## Example
+```csharp
+string key = PromptKey.PersonaFewShot;
+string fragment = Fragments.PersonaFewShot;
+```
 
 ## Notes
-- Ensure the key value matches a corresponding Fragments.* fragment; otherwise prompt assembly may skip or fail at runtime.
-- Do not rename keys without updating call sites that rely on exact strings.
-- Keep the dot-separated namespace stable; it encodes grouping and mode selection.
+- Names must be consistent with Fragments.*; renaming a key without updating its Fragment counterpart will break behavior.
+- Keys are static and tightly coupled to the build; avoid attempting to mutate them at runtime.
+- Do not rely on these identifiers for user-facing UI text; they are internal tokens.

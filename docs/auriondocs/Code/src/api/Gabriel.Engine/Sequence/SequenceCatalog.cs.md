@@ -8,23 +8,4 @@ public static class SequenceCatalog
 ```
 
 
-SequenceCatalog is a static catalog of known pattern and palette identifiers used when pinning a Sequence to a Project or Conversation. Its values are treated case-insensitively, canonicalized, and mapped to optional enum forms where possible; unknown identifiers are silently ignored at generation time and replaced by seed-derived picks.
-
-## Remarks
-SequenceCatalog centralizes the knowledge of valid sequence identifiers, isolating normalization and parsing from consuming code. It provides canonical, storage-friendly forms for persistence while still accepting user-provided strings. The separate Pattern and Palette collections enable independent curation, allowing the catalog to evolve without forcing migrations or reordering templates.
-
-## Example
-```csharp
-string? userInput = GetUserInput("pattern");
-if (SequenceCatalog.IsKnownPattern(userInput))
-{
-    string? canonical = SequenceCatalog.NormalizePattern(userInput); // e.g. "plasma"
-    PatternKind? kind = SequenceCatalog.TryParsePattern(userInput); // PatternKind.Plasma
-    // Use canonical and kind as needed
-}
-```
-
-## Notes
-- NormalizePattern/NormalizePalette return null for unknown identifiers; always handle null before persisting or using the result.
-- IsKnownPattern/IsKnownPalette perform a case-insensitive check against canonical lists; inputs are treated as trimmed and lowered before comparison.
-- Unknown identifiers are ignored during generation, which keeps data stable while permitting catalog growth over time.
+SequenceCatalog acts as the canonical registry of the identifiers clients may pin to a Project or standalone Conversation. It exposes two public, read-only lists: Patterns and Palettes, aligned with PatternKind values and PaletteTemplates.All, respectively, so the catalog can grow without breaking wire formats or migrations. It provides validation helpers (IsKnownPattern, IsKnownPalette), normalization helpers (NormalizePattern, NormalizePalette) that return canonical, storage-friendly forms (lowercased and trimmed) or null when unknown, and a parser (TryParsePattern) that maps a name to the corresponding PatternKind when possible. Unknown identifiers are silently ignored at generation time—the generator falls back to the seed-derived pick instead of forcing migrations. This centralizes knowledge of valid identifiers and keeps input variability isolated from storage and downstream rendering logic.

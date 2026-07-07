@@ -8,12 +8,11 @@ public interface ITool
 ```
 
 
-ITool defines the contract for pluggable tooling within Gabriel.Engine. Implementations register via dependency injection and are discovered by IToolRegistry, enabling dynamic extension of capabilities. Each tool exposes a Name and Description, a ParametersJsonSchema describing the JSON arguments accepted by ExecuteAsync, and an asynchronous ExecuteAsync(string argumentsJson, CancellationToken ct) that runs the operation and returns a string result or error.
+ITool defines the pluggable tool contract used by Gabriel.Engine. Each tool exposes a Name and a human-readable Description, and provides a JSON schema describing the Arguments it accepts via ParametersJsonSchema. Implementations are registered via dependency injection and discovered by IToolRegistry, enabling the engine to enumerate and invoke tools by name. At runtime, ExecuteAsync executes the tool's logic asynchronously, consuming a JSON-encoded payload and returning a string observation (or error) for the caller to interpret.
 
 ## Remarks
-ITool serves as a thin abstraction that decouples tool implementation from how tools are invoked, enabling a plugin-like architecture. The ParametersJsonSchema enables dynamic validation and tooling documentation, allowing callers to construct valid argument payloads without embedding argument shapes in the caller code.
+This interface serves as a clean boundary between the host and runtime tools. By requiring a JSON schema for arguments, it enables dynamic validation and UI generation without coupling to concrete payload types. Tools can be added, replaced, or reconfigured at runtime through the DI container and registry, supporting extensibility and testability.
 
 ## Notes
-- Tool implementations should be thread-safe if the engine may invoke them concurrently.
-- The ParametersJsonSchema must be valid JSON Schema and accurately describe the accepted arguments to avoid runtime errors.
-- ExecuteAsync should respect the CancellationToken to support cooperative cancellation.
+- Tools are discovered via IToolRegistry, so adding new tools typically requires only a new ITool implementation and registration in DI, without changing the engine core.
+- ExecuteAsync must honor the provided CancellationToken and should robustly handle malformed or missing arguments by relying on the declared ParametersJsonSchema.

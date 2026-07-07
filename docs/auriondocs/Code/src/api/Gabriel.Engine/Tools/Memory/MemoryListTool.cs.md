@@ -8,19 +8,11 @@ public sealed class MemoryListTool : ITool
 ```
 
 
-MemoryListTool enumerates every memory visible to the current conversation by querying the memory service for the relevant scope (user and project memories). It returns a compact, human-friendly list containing the memory type, scope (user or project), name, and a one-line description. This tool is useful when assessing whether prior memories might inform the current response; it allows you to quickly gauge relevance before deciding to fetch or reference specific memories. It does not load full memory content; it only lists metadata to aid decision-making.
+MemoryListTool enumerates every memory visible to this conversation by querying the memory service with the current project context and returns a concise, line-per-entry list that includes the memory type, scope (user or project), name, and a one-line description. Use it to quickly assess which prior memories might be relevant before composing a reply, without loading full memory bodies into the system prompt.
 
 ## Remarks
-It acts as a lightweight discovery aid that decouples memory storage from the response generation, giving the agent a concise view of what memories exist and are accessible in the present conversation. By honoring the current project scope, it ensures that both user-owned and project-scoped memories are surfaced consistently, enabling better context-aware decisions.
-
-## Example
-```csharp
-Memories visible to this conversation (2):
-- [text, user] Meeting notes — Summary of yesterday's standup
-- [document, project] ProjectPlan — Latest project milestones
-```
+MemoryListTool derives the scope by inspecting whether a memory's ProjectId is null: null means user-scope, non-null means project-scope. This explicit formatting helps the agent decide relevance at a glance, without fetching full bodies. The tool is designed for on-demand discovery and is dependency-injected with IMemoryService and IToolExecutionContext to support testability and separation of concerns. Output is human-friendly rather than a raw payload, so it can be consumed directly by the agent's reasoning/chat UI.
 
 ## Notes
-- The list is metadata-only: to fetch full bodies, use a separate memory retrieval tool.
-- If memory retrieval fails, the tool returns a plain error string rather than throwing.
-- The exact ordering of entries is not guaranteed.
+- Long memory lists can produce verbose output; there is no pagination.
+- The exact error string includes the exception message; in typical UI, consider surfacing a user-friendly fallback or logging.

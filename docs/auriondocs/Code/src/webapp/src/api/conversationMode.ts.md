@@ -19,26 +19,14 @@ export type GabrielMode = 'chatty' | 'elaborative' | 'concise' | 'tutor' | 'crit
 ```
 
 
-GabrielMode defines the set of tonal and depth configurations that Gabriel can adopt when generating responses. It restricts values to the five modes: 'chatty', 'elaborative', 'concise', 'tutor', and 'critic'. Use GabrielMode anywhere you configure Gabriel's behavior (UI mode selectors, user preferences, or response pipelines) to ensure only valid modes are chosen. This type alias encodes domain vocabulary into the type system, enabling better autocompletion, compile-time safety, and clearer intent when wiring components together.
+GabrielMode is a TypeScript type alias that enumerates the allowed conversational stances Gabriel can adopt: 'chatty', 'elaborative', 'concise', 'tutor', and 'critic'. By constraining values to this finite set, downstream code can switch Gabriel's behavior in a type-safe way without relying on free-form strings. Use GabrielMode whenever you need to specify or convey Gabriel's desired response style in configuration objects, UI selections, or API inputs, ensuring consistency across the codebase.
 
 ## Remarks
-GabrielMode acts as a contract between the presentation layer and the response generator. By enumerating modes as a distinct type, the system can exhaustively handle each mode in switches or mapping logic, and future extensions can add new modes with minimal ripple. Because it's a type-level construct, the actual runtime value is just a string; validation may be required if values originate from external sources.
-
-## Example
-```typescript
-function configureGabriel(mode: GabrielMode) {
-  // implementation applies the selected conversational style
-  // e.g., set response verbosity, examples, and pacing
-  applyModeToEngine(mode);
-}
-
-const mode: GabrielMode = 'elaborative';
-configureGabriel(mode);
-```
+GabrielMode serves as a domain-level contract between the UI layer (mode selectors) and the conversational engine. It centralizes the allowed modes, making it easy to add or remove styles in one place and propagate changes consistently. This abstraction prevents scattered string literals and reduces the risk of invalid styles being used.
 
 ## Notes
-- Runtime values are plain strings; if you parse mode from JSON or external input, validate against GabrielMode to avoid invalid states.
-
+- This is a type alias and has no runtime representation. If you need runtime constants, define a string enum or a set of constants that mirror these values.
+- When parsing external input (e.g., JSON from an API), validate that the value is one of the allowed GabrielMode options to avoid downstream errors.
 
 ---
 
@@ -65,17 +53,22 @@ export async function setConversationMode(
 **Returns:** `Promise<void>`
 
 
-Updates the mode of a specific conversation by issuing an HTTP PUT request to the server endpoint for that conversation. It accepts a conversationId, a mode value of type GabrielMode or null, and an optional AbortSignal to cancel the request. The request is prepared with a JSON body containing { mode } and is sent with credentials included. The operation delegates to withRefresh to ensure a fresh authentication state before making the call. If the server responds with a non-OK status, the response text (if any) is read and included in the thrown Error to aid debugging.
-
-On success, the function resolves to void. On failure, it throws an Error whose message includes the HTTP status and any response text returned by the server.
+Updates the mode for a conversation by issuing a PUT request to the backend at /api/conversations/{conversationId}/mode with a JSON body { mode }. It accepts either a GabrielMode value or null (to clear the mode) and returns a `Promise<void>` that resolves when the operation completes. The request is wrapped by withRefresh to automatically refresh authentication tokens as needed, and it supports cancellation via an optional AbortSignal. If the server responds with a non-ok status, it surfaces the status together with any response text as an Error.
 
 ## Remarks
-Encapsulates a small API call boundary between UI/business logic and the backend. Centralizes token refreshing, request formatting, and error handling so call sites stay simple and consistent. If you later change how conversations’ modes are updated (e.g., adding retry logic or switching to a different transport), this is the single place to adjust.
+This function centralizes the server mutation for conversation mode, decoupling UI code from the HTTP details and token management. By delegating to withRefresh, it ensures that authentication concerns are handled consistently across API mutations. The endpoint relies on standard browser fetch semantics with credentials: 'include' and a URL-encoded conversationId to build a stable, authenticated request.
+
+## Example
+```ts
+async function clearModeForConversation(convId: string) {
+  await setConversationMode(convId, null);
+}
+```
 
 ## Notes
-- The error message includes the response status and body text; if the body is unavailable, the text falls back to an empty string.
-- Credentials: 'include' means cookies are sent; ensure CORS allows credentialed requests.
-- mode can be null; server must handle null accordingly.
+- If you supply an AbortSignal, the caller can cancel the request; ensure proper cancellation handling at the call site.
+- The request uses credentials: 'include'; it relies on cookies or other browser-auth mechanisms being available.
+- Error messages include server-provided text when available; if the server returns empty text, the error will still report the HTTP status.
 
 ---
 
@@ -96,20 +89,13 @@ async function withRefresh(doFetch: () => Promise<Response>): Promise<Response>
 **Returns:** `Promise<Response>`
 
 
-withRefresh is a small helper that augments a fetch-like operation with automatic session refresh logic. It runs the provided doFetch function to obtain a Response; if the server replies with 401 Unauthorized, it attempts a single session refresh and retries the fetch. If the retried request still yields 401, it signals that the session has expired and throws an error prompting the user to sign in again. The caller receives the final Response from either the initial call or the retried call.
+withRefresh is a small helper that encapsulates the common pattern of refreshing an authenticated session when a request returns 401. It accepts a doFetch function that performs the actual fetch and returns a Response. When called, it awaits the initial response; if the status is 401, it attempts to refresh the session via refreshSession. If the refresh succeeds, it retries the original doFetch once and returns the retried response. If the retried response remains 401, it signals that the session has expired and throws an error guiding the user to sign in again. Call this helper to centralize retry-on-unauthorized logic and keep API-call sites free from boilerplate.
 
 ## Remarks
-Centralizes the authentication-handling pattern for API calls that require a valid session, reducing duplicated refresh-and-retry boilerplate. It coordinates with refreshSession and signalSessionExpired to deliver a consistent user experience when a session has expired, without forcing callers to manage refresh flows directly.
-
-## Example
-```typescript
-// Common usage: wrap a fetch-like operation so it will refresh auth if needed
-const response = await withRefresh(() => fetch('/api/messages', { credentials: 'include' }));
-```
+Centralizes the refresh-on-unauthorized workflow, reducing duplication across API calls that require authentication. It isolates session-refresh semantics behind a single utility, so callers only provide the fetch logic and let withRefresh decide when to refresh. It relies on refreshSession to determine if a token refresh occurred and on signalSessionExpired to trigger the sign-out flow when refresh fails.
 
 ## Notes
-- It performs at most one refresh and one retry after a 401.
-- If, after the optional retry, the response is still 401, the function signals session expiry and throws a standard error.
-- Non-401 responses pass through unchanged; this function does not alter successful responses or other error cases.
+- Only a single retry is attempted; there is no looping or exponential backoff. If the retried request after a refresh still returns 401, the session is considered expired.
+- Concurrency caveat: if multiple requests hit 401 at once, each may trigger its own refresh; consider higher-level coordination if this is a concern.
 
 ---

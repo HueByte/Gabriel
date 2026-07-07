@@ -8,11 +8,12 @@ public sealed class DocsListTool : ITool
 ```
 
 
-DocsListTool is a sealed utility that queries IDocsLookup to enumerate Gabriel's official internal documentation and returns a single, formatted index. It groups pages by their source (local LLM-native docs vs GitHub-hosted prose) and sorts each group by path, rendering a concise catalog that callers can pass to docs_read to fetch a specific page. The tool prioritizes LLM-native content as the primary source and uses GitHub entries only when coverage is lacking. It's intended for scenarios where an agent needs an up-to-date inventory of internal docs to drive questions about Gabriel’s architecture, agent loop, personality system, and internal APIs.
+DocsListTool serves as a read-only explorer for Gabriel’s official internal documentation. It fetches the active docs catalog via IDocsLookup, groups entries by their source, and renders a concise, prioritized listing that highlights the primary, LLM-native pages first and places human-prose GitHub pages after. Use it when you need a quick overview of what documentation exists and to discover a specific page by path (you can pass a path to docs_read to retrieve it).
 
 ## Remarks
-This abstraction centralizes doc discovery, keeping the catalog stable even as individual pages evolve. By separating discovery from retrieval, it enables both user-facing catalogs and automated workflows to reason about the full set of internal documentation. The source-grouping also makes clear when coverage comes from canonical self-docs versus human-authored prose.
+DocsListTool encapsulates the presentation logic for the docs catalog, decoupling it from the storage details. By ordering sources with a fixed priority (LLM-native before GitHub) and sorting entries by path, it delivers a stable, predictable listing that is easy to scan and reference. The tool also surfaces the total page count and hints on how to fetch individual pages via docs_read, making it useful both for discovery and navigation.
 
 ## Notes
-- The output is a plain-text catalog; downstream consumers may parse lines starting with "-" to extract paths.
-- If listing fails, the method returns an error string rather than throwing; callers should handle gracefully and consider fallback strategies.
+- It gracefully handles errors from the underlying docs provider by returning a concise error string that includes the exception message.
+- If no docs are available, it returns a user-friendly message indicating the docs source may be unreachable.
+- The output's grouping and header lines encode the source and access priority, which is important for consumers that rely on the primary vs fallback distinction.

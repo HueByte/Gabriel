@@ -8,14 +8,11 @@ public class GlobalExceptionHandler : IExceptionHandler
 ```
 
 
-Centralizes the translation of domain exceptions into HTTP responses. It maps common domain- and runtime-exceptions to appropriate HTTP status codes and returns a RFC 7807 ProblemDetails payload, ensuring consistent error responses across the API. Use this when you want a single, testable path for exception handling rather than sprinkling try/catch blocks throughout controllers.
+GlobalExceptionHandler centralizes the translation of domain exceptions into HTTP responses by mapping NotFoundException to 404, DomainException and ArgumentException to 400, UnauthorizedAccessException to 401, and all other exceptions to 500, returning a ProblemDetails payload that includes status, title, and a contextual detail. It is wired into the ASP.NET Core middleware (registered via DI and invoked through UseExceptionHandler) to provide consistent error responses across the API without duplicating error handling in controllers.
 
 ## Remarks
-
-Acts as the single point of translation between domain-layer failures and client-facing errors. It decides the HTTP status and user-facing title, and it uses a generic detail for server errors to avoid leaking sensitive information while still logging the full exception for diagnostics. This abstraction cleanly separates error presentation from business logic and works with the exception handler middleware registered in Program.cs.
+By consolidating error translation in one class, this abstraction reduces boilerplate in controllers and ensures a uniform client-facing error surface. It also centralizes logging decisions: domain/client errors are logged at information, while unexpected errors are logged as errors, aiding operators while keeping sensitive internals hidden from clients. The ProblemDetails payload uses the request path as the instance to help clients correlate errors to specific requests.
 
 ## Notes
-
-- 500 responses do not include exception details; the original exception is logged at error level for troubleshooting.
-- Non-500 responses map known domain exceptions to specific statuses (NotFound -> 404, Domain/Argument -> 400, Unauthorized -> 401), while all other exceptions fall back to 500.
-- Ensure the handler is registered in the DI container and wired into the middleware pipeline (AddExceptionHandler and UseExceptionHandler); without this wiring, exceptions won't be translated.
+- The 500 internal server error path returns a generic message to avoid leaking internals; the actual exception is logged with its stack trace.
+- If you introduce new domain exceptions, extend the mapping accordingly to preserve consistency.

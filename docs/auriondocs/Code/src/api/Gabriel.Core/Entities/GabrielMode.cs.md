@@ -15,11 +15,11 @@ public enum GabrielMode
 ```
 
 
-GabrielMode is an enum that encodes the behavioral bias attached to a single Conversation. It drives which Fragments.Mode* snippet gets spliced into the per-turn system prompt, effectively re-weighting the persona without rewriting it. The mode is stored as an int on Conversation.Mode (nullable; null = Chatty default). Adding a new mode requires three coordinated edits: a new enum value here, a corresponding Fragments.Mode* constant plus a PromptKey.Mode* constant plus a PromptRegistry mapping, and a new case in the mode→PromptKey switch in GabrielSystemPromptBuilder.
+GabrielMode encodes the behavioral bias applied to a Conversation by selecting which Fragments.Mode* snippet is spliced into the per-turn system prompt, effectively re-weighting the persona without rewriting the underlying prompt logic. It is stored as an int on Conversation.Mode (nullable; null means the default Chatty mode).
 
 ## Remarks
-The enum centralizes persona variants and decouples their selection from the prompt-building pipeline. It acts as a single source of truth for mode-based prompt fragments and, together with GabrielSystemPromptBuilder, enables consistent behavior changes across conversations without scattering logic across multiple files.
+GabrielMode acts as a centralized switch that shapes the system prompt construction by mapping a Conversation's mode to the corresponding fragment and prompt-key combination. It ties the Conversation state to GabrielSystemPromptBuilder via ModeKey and to the persona fragments defined in Fragments and PromptKey, ensuring the intended persona flavor is applied without altering the core prompt assembly. When GabrielSystemPromptBuilder builds the final prompt, it uses the mode to determine which key and fragment to substitute.
 
 ## Notes
-- Be mindful that the selected mode is stored as an int on Conversation.Mode; if you serialize or migrate data, ensure compatibility with existing values and the default Chatty behavior when null is encountered.
-- When introducing a new mode, you must update all three coordinated locations exactly as described above; missing any step can cause the system to ignore the new mode or fail to map it to the correct prompt fragments.
+- Adding a new mode requires coordinated edits across multiple components: the GabrielMode value itself, a matching Fragments.Mode* constant plus a corresponding PromptKey.Mode* constant, and an updated case in GabrielSystemPromptBuilder's mode-to-key switch.
+- The enum is stored as an int on Conversation.Mode; null yields Chatty as the default, so explicit mode values are only meaningful when set.

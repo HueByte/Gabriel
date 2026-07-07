@@ -8,21 +8,12 @@ public class MemoryEntryConfiguration : IEntityTypeConfiguration<MemoryEntry>
 ```
 
 
-Configures the EF Core mapping for MemoryEntry. It binds MemoryEntry to the MemoryEntries table, marks the primary key and required properties, enforces length constraints on string fields, and defines two targeted indexes to support common access patterns: a hot-path index for listing memories by UserId within a given scope (ordered by UpdatedAt), and a composite unique index on (UserId, ProjectId, Name) to enforce slug uniqueness within a scope (using Name as the slug key).
+MemoryEntryConfiguration configures EF Core mapping for MemoryEntry to the MemoryEntries table. It defines the primary key, required fields, maximum lengths, and two indexes that optimize common access patterns: a hot path for listing memories by user and scope (UserId, ProjectId, UpdatedAt) and a uniqueness constraint on (UserId, ProjectId, Name) to support slug usage by the memory_save tool. The configuration mirrors the domain’s need to distinguish between project-scoped memories and user-scoped memories and to enforce data integrity around upserts and lookups.
 
 ## Remarks
-EF Core configuration here encapsulates persistence concerns, keeping the MemoryEntry domain model separate from database specifics while aligning the database schema with typical query patterns. Making ProjectId nullable allows MemoryEntry to exist in either a user-wide namespace or a specific project, and the two indexes encode the intended access paths and slug semantics used by the memory_save workflow. This configuration serves as the single source of truth for how MemoryEntry is stored and queried at the persistence layer.
-
-## Example
-```csharp
-// Typical usage inside your DbContext
-protected override void OnModelCreating(ModelBuilder modelBuilder)
-{
-    modelBuilder.ApplyConfiguration(new MemoryEntryConfiguration());
-}
-```
+This class decouples persistence concerns from the MemoryEntry domain model by centralizing database schema details (table name, keys, constraints, and indexes) in one place. It encodes the business rules around memory scoping and slug usage: memories are identified by Id, but their semantic slug (Name) must be unique within each (UserId, ProjectId) scope, while still supporting both project-scoped and user-scoped memories. The two hot lookup paths reflect the most common query patterns the application performs when managing memories.
 
 ## Notes
-- The unique index (UserId, ProjectId, Name) enforces per-scope slug uniqueness; due to ProjectId being nullable, memories in user scope (ProjectId = NULL) are allowed to share slugs with project-scoped memories as described by the underlying provider's NULL handling semantics. If migrating to a provider with different NULL semantics, verify the constraint behavior.
-- Ensure the configuration is applied during model creation (e.g., via OnModelCreating) so EF Core creates the intended schema and indices.
-- The Name and Description constraints (max lengths) help maintain consistent data sizing and prevent overly long entries.
+- The (UserId, ProjectId, Name) unique index relies on how NULLs are treated by the underlying database to differentiate user-scoped memories (ProjectId = NULL) from project-scoped ones. This behavior is database-specific (notably SQLite’s handling of NULLs in unique constraints) and should be considered if you switch databases. 
+- If you rename properties, tables, or adjust nullability, update this configuration accordingly to preserve the intended schema and query performance.
+- Changes to indexing can impact performance of the hot path queries (listing by UpdatedAt) and upsert semantics; validate performance after any modification.

@@ -29,21 +29,8 @@ public sealed record ConversationState
 ```
 
 
-ConversationState is the per-conversation, immutable snapshot of the session's behavioral state. It is maintained by IConversationStateUpdater and read by ISystemPromptBuilder and IResponsePostProcessor to tailor prompts, responses, and behavior to the current dialogue (mood, topics, and user style). The state is persisted as JSON on Conversation.StateJson so Entity Framework does not require a separate table, and it serves as the foundation for the planned emotion engine (Phase 10), where Mood and user-style flags will influence avatar reactions.
+ConversationState is a per-conversation, immutable record that captures the evolving behavioral state used by the system to tailor prompts and post-processing. It is persisted as JSON on Conversation.StateJson to avoid a dedicated EF table and to provide a stable, transportable snapshot of context across the life of a chat. The state is maintained by IConversationStateUpdater and read by ISystemPromptBuilder and IResponsePostProcessor, and it underpins the future mood engine described in the comments (Mood and user-style flags feeding avatar reactions).
 
-## Remarks
-This design centralizes transient, session-scoped signals in a single immutable record, decoupling state management from the prompt-building and post-processing logic. It enables future enhancements without changing the public interface or persistence shape, and it provides a stable contract for components that need to read or extend conversation behavior across turns.
+It tracks TurnCount, Mood (defaulting to Neutral), token-usage metrics (AvgUserTokenCount, LastUserTokenCount), recent topics, message timing (LastMessageAt), and user flavor flags (UserUsesEmoji, UserUsesLowercase) plus a hint whether the user asked for detail (UserAskedForDetail).
 
-## Example
-```csharp
-var initial = ConversationState.Initial();
-var next = initial with {
-    TurnCount = initial.TurnCount + 1,
-    LastMessageAt = DateTimeOffset.UtcNow
-};
-```
-
-## Notes
-- ConversationState is immutable; updates are performed by creating a new instance (e.g., via the with-expression).
-- AvgUserTokenCount is an EMA-based metric; update with a proper smoothing factor to avoid abrupt shifts.
-- LastMessageAt is UTC-based and used to reason about recency; ensure consistent timezone handling when persisting.
+Initial() creates a starting state with LastMessageAt set to DateTimeOffset.UtcNow.

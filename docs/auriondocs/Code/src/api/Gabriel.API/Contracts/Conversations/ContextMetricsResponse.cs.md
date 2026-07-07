@@ -57,30 +57,12 @@ public record ContextMetricsResponse(
 | `ConversationTokens` | `int` | — |
 
 
-ContextMetricsResponse is a transport-friendly record that mirrors the engine's ContextMetrics for over-the-wire use. It aggregates the current token count, the provider's context window, and a per-category breakdown of tokens (system prompt, project prompt, memories, rolling summaries, tools, and conversation) along with thresholds and summarization state so callers can render UI and make decisions without referencing engine types.
+ContextMetricsResponse is a serializable snapshot of the current context usage and summarization state, designed to travel across process or service boundaries without leaking engine-types. Use it when you need to display or reason about token counts, thresholds, and the per-category breakdown that underpin the UI and intelligent summarization decisions.
 
 ## Remarks
-To decouple the API surface from engine internals and preserve stability across internal refactors, this record is kept separate from Gabriel.Engine types. It serves as a stable transport contract that carries granular context accounting, enabling consistent UI and provider behavior without leaking implementation details.
-
-## Example
-```csharp
-// Concrete usage example
-var metrics = new ContextMetricsResponse(
-    CurrentTokens: 1280,
-    ContextWindowTokens: 256000,
-    CompactThresholdTokens: 1024,
-    CompactThresholdRatio: 0.8,
-    MessagesAfterCut: 5,
-    IsSummarized: true,
-    SystemPromptTokens: 320,
-    ProjectPromptTokens: 128,
-    MemoryTokens: 256,
-    SummaryTokens: 0,
-    ToolsTokens: 20,
-    ConversationTokens: 0
-);
-```
+Decoupling from engine types, ContextMetricsResponse defines a stable wire surface for telemetry and UI consumption while the engine evolves independently. The per-category breakdown (SystemPromptTokens, ProjectPromptTokens, MemoryTokens, SummaryTokens, ToolsTokens, ConversationTokens) makes it easy to show users where token budget is consumed and to verify that CurrentTokens equals the sum of those categories. IsSummarized signals whether any compacted content has been rolled into the conversation.
 
 ## Notes
-- The sum of the per-category tokens (SystemPromptTokens + ProjectPromptTokens + MemoryTokens + SummaryTokens + ToolsTokens + ConversationTokens) should equal CurrentTokens; mismatches indicate unsynced accounting.
-- CompactThresholdRatio should reflect the ratio of CompactThresholdTokens to ContextWindowTokens (roughly 0.0–1.0). If out of range, clamp or validate at call-sites.
+- Per-category token fields are intended to sum to CurrentTokens; consumers should not rely on them for other calculations.
+- CompactThresholdRatio should be interpreted as a percentage (e.g., 0.8 means 80%); guard against ContextWindowTokens == 0 to avoid undefined division.
+- This DTO is strictly a transport contract; do not rely on it for engine-side logic.

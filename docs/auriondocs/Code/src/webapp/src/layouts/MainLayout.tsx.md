@@ -8,23 +8,12 @@ export function MainLayout()
 ```
 
 
-MainLayout is a React functional component that defines the app's top-level shell. It renders a persistent Sidebar, a central main column for routed content via Outlet, and a configured ToastContainer for in-app notifications. Use this component when you want a consistent page chrome across routes and to centralize global UI concerns such as navigation and toasts, rather than rendering page content directly.
+MainLayout defines the app’s shell by composing a persistent Sidebar, a routed content area via Outlet, and a ToastContainer for in-app notifications. Developers reach for it when they want a single, reusable layout wrapper that provides consistent chrome and toast behavior across all routed pages.
 
 ## Remarks
-MainLayout encapsulates layout concerns that would otherwise be repeated across pages: the app chrome (sidebar and content area) and the notification system. By centralizing these concerns, all routed pages render inside a shared shell, ensuring a uniform look and behavior for navigation and toasts. It acts as a boundary between route content and global chrome, so nested routes can render inside Outlet while preserving the persistent navigation and feedback UI.
-
-## Example
-```typescript
-// Typical usage with React Router
-<Routes>
-  <Route path="/" element={<MainLayout/>}>
-    <Route path="dashboard" element={<Dashboard/>} />
-    <Route path="reports" element={<Reports/>} />
-  </Route>
-</Routes>
-```
+By centralizing layout concerns, MainLayout ensures a uniform look and feel across the app while the content changes behind the Outlet. The Outlet renders the currently active child route, enabling nested routing to plug into this chrome without duplicating structure. The ToastContainer configuration (position="bottom-right", autoClose={4000}, newestOnTop, closeOnClick, pauseOnHover, draggable={false}, theme="dark", toastClassName="gbr-toast") expresses a deliberate UX choice: notifications appear unobtrusively in the lower-right with the latest on top and a consistent dark styling that matches the app’s chrome.
 
 ## Notes
-- The ToastContainer configuration (position, autoClose, newestOnTop, closeOnClick, pauseOnHover, draggable, theme, toastClassName) is baked into MainLayout; changing these affects all toasts application-wide. 
-- Outlet renders the matched child route content; Sidebar remains static across routes. 
-- If you need a different chrome for a subset of routes, consider a separate layout component or render a different element in the parent layout.
+- Ensure your CSS defines .app, .main-col, and .gbr-toast for expected layout and toast styling.
+- Only one ToastContainer should be mounted in the app to avoid duplicate toasts.
+- If you need to adjust toast behavior, modify the props on ToastContainer in this component rather than sprinkling new containers elsewhere.

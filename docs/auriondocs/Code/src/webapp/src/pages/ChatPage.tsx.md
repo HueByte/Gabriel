@@ -18,15 +18,7 @@ export function ChatPage()
 ```
 
 
-ChatPage renders the chat UI for a single conversation identified by the URL, orchestrating metadata loading, avatar seed management, project context, and the GabrielSequence-driven color palette. It keeps per-conversation UI state (avatarSeed, projectId, projectIsDefault, sequenceStops) with seed-based fallbacks while the sequence data loads, persists the active conversation so the IndexPage can resume later, and provides actions to reroll the avatar and to refresh the sequence after a turn.
-
-## Remarks
-ChatPage acts as the per-conversation glue between routing, server-provided identity, and local UI state. It ensures a conversation’s avatar seed and color palette reflect server data when available, while gracefully falling back to deterministic seed-based visuals during loading. It also isolates conversation-specific concerns from the broader lists by resetting the server-driven palette when the active conversation changes, preventing visual bleed across chats. This component is the focal point where routing, metadata loading, and the GabrielSequence-driven UI converge, keeping the UI responsive and consistent as data arrives and evolves.
-
-## Notes
-- The palette relies on a server-provided GabrielSequence; until it loads, a seed-derived palette is used to keep the UI visually coherent.
-- Rerolling the avatar updates the seed and triggers a palette refresh, but does not refetch the entire conversation list to avoid unnecessary network traffic.
-- If the conversation is missing (e.g., deleted in another tab), the handler surfaces an error and navigates away; this behavior is centralized around graceful error handling rather than silent failure.
+ChatPage is a React function component that renders the chat UI for a specific conversation. It reads the conversationId from the route, preserves an avatar seed, manages a server-driven color palette derived from the Gabriel sequence, and coordinates loading of conversation metadata so visuals reflect the correct project context (default vs. project-wide). Until the sequence data arrives, a seed-derived palette provides a stable visual baseline; once a sequence loads, its palette becomes the canonical color theme for the UI. The component also persists the active conversation to support resumption, and resets the server-driven palette when the active conversation changes to avoid color bleed. It exposes actions like rerollAvatar to request a new avatar seed from the backend; a successful reroll updates the seed and triggers a sequence refresh so avatar and palette shift cohesively. Overall, ChatPage acts as the UI glue that ties route-driven state to server-provided visuals while keeping loading, fallback, and project-context concerns in a coherent, isolated surface.
 
 ---
 
@@ -45,22 +37,22 @@ function persistActiveConversation(id: string | null)
 | `id` | `string | null` | — |
 
 
-Stores the given active conversation ID in localStorage under a shared key; if null is passed, it clears that entry. The operation is wrapped in a try/catch and any errors are ignored to prevent storage failures from interrupting the UI flow. Use this helper when you want to remember or clear the user's last active conversation across page reloads.
+Persist the active conversation identifier in localStorage under a shared key when you pass a non-empty string, or clears that key when you pass a falsy value. This lightweight helper enables the chat page to remember which conversation is active across reloads, so a user returning to the chat sees the same context. It intentionally swallows localStorage errors to avoid breaking the UI in environments where storage access is restricted or unavailable.
 
 ## Remarks
-Centralizes persistence semantics for the active conversation. It encapsulates the storage key and error handling, keeping ChatPage logic focused on UI concerns and reducing boilerplate across the codebase. It also defines a clear signal for clearing persisted state by using null as the parameter.
+This centralizes storage concerns behind a single API, decoupling the UI from direct localStorage calls and from the specific storage key. It also guarantees that an empty or null input clears the stored id, ensuring a consistent "no active conversation" state across sessions.
 
 ## Example
 ```typescript
-// Persist the currently active conversation
-persistActiveConversation("abc123");
+// Persist a new active conversation
+persistActiveConversation("conv_42");
 
-// Clear persisted value when the user signs out or selects none
+// Clear the active conversation
 persistActiveConversation(null);
 ```
 
 ## Notes
-- Errors from localStorage are intentionally ignored to avoid disrupting the user experience.
-- Passing null clears the persisted value; empty strings will also clear due to truthiness rules in JavaScript.
+- Passing an empty string will remove the stored value rather than persisting an empty id.
+- Failures interacting with localStorage are swallowed; callers should not rely on this function for error reporting.
 
 ---

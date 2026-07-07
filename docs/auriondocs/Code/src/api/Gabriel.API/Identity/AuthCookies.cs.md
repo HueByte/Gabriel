@@ -8,23 +8,12 @@ internal static class AuthCookies
 ```
 
 
-AuthCookies centralizes the handling of the application's authentication cookies. It provides Set, Clear, and ReadRefresh helpers to persist, revoke, and retrieve token data in a consistent, secure manner, reducing the risk of misconfigured cookie options scattered across call sites.
+AuthCookies is a small, internal helper that centralizes writing and clearing the authentication cookies used by the app's JWT-based flow. Use it whenever you need to persist or revoke the access and refresh tokens via cookies, guaranteeing consistent security attributes, cookie names sourced from GabrielIdentityExtensions, and scoped paths that minimize exposure.
 
 ## Remarks
-AuthCookies encapsulates cookie semantics to enforce a uniform security posture and clear boundaries between access and refresh tokens. The access cookie is set with a site-wide path and standard security attributes, while the refresh cookie is intentionally scoped to /api/auth to limit exposure in the event of leaks. Deleting cookies relies on exact path values to ensure the browser actually removes them, which is why Clear uses the same path definitions as Set.
-
-## Example
-```csharp
-// Typical usage after a successful login
-AuthCookies.Set(HttpContext.Response, new TokenPair
-{
-    AccessToken = accessToken,
-    AccessExpiresAt = accessExpiresAt,
-    RefreshToken = refreshToken,
-    RefreshExpiresAt = refreshExpiresAt
-});
-```
+AuthCookies encapsulates the cookie policy for authentication in one place, so callers don’t have to repeat HttpOnly/SameSite/Secure decisions. It ties the cookie lifetimes to the provided TokenPair and deliberately scopes the refresh cookie to the /api/auth path, reducing exposure if a response leaks. By aligning to GabrielIdentityExtensions' cookie names, it also ensures the identity system can rehydrate the principal when those cookies return to the browser.
 
 ## Notes
-- The refresh cookie is scoped to /api/auth, so it will only be sent with requests under that path. If a client interacts with endpoints outside this path, the refresh token will not be included automatically.
-- When clearing cookies, use Clear to ensure both cookies are removed with their original paths; otherwise, the browser may retain stale cookies.
+- Deleting cookies requires the same Path as when set; otherwise the browser ignores the deletion.
+- The refresh cookie is scoped to /api/auth to minimize exposure and to ensure it isn't sent with ordinary API calls.
+- The Secure flag is derived from the request's IsHttps; if TLS is terminated upstream, ensure the app sees HTTPS so cookies are marked as Secure and not transmitted over insecure connections.

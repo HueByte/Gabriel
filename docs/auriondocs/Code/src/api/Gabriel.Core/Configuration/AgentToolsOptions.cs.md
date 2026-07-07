@@ -8,28 +8,24 @@ public sealed class AgentToolsOptions : IConfigSection<AgentToolsOptions>
 ```
 
 
-AgentToolsOptions defines the configuration contract for the filesystem and shell agent tools used by the host-mode environment. It binds from the AgentTools section of the application configuration and governs host-root path canonicalization, file preview limits, and directory listing constraints for safety. The HostRoot property is the single most important knob: all host-mode filesystem operations are canonicalized under this root, and any path resolving outside it is rejected.
+AgentToolsOptions defines configuration options for the agent’s host-mode filesystem and shell tooling. It is bound to the AgentTools configuration section and centralizes safeguards and defaults that govern how host-mode operations resolve paths, preview file contents, and enumerate directories. Use this class when you need to enable, constrain, or disable host-mode behavior (by setting HostRoot) and to adjust how much data is loaded or listed during previews and directory listings.
 
 ## Remarks
-
-AgentToolsOptions implements [`IConfigSection<AgentToolsOptions>`](IConfigSection.cs.md), enabling centralized binding and validation of settings from configuration sources. This abstraction localizes safety concerns—such as path confinement and preview quotas—into a single, testable place, separating them from the runtime agents themselves. By centralizing these knobs, components that perform host-mode operations can rely on a single, well-defined contract for what is allowed, reducing risk of accidentally accessing outside workspace.
+This abstraction isolates host-mode safety and resource constraints behind a single config object, so all host filesystem interactions consistently respect the same bounds. By providing sensible defaults, it protects against runaway previews and listings while remaining opt-in through HostRoot. It also simplifies testing by allowing tests to override only a few knobs without touching the rest.
 
 ## Example
-
 ```csharp
-// Example: enable host-mode with a concrete root and sane defaults
 var options = new AgentToolsOptions
 {
-    HostRoot = "/sandbox/host",
+    HostRoot = "/sandbox/agent",
     MaxPreviewBytes = 5 * 1024 * 1024, // 5 MiB
     MaxListEntries = 500,
     DefaultListEntries = 100,
-    DefaultPreviewLines = 8
+    DefaultPreviewLines = 4
 };
 ```
 
 ## Notes
-
-- Leave HostRoot null/empty to disable host mode entirely (project-sandbox mode still works).
-- Relative paths resolve against HostRoot; absolute paths must canonicalize under it (paths outside are rejected).
-- Setting MaxPreviewBytes too low can cause many previews to be omitted even for moderately large files; tune to balance performance and visibility.
+- If HostRoot is null or empty, host-mode is effectively disabled; code that relies on host-mode behavior should handle this case gracefully.
+- MaxPreviewBytes bounds the amount of file content shown in previews; large files will report their size but skip preview content beyond this limit.
+- MaxListEntries caps the number of directory entries returned by listing operations to prevent runaway recursion or extremely large responses.

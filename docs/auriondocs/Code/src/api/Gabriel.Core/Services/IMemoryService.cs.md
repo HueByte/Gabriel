@@ -18,15 +18,15 @@ public interface IMemoryService
 ```
 
 
-IMemoryService defines a service-layer contract for memory data that derives the current user from ICurrentUser and exposes operations to list, retrieve, upsert, and remove memories within the appropriate scope. It prevents controllers and tools from leaking or manipulating another user's memories by enforcing user-scoped access at the service boundary.
+IMemoryService is a service-layer contract that enforces user-scoped access to memories by pulling the caller's UserId from the current user context and delegating to the repository. It exposes operations to list, retrieve, save (upsert), and remove MemoryEntry items within an optional project scope, so controllers and tools don’t have to thread user identity through every call.
 
 ## Remarks
-IMemoryService acts as a boundary between controllers/tools and the repository, centralizing memory-access rules and presenting a stable, user-scoped API. It coordinates scope-aware retrieval (including the option to include project-scoped memories for conversations), provides an idempotent SaveAsync upsert, and exposes explicit removal semantics to distinguish between "not found" and "deleted" scenarios.
+Architecturally, it acts as a boundary between controllers/tools and IMemoryRepository, centralizing scope and authorization concerns. ListAsync returns all memories the current user has within the given project scope (null means user-only). ListForConversationAsync combines the user-scoped memories with the conversation's project-scoped memories, when applicable, and presents them in a stable display order by Type and then by Name. SaveAsync implements an idempotent upsert based on UserId, ProjectId, and Name: repeated saves with the same spec do not create duplicates and only update the UpdatedAt timestamp. RemoveAsync returns a boolean indicating whether a target was actually deleted, while RemoveByNameAsync deletes by name within an optional project scope.
 
 ## Notes
-- RemoveAsync and RemoveByNameAsync return a boolean indicating whether a matching entry was removed (false means nothing matched).
-- SaveAsync is idempotent: repeated saves with the same spec only update metadata (e.g., UpdatedAt) and do not create duplicate entries.
-- ListForConversationAsync returns memories in a deterministic display order (Type, then Name) when presenting data for a given conversation.
+- This interface assumes an authenticated user context; without a resolvable UserId, scope enforcement cannot be performed.
+- Null projectId means user-scoped operations; providing a projectId scopes the operation to that project.
+- SaveAsync is idempotent: a second SaveAsync call with the same spec is a no-op aside from bumping UpdatedAt.
 
 ---
 
@@ -54,25 +54,13 @@ public sealed record MemoryEntrySpec(
 | `Body` | `string` | — |
 
 
-Represents the specification for a memory entry used by the memory service. MemoryEntrySpec bundles the data required to create or update a memory entry: an optional ProjectId to scope the entry, a Type that classifies the entry (MemoryEntryType), and the entry’s Name, Description, and Body. As a sealed record, it provides value-based equality and immutable semantics, making it a reliable data contract for API boundaries and inter-service communication.
+MemoryEntrySpec is an immutable data contract that describes a memory entry to be persisted by the memory service. It aggregates an optional ProjectId, the entry Type, a human-friendly Name, a Description, and the content Body. Use this record when creating or updating memory entries to ensure all required metadata and content are provided in a single, transportable payload; its value-based semantics help keep comparisons reliable across layers.
 
 ## Remarks
-MemoryEntrySpec serves as a transport object between the caller and IMemoryService. It captures the essential metadata and content of a memory entry without embedding persistence concerns. The record nature ensures that two specs with identical properties are treated as equal, which simplifies testing and caching scenarios.
-
-## Example
-```csharp
-var spec = new MemoryEntrySpec(
-    ProjectId: someProjectId,
-    Type: MemoryEntryType.Note,
-    Name: "Initialization Notes",
-    Description: "Prepares the runtime with essential notes",
-    Body: "Initialize X, Y, and Z with defaults."
-);
-```
+MemoryEntrySpec centralizes the shape of a memory entry into a single, reusable payload. It couples the project scope, the kind of memory (MemoryEntryType), and the descriptive fields with the actual content, enabling consistent handling by the IMemoryService. As a sealed record, it provides value equality and deconstruction-friendly access, making tests and data transfer straightforward while preventing unintended inheritance.
 
 ## Notes
-- ProjectId is nullable to permit creating memory entries outside a specific project, or to be assigned later.
-- Ensure the Type aligns with the Body semantics (e.g., a CodeSnippet type should have code-like content).
-- MemoryEntrySpec is a data contract used by IMemoryService operations; it does not perform persistence itself.
+- ProjectId is nullable; when null, the entry has no explicit project scope and may be treated as global or unscoped depending on the service policy.
+- Name, Description, and Body should be provided with meaningful content; the memory service will typically validate required fields and may reject entries that are empty or null.
 
 ---

@@ -8,18 +8,11 @@ public static class DependencyInjection
 ```
 
 
-DependencyInjection is a domain-wiring helper that provides AddCoreServices, an extension on IServiceCollection. It registers IChatService, IProjectService, and IMemoryService to their concrete implementations as scoped services, centralizing core-domain wiring so startup code can call a single method instead of registering each service individually; engine-related setup remains separate and is wired via AddEngineServices.
+Registers core domain services into the application's dependency injection container. AddCoreServices centralizes the wiring of the domain services IChatService, IProjectService, and IMemoryService to their concrete implementations (ChatService, ProjectService, MemoryService) with a scoped lifetime, making them available to consumers via constructor injection. This extension method is intended to be invoked during startup to assemble the core services for Gabriel.Core and to align with the engine wiring performed by AddEngineServices.
 
 ## Remarks
-By grouping core service registrations behind a single extension, this symbol keeps the composition root tidy and makes the intended lifetimes explicit. It also promotes testability by allowing mocks or stubs to be substituted for the interfaces in isolation, without touching startup code.
-
-## Example
-```csharp
-// Common usage at startup
-services.AddCoreServices();
-```
+By isolating service registrations in AddCoreServices, the codebase gains a reusable and testable composition point for core domain concerns, decoupling concrete implementations from the rest of the startup logic. It complements the engine wiring by providing the domain-facing services that the engine components rely upon, while preserving a clear separation between domain wiring and engine registration.
 
 ## Notes
-- Scoped lifetime means one instance per DI scope (per web request in ASP.NET Core); in non-web apps, create a scope to ensure per-operation instances.
-- Call AddCoreServices once in the composition root to avoid confusion from multiple registrations.
-- This extension wires only the core domain services; engine-related registrations are handled separately via AddEngineServices.
+- The registered lifetimes are scoped; avoid capturing these services in singletons or exposing them through singleton registrations.
+- This method focuses on three core services; extending core wiring should continue to be centralized here rather than scattered across startup code to maintain consistency.

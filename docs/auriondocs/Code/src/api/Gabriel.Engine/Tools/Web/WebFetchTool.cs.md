@@ -8,12 +8,12 @@ public sealed class WebFetchTool : ITool
 ```
 
 
-WebFetchTool is a sealed ITool that fetches and reads the full content of a public web page from a URL. It delegates the HTTP request to an injected IUrlFetcher and returns a single string containing lightweight metadata plus the cleaned page text. This is intended to be used after a web_search step identifies a potentially relevant result, since search snippets often miss important details. The returned content is sanitized (HTML tags stripped, scripts/styles/nav removed, whitespace normalized) and capped at roughly 12,000 characters. If the URL is invalid or the fetch fails, the method returns an error message rather than throwing.
+WebFetchTool fetches and reads the full text content of a public web page by URL. Use this after web_search when a result snippet looks relevant and you need the full page text to answer the user—the snippets are short and often miss relevant detail. It returns cleaned plain text (HTML tags stripped, script/style/nav removed, whitespace normalized), capped at roughly 12,000 characters. Do not use this for Gabriel-specific questions—use docs_read for those.
 
 ## Remarks
-WebFetchTool isolates the page-fetching concern from query discovery, enabling swap-in of different fetchers or mock implementations for tests. The header lines ('Fetched', 'Content-Type', 'Length') provide quick auditing of the resolved URL and payload without requiring separate parsing of the content. This abstraction focuses on turning a URL into a plain-text representation that downstream components can analyze or present to users.
+WebFetchTool is a thin wrapper around an injected IUrlFetcher. It coordinates input validation, invocation, and presentation of results as a single, human-readable string. The output begins with an informational header including the final URL, content type, and content length, followed by the page content. This design keeps the fetch logic decoupled from how the results are consumed by downstream tooling and fits naturally into a web-search -> fetch workflow where you need the full page text for deeper analysis.
 
 ## Notes
-- The ExecuteAsync method returns strings starting with "Error:" for invalid input or fetch failures instead of throwing exceptions.
-- The content is capped around 12,000 characters; large pages will be truncated, with a flag in metadata indicating truncation.
-- The URL must be absolute (http or https). The tool does not perform or retry in-domain redirects beyond what the fetcher reports.
+- If the input JSON is missing the required "url" field, or the value is not a string or is empty, ExecuteAsync returns an error message instead of throwing.
+- If the fetched page is larger than the internal limit, the result will include "(truncated - page was larger)" after the length to signal incomplete content.
+- The first lines of the returned string reveal the final URL after any redirects, the content type, and the length, which aids debugging and provenance of the fetched content.

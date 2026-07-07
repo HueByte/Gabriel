@@ -8,27 +8,11 @@ internal static class ContractMappings
 ```
 
 
-ContractMappings provides a concise, centralized set of extension methods that translate domain models into API response DTOs. It handles Projects, ProjectFiles, Conversations, and ContextMetrics by applying a consistent shape, loading related data only when requested, and computing derived fields that the client relies on (for example, the conversation mode name, whether a project is default, and the effective avatar seed).
+ContractMappings is an internal helper that translates domain models into API response contracts by offering ToResponse extension methods for Project, ProjectFile, and Conversation. It centralizes the mapping logic and exposes endpoint-oriented shapes, allowing callers to opt-in to related data (such as including files or messages) while consistently computing metadata like avatar seeds and default-project flags.
 
 ## Remarks
-
-By encapsulating this mapping in one place, the domain models remain decoupled from API payloads, and the API surface remains stable even as the internal domain evolves. The ToResponse methods compute derived values (modeName, projectIsDefault, effectiveSeed) and apply filtering rules to messages to match the UI's expectations (e.g., including only active variants and qualifying tool messages). For conversations, the mapping also precomputes per-variant sibling lists to enable a reliable, index-stable variant picker in the client.
-
-## Example
-
-```csharp
-// Minimal example: map a project including its files
-var projectDto = project.ToResponse(includeFiles: true);
-```
-
-```csharp
-// Map a conversation with its messages for a given project
-var convDto = conversation.ToResponse(includeMessages: true, project: someProject);
-```
+This abstraction decouples the domain layer from the API contracts, ensuring consistent response shapes across endpoints. It encodes endpoint-specific concerns—e.g., whether to embed a project's files, whether to include a conversation's message history, and how avatar seeds are derived from either the project or the conversation metadata. The approach reduces duplication and keeps the mapping logic in one place, simplifying maintenance and future changes.
 
 ## Notes
-
-- ToolMessages: Only tool messages with a non-null ToolCallId that are part of an active tool call are included; ToolCallsJson is parsed to extract IDs. If ToolCallsJson is invalid, this will throw.
-- IncludeFiles: When includeFiles is false, the returned ProjectResponse omits the Files collection entirely (null). This reduces payload but requires the caller to re-fetch if needed.
-- Performance: For conversations with many messages, the mapping builds per-variant sibling lists and filters the messages; this is intended to keep UI behavior consistent but may be non-trivial for large histories.
-- Nulls: Some derived fields (like projectIsDefault, effectiveSeed) are nullable depending on whether a project is supplied.
+- When includeFiles is false, the ProjectResponse's Files collection is null rather than an empty list; call sites should account for null when serializing.
+- In Conversation.ToResponse, omitting messages via includeMessages = false yields a lightweight payload suitable for list endpoints; additional project-derived metadata remains present to enable correct UI rendering.

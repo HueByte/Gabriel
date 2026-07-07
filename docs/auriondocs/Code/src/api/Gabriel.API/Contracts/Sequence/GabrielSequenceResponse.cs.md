@@ -31,17 +31,15 @@ public record GabrielSequenceResponse(
 | `Metadata` | `SequenceMetadataResponse` | — |
 
 
-GabrielSequenceResponse is the wire-format representation of a Gabriel sequence returned by the API. It carries a Version, a Palette of RGB colors, a sequence of Frames, and associated Metadata. To minimize bandwidth, frame data is stored as palette indices rather than raw RGB values: each frame corresponds to a 16×16 grid of pixels, with every entry in the grid being an index into Palette. Palette entries are serialized as [r, g, b] triples, and clients reconstruct RGB colors by looking up Palette by index. Frames are transmitted in canonical order from 0 to 63; the layer a given frame belongs to can be derived as floor(frameIndex / 16), mapping to 0=DNA, 1=Traits, 2=Context, 3=Live. The Version field enables evolution of the format, and Metadata (SequenceMetadataResponse) provides descriptive information about the sequence.
+GabrielSequenceResponse is the wire-format container for a Gabriel sequence. It groups a Version, Palette, Frames, and Metadata into a transportable payload. The Palette stores colors as [r, g, b] triples and Frames are sequences of palette indices that reference that palette. Clients reconstruct colors by looking up the palette by index and render each 16×16 frame accordingly. Frames are sent in canonical 0..63 order, and the layer for a given frame is determined by floor(frameIndex / 16) (0 = DNA, 1 = Traits, 2 = Context, 3 = Live). This structure keeps the on-wire size small by separating color data from per-frame indices, and it is designed for efficient transmission and decoding in client code.
 
 ## Remarks
-
-The abstraction separates color data (Palette) from spatial data (Frames), enabling compact wire-serialization and efficient caching. By encoding frames as palette indices, clients can reuse shared colors across frames and reduce payload size. The canonical frame ordering and layer derivation make it straightforward to render each frame and overlay or animate the Gabriel sequence by layer.
+GabrielSequenceResponse serves as an on-wire envelope for the Gabriel sequence concept. By separating palette from frame data, it minimizes duplication and supports caching and streaming across many frames. The metadata attaches contextual information about the sequence, enabling consumers to interpret and display the data consistently without duplicating domain knowledge in the frames themselves.
 
 ## Notes
-
-- Indices into Palette must be valid (0 <= index < Palette.Count); out-of-range values indicate invalid data.
-- Palette entries should be 3-length [r, g, b] triples with each component typically in the 0..255 range; clients should validate or clamp as needed.
-- Frames are expected to comprise 64 frames in canonical order (0..63); rendering logic should rely on that ordering for correct layer composition.
+- Palette indices in Frames must be valid against the provided Palette (0 <= index < Palette.Count).
+- Frames are delivered in canonical order 0..63; preserve this order during serialization and deserialization.
+- The Version field is a protocol-version marker; consumers should handle unknown versions gracefully (e.g., via future-compatible fallbacks).
 
 ---
 
@@ -65,14 +63,29 @@ public record SequenceMetadataResponse(
 | `StateSummary` | `string?` | — |
 
 
-Represents the metadata for a generated sequence. It encapsulates the 64-bit Seed used for deterministic generation, the exact timestamp of generation (GeneratedAt) with offset information, and an optional StateSummary describing the sequence's state at that moment. As an immutable record, SequenceMetadataResponse is a lightweight, transport-friendly payload suitable for API responses and inter-service messages where reproducibility and timing context are important.
+SequenceMetadataResponse is an immutable data carrier that captures metadata about a Gabriel sequence run. It bundles a seed (Seed) used to initialize deterministic generation, the moment it was generated (GeneratedAt), and an optional human-friendly snapshot of the current state (StateSummary). Use this type when API responses or internal data paths need to convey reproducibility information and timing without embedding any behavior.
 
 ## Remarks
-SequenceMetadataResponse is a focused value object that bundles generation metadata into a single return type, enabling predictable transport across API boundaries. It preserves reproducibility via Seed, while GeneratedAt (DateTimeOffset) maintains the exact generation moment with its offset; StateSummary offers an optional, human-friendly description of the sequence state.
+Because it is declared as a record, the type provides value-based equality and immutability, making it safer to pass around across layers and cache. The StateSummary field offers a lightweight, readable description of the sequence state without exposing internal details, which helps with debugging and auditing while keeping the payload small. This abstraction fits as a simple transfer object between server and client or between services, separating metadata concerns from the actual sequence logic.
+
+## Example
+```csharp
+var metadata = new SequenceMetadataResponse(
+    Seed: 42L,
+    GeneratedAt: DateTimeOffset.UtcNow,
+    StateSummary: "Initialized"
+);
+
+// Accessors
+Console.WriteLine(metadata.Seed);
+Console.WriteLine(metadata.GeneratedAt);
+
+// Deconstruct
+var (seed, generatedAt, summary) = metadata;
+```
 
 ## Notes
-- StateSummary is nullable; handle null gracefully.
-- GeneratedAt uses DateTimeOffset; display with offset or convert to local time as needed.
-- Seed is 64-bit; ensure clients do not lose precision in environments without 64-bit integer support.
+- StateSummary may be null; callers should handle null.
+- Deconstruction is supported because the record is defined with positional parameters.
 
 ---

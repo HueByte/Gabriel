@@ -8,16 +8,8 @@ public interface IConversationStateUpdater
 ```
 
 
-IConversationStateUpdater defines a contract for evolving the state of a conversation from the current state and the latest user message. Implementations should be stateless so they can be registered safely as singletons; they receive the existing ConversationState (or null for a new conversation) and the user message, and return the updated ConversationState.
-
-Use this abstraction when you want to separate how state is updated from the rest of the conversation pipeline, or when you need pluggable strategies for managing context (for example, appending messages, pruning history, or injecting system messages). It enables swapping strategies without touching downstream components.
+IConversationStateUpdater defines a contract for evolving the ongoing conversation state from an optional previous state and the latest user input. Implementations take the current ConversationState (if any) and the new userMessage and return the next ConversationState, encapsulating the rules for how context, history, and metadata advance across turns. Because this is a stateless service, concrete implementations should not retain per-instance data and should be safe to register as a singleton, enabling reuse across requests.
 
 ## Remarks
 
-It serves as a boundary between input handling and state management, enabling you to swap in different state-update policies without changing downstream code. This improves testability by allowing mocks or fakes and promotes a clean separation of concerns. Because implementations are designed to be stateless, they can be safely registered as singletons and reused across requests.
-
-## Notes
-
-- Do not mutate the provided current state; treat it as input and return a new ConversationState.
-- Do not rely on per-instance state or mutable static data; the interface is designed for stateless, singleton-friendly implementations.
-- If the ConversationState is large or expensive to copy, consider design choices that minimize allocations and favor incremental updates when supported by ConversationState.
+By isolating state evolution behind this interface, you centralize the policy governing how conversations grow, reset, or prune context. This makes testing easier and lets different parts of the system swap in alternative strategies for state advancement without touching the message handling logic. The contract explicitly allows a null current state, enabling a fresh conversation to start when no prior state exists. The stateless design also supports thread-safe usage and singleton lifecycles, reducing coupling between components that process user messages and those that manage context.

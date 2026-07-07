@@ -23,29 +23,16 @@ interface DiagnosticsFrameProps
 ```
 
 
-Defines the shape of the data passed to a diagnostics frame renderer on the DiagnosticsPage. It bundles a numeric frame array, a two-dimensional color palette, and an index identifying which frame to render.
+DiagnosticsFrameProps defines the props contract for the DiagnosticsFrame component used within the DiagnosticsPage. It requires three pieces of data: frame, a numeric array representing the data for a single frame; palette, a two-dimensional array of numbers that maps data values to colors (for example, RGB triplets); and index, a numeric position indicating which frame in a sequence this prop set belongs to.
 
 ## Remarks
-By isolating these three properties behind DiagnosticsFrameProps, the UI can render frames generically without leaking implementation details into callers. This interface acts as a stable contract between data-fetching logic and the rendering layer, enabling reuse across different frames or visualizations that share the same rendering component. It also clarifies that frame data is separate from presentation logic, aiding testing and composition.
 
-## Example
-```typescript
-const example: DiagnosticsFrameProps = {
-  frame: [0, 1, 2, 3],
-  palette: [
-    [0, 0, 0],
-    [255, 0, 0],
-    [0, 255, 0],
-    [0, 0, 255]
-  ],
-  index: 0
-};
-```
+DiagnosticsFrameProps acts as a simple, strongly typed envelope that separates data from presentation. By isolating frame data, color mapping, and positional context (index), the rendering logic of the DiagnosticsFrame can remain agnostic to how frames are produced or sourced elsewhere in the page. This interface complements the DiagnosticsPage by providing the minimal, well-defined input needed to render a visual frame.
 
 ## Notes
-- Ensure all palette entries are consistent color triplets (RGB) to avoid rendering surprises.
-- This interface has no runtime validation; callers must validate shapes before passing to UI components.
-
+- Ensure the frame array's length and value ranges align with the rendering expectations, as mismatches can lead to rendering artifacts or runtime checks failing.
+- Palette should be provided and non-empty to enable colorized rendering; values in the frame are interpreted by the rendering logic using this palette.
+- Index should be non-negative; out-of-range indices can cause errors when selecting frames from a collection.
 
 ---
 
@@ -58,22 +45,11 @@ interface DiagnosticsPageProps
 ```
 
 
-DiagnosticsPageProps defines the props contract for the Diagnostics page. It specifies which sequence to inspect (source), where the back button should navigate (backTo), and an optional scope indicator for headings (scopeLabel). This single interface lets the Diagnostics page render with consistent routing and contextual labeling without scattering navigation logic throughout the UI.
+DiagnosticsPageProps defines the props consumed by the DiagnosticsPage component. It carries the essential context to render diagnostics for a selected sequence: source (the sequence to inspect), backTo (an optional navigation target for the back button), and scopeLabel (an optional suffix for headings to convey the current scope). Wrappers wired from the URL populate source, while backTo and scopeLabel customize navigation and presentation without requiring page logic to know the route structure.
 
 ## Remarks
-By encapsulating navigation and scope information, this interface keeps the Diagnostics page decoupled from where sequences are produced and how routes are constructed. It also makes it easy to reuse the same page for different sequence kinds while preserving a uniform user experience.
 
-## Example
-```typescript
-// Typical usage within a DiagnosticsPage consumer
-const someSource: SequenceSource = getSequenceSource();
-<DiagnosticsPage source={someSource} backTo="/diagnostics" scopeLabel="Project" />
-```
-
-## Notes
-- BackTo can be omitted; the component will fall back to the matching detail page for the back button.
-- scopeLabel is optional and only affects the heading when provided.
-- source is required; supply a valid SequenceSource to satisfy the type contract.
+By centralizing routing and contextual cues in a single prop bag, the DiagnosticsPage can render a sequence-specific diagnostics view while remaining decoupled from how the URL is parsed. This separation makes the component easier to test in isolation and simpler to reuse across different parts of the app that present similar diagnostics for different sequences or scopes.
 
 ---
 
@@ -86,10 +62,10 @@ function DiagnosticsFrame(
 ```
 
 
-DiagnosticsFrame is a small presentational React component that renders a single diagnostic frame within the Diagnostics page. It accepts a frame describing the diagnostic data, a palette for styling, and an index indicating its position in a sequence. This component is intended to be used by the parent DiagnosticsPage to render a list of frames, isolating frame-specific rendering from page-level layout and behavior.
+DiagnosticsFrame renders a single diagnostic frame within the DiagnosticsPage, encapsulating the presentation of frame data using the provided color palette. It is designed to be reused whenever the DiagnosticsPage needs to display a frame in a list, ensuring consistent styling, spacing, and theming across frames rather than duplicating markup.
 
 ## Remarks
-By isolating the rendering of an individual frame, DiagnosticsFrame provides a stable, reusable unit that can be composed into various layouts or reused in other pages that show diagnostic visuals. It relies on its palette to ensure consistent theming, and the index helps with sequencing or styling decisions in the surrounding UI.
+By isolating the rendering of a frame, DiagnosticsFrame keeps the page logic focused on data wiring while the component handles visual concerns. The palette prop centralizes theming, allowing the frame to adapt to light or dark themes and to color-code distinctions conveyed by the frame. The index prop is typically used for simple positional styling or as a stable cue when rendering a sequence of frames.
 
 ## Example
 ```typescript
@@ -97,9 +73,8 @@ By isolating the rendering of an individual frame, DiagnosticsFrame provides a s
 ```
 
 ## Notes
-- Ensure the frame prop contains the required properties the component expects; the component may not perform deep runtime validation.
-- If rendering multiple frames in a list, provide a stable key at the parent level; DiagnosticsFrame itself does not manage list keys.
-- Be mindful of theming: provide a well-defined palette to avoid visual inconsistencies.
+- Do not mutate the incoming props; treat them as immutable.
+- If frame or palette are undefined, ensure the component renders gracefully.
 
 ---
 
@@ -112,21 +87,16 @@ export function DiagnosticsPage()
 ```
 
 
-DiagnosticsPage is a React function component that reads the conversationId from the current route and, when present, renders DiagnosticsPageInner for that conversation. If the parameter is missing, it renders nothing.
+DiagnosticsPage is a small route-aware React component that reads the conversationId from the URL and, when present, renders DiagnosticsPageInner configured for that conversation. If the conversationId parameter is absent or empty, this component renders nothing.
 
 ## Remarks
-DiagnosticsPage acts as a thin route-bound wrapper around DiagnosticsPageInner. It isolates route-parameter handling from the inner UI, ensuring consistent labeling (scopeLabel) and a safe back-navigation target (backTo) derived from the conversationId. This separation keeps the inner diagnostics logic focused on presentation, while this wrapper handles routing concerns.
+
+By wrapping DiagnosticsPageInner, this symbol isolates routing concerns from the diagnostics UI and supplies a typed source descriptor (kind: 'conversation', conversationId) along with a back link target. The backTo path uses encodeURIComponent to safely embed the conversationId in the URL, guarding against characters that would break the route. This wrapper thus acts as a bridge between the router layer and the diagnostic presentation, enabling context-sensitive diagnostics without duplicating routing logic.
 
 ## Notes
-- Requires to be rendered within a Router context since it relies on useParams.
-- If conversationId contains special characters, encodeURIComponent is used to construct the backTo URL safely.
-- Rendering null when conversationId is absent prevents an incomplete diagnostics view; ensure the route always provides the param when diagnostics are intended.
 
-## Example
-```tsx
-// Typical usage within a route that provides a conversationId
-<DiagnosticsPage />
-```
+- If the URL parameter conversationId is missing, the page renders nothing; ensure your route provides the parameter when the diagnostics view should be shown.
+- The backTo link encodes the conversationId to produce a valid path under /c/.
 
 ---
 
@@ -139,20 +109,10 @@ function DiagnosticsPageInner(
 ```
 
 
-DiagnosticsPageInner is a React functional component that renders the inner content of the diagnostics view for a given source in the web UI. It accepts a destructured props object with source, backTo, and scopeLabel, which suggests it displays diagnostic details for a particular source while providing a back-navigation target and a contextual scope label. Developers reach for this symbol when they need to render a focused diagnostics panel within the Diagnostics page, rather than composing the entire page structure manually.
+DiagnosticsPageInner is a React functional component that renders the core body of the diagnostics UI for a specific source. It consumes a source payload to display diagnostic messages, a backTo navigation target to return to a previous view, and an optional scopeLabel to convey the current diagnostic scope (for example, the function or module being examined). Use this inner component when you need to present diagnostics within a page that already provides surrounding chrome and navigation, or when composing diagnostic UIs that share styling and behavior with other diagnostic views.
 
 ## Remarks
-By isolating the inner rendering logic into DiagnosticsPageInner, the presentation of diagnostic data is decoupled from page chrome and routing concerns. This separation makes it straightforward to reuse the inner renderer for different sources or in varied contexts, while a parent DiagnosticsPage supplies the surrounding layout and navigation.
-
-## Example
-```typescript
-<DiagnosticsPageInner
-  source={selectedSource}
-  backTo="/diagnostics"
-  scopeLabel="Module: user-auth"
-/>
-```
-
+This abstraction isolates the rendering of diagnostics from layout concerns, enabling consistent styling across the app and easier testing of the diagnostic rendering logic. It fits into a pattern of separating page chrome from content, making the diagnostics experience predictable regardless of where it is embedded.
 
 ---
 
@@ -165,22 +125,14 @@ export function ProjectDiagnosticsPage()
 ```
 
 
-ProjectDiagnosticsPage is a page-level wrapper that reads the projectId from the route parameters and delegates rendering to DiagnosticsPageInner with a source shaped as { kind: 'project', projectId }. If no projectId is present, it returns null instead of rendering UI.
+ProjectDiagnosticsPage is a tiny React function that reads the projectId from the URL parameters and, when present, renders the project-scoped diagnostics UI. If the route lacks a projectId, it returns null to avoid mounting diagnostics in an invalid context. When a projectId exists, it forwards a project context to DiagnosticsPageInner via source={ kind: 'project', projectId }, and configures navigation and labeling with backTo=\"/\" and scopeLabel=\"project\".
 
 ## Remarks
-This wrapper decouples routing concerns from the diagnostics UI, enabling DiagnosticsPageInner to be reused for other sources with minimal changes. It fixes the diagnostics scope to 'project' and provides a consistent back navigation target (root), ensuring a uniform experience across project-related pages.
-
-## Example
-```typescript
-// Route configuration example (React Router v6)
-<Route path="/projects/:projectId/diagnostics" element={<ProjectDiagnosticsPage />} />
-```
+It serves as a routing boundary, centralizing how project-scoped diagnostics are wired into the shared DiagnosticsPageInner. By isolating the route-parameter parsing here, the diagnostics UI itself remains agnostic of routing concerns. The fixed backTo and scopeLabel usage ensures a consistent user experience when navigating back to the project list and when labeling the scope of diagnostics across the app.
 
 ## Notes
-- The page renders null when projectId is missing, so ensure your route configuration always supplies a projectId param.
-- DiagnosticsPageInner receives the source as { kind: 'project', projectId }, which determines the content and context of the diagnostics UI; if you rely on this for permissions or analytics, validate the projectId before rendering a diagnostics view.
-- The backTo prop is hard-coded to "/", so navigation will return to the app root unless this wrapper is customized.
-
+- If projectId is absent, the component returns null, which can yield an empty page unless a parent route handles fallback content.
+- Ensure your routing configuration provides a projectId for the DiagnosticsPage route; otherwise the UI will not render.
 
 ---
 
@@ -193,19 +145,13 @@ const onBack = () =>
 ```
 
 
-onBack is a compact navigation handler used in DiagnosticsPage to perform back navigation. It prefers navigating to a specific route when a backTo target is provided, and falls back to a generic history-back action when it is not. This lets a Back control either return to a known previous page or simply go back in the session history, depending on the context.
+onBack is a compact navigation handler used on the DiagnosticsPage to move the user to a prior screen. It checks for a backTo target; if present, it navigates to that route. If backTo is not provided, it falls back to navigating back one entry in the history (navigate(-1)). This function is typically wired to a Back control in the UI, providing a consistent back behavior whether a specific destination is known or not.
 
 ## Remarks
-Abstraction of this logic keeps the UI candidate lean and makes the navigation intent explicit: if a targeted return path exists, use it; otherwise, rely on the browser/router history to determine the previous location. This centralizes the back behavior behind a single function, improving testability and readability of the surrounding UI.
-
-## Example
-```typescript
-<button onClick={onBack}>Back</button>
-```
+By encapsulating this decision in a single function, the UI components don't need to duplicate the back logic or reason about history vs. a fixed destination. It relies on the presence of backTo to steer the user toward a known route when available, and falls back to the most natural previous page when not. This pattern keeps navigation behavior predictable and easy to test in isolation.
 
 ## Notes
-- backTo being undefined or falsy triggers navigate(-1); ensure there is a meaningful previous entry in history to avoid unexpected navigation.
-- navigate must be available in scope; if not, inject or import the appropriate navigation function.
-- In routing environments where negative indices are not supported, this back navigation may not behave as intended—consider a guard or an alternative back strategy in such contexts.
+- If there is no navigable history (e.g., user opened the page directly), navigate(-1) may have no effect.
+- Ensure backTo, when provided, represents a valid route; otherwise navigation may fail or take the user to an unintended location.
 
 ---

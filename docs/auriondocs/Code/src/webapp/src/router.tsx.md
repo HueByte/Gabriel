@@ -22,24 +22,14 @@ interface ErrorBoundaryProps
 ```
 
 
-ErrorBoundaryProps defines the props contract for an error boundary component in a React UI. It requires a children ReactNode to render under normal operation and a fallback ReactNode to render when an error is caught, enabling graceful degradation of the UI rather than the entire subtree crashing.
+ErrorBoundaryProps specifies the props for an error boundary component, requiring a children node to render in normal operation and a fallback node to render when an error occurs. This contract makes the boundary reusable and predictable across different parts of the UI.
 
 ## Remarks
-This interface encapsulates a minimal, explicit boundary: it separates content from error handling presentation, so developers can swap in different fallbacks without changing the consuming component. It also enforces that both the normal content and the error UI are provided at compile time, reducing runtime ambiguity for boundary usage.
-
-## Example
-```typescript
-// Example usage of ErrorBoundaryProps
-const boundaryProps: ErrorBoundaryProps = {
-  children: <App />,
-  fallback: <div>Something went wrong.</div>,
-};
-```
+By expressing this contract as a dedicated interface, the boundary's UI and its error-handling behavior remain loosely coupled: the boundary can swap how errors are presented without changing its consumer code. Since both children and fallback are ReactNode, any renderable content — elements, strings, fragments, or components — can be supplied, enabling flexible and consistent error presentation across the app. This interface communicates a clear separation of concerns: the boundary handles errors, while the props decide what to show in both success and failure states.
 
 ## Notes
-- Both props are required; omitting either will cause a TypeScript error.
-- ReactNode is broad (elements, strings, numbers, or null), so choose a meaningful fallback UI that remains stable across renders.
-- Error boundaries catch rendering-time errors in their subtree (including during rendering and lifecycle methods) but do not catch errors inside event handlers or asynchronous code; handle those separately as appropriate.
+- ReactNode includes null and undefined; if you pass such values for either prop, the render may be empty. Provide meaningful content for fallback or children to avoid a blank UI.
+- This interface does not implement the boundary logic itself; it merely defines the shape of props consumed by a separate error boundary component.
 
 ---
 
@@ -52,37 +42,15 @@ interface ErrorBoundaryState
 ```
 
 
-ErrorBoundaryState is a TypeScript interface that represents the state shape for a class-based React error boundary used within the web application's routing layer. It defines a single boolean flag, hasError, which signals whether an error has been caught and the boundary should switch to a fallback UI.
+Represents the shape of the state used by an error boundary in the web app router. It exposes a single boolean flag, hasError, that signals whether an error has been captured and whether a fallback UI should be rendered instead of the normal children.
 
 ## Remarks
-Error boundaries encapsulate rendering errors to provide a graceful recovery path without crashing the entire UI. By typing the boundary's state as ErrorBoundaryState, the codebase gains a consistent, explicit contract for error handling across routing components, improving readability and maintainability when implementing or refactoring error boundaries.
-
-## Example
-```typescript
-import React from 'react';
-
-type Props = { children?: React.ReactNode };
-
-class MyErrorBoundary extends React.Component<Props, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false };
-
-  componentDidCatch(_error: any, _info: any) {
-    this.setState({ hasError: true });
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <div>Something went wrong.</div>;
-    }
-    return this.props.children ?? null;
-  }
-}
-```
+This interface acts as a small contract describing error-boundary state. It separates concerns by letting components focus on rendering vs. error handling, and it can be reused across multiple boundaries within the router to keep state representation consistent.
 
 ## Notes
-- Ensure the initial state sets hasError to false to reflect a non-error render. 
-- This interface is intended for class-based error boundaries; function components using hooks would manage equivalent state differently and may not use this type directly.
-
+- The interface only defines the shape; it does not implement any error-handling logic.
+- In React error boundaries, the hasError flag is typically toggled in componentDidCatch and can drive conditional rendering of a fallback UI.
+- Mutating hasError directly is not the correct pattern in React; update state through the component's state management (e.g., setState).
 
 ---
 
@@ -95,22 +63,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState>
 ```
 
 
-ErrorBoundary is a React class component that acts as a boundary for capturing runtime errors in its subtree and rendering a fallback UI instead of crashing the entire app. It uses the error boundary lifecycle by implementing a static getDerivedStateFromError to set a hasError flag, and rendering either a provided fallback UI or its children based on that state. In addition to catching errors, it logs details in componentDidCatch, with special handling for "Failed to fetch dynamically imported module" to surface chunk-loading/deploy issues, while otherwise logging a standard page error with error and errorInfo. This component is commonly used to wrap routes or sections of the UI where failures should not bring down the entire page.
+ErrorBoundary is a React class component that implements the standard error boundary pattern. It guards a subtree by catching rendering-time and lifecycle errors, toggles an internal hasError state via getDerivedStateFromError, and renders the provided fallback UI when an error occurs; otherwise it renders its children. In componentDidCatch, it distinguishes chunk-loading failures from other errors: a chunk-loading error logs a concise message suggesting a new version may be available, while other errors are logged with the React error information. This boundary enables a resilient UI by preventing a single failure from crashing the entire subtree and by presenting a stable fallback UI to users.
 
 ## Remarks
-ErrorBoundary provides a focused, user-friendly safety net for parts of the UI that are error-prone or dynamically loaded. By centralizing error handling and offering a consistent fallback experience, it helps maintain a stable user experience even when modules fail to load or render. The specialized logging in componentDidCatch aids in diagnosing deployment-related issues (e.g., stale chunks after a new version deploy) without surfacing raw errors to end users. Use this boundary to guard routing trees or high-risk UI boundaries where a graceful degradation is preferable to a full crash.
-
-## Example
-```typescript
-<ErrorBoundary fallback={<div>Something went wrong. Please try again.</div>}>
-  <App />
-</ErrorBoundary>
-```
+Error boundaries address the reality that JavaScript errors thrown during rendering or lifecycle methods can crash a portion of the UI. By isolating error handling to this boundary, developers gain a predictable recovery point and centralized diagnostics for issues within a subtree. The boundary also centralizes a small, targeted logging path for deployment-related chunk-loading issues, helping distinguish stale-cache scenarios from ordinary runtime errors without cluttering logs with stack traces for everyday failures.
 
 ## Notes
-- Error boundaries catch errors in render, lifecycle methods, and constructors of the subtree, but do not catch errors inside event handlers or asynchronous callbacks placed outside render. Planning error handling for those cases remains important.
-- Ensure the provided fallback UI is safe and user-friendly; avoid exposing internal error details to end users.
-- The boundary includes a targeted log path for chunk-loading failures, which is helpful in detecting stale deploys; verify logging configuration and environment if you rely on these insights in production.
+- The chunk-loading diagnostic path relies on the error message containing "Failed to fetch dynamically imported module"; if the bundler or environment changes this message, the targeted log may not fire. Consider extending the check or centralizing error categorization if you rely on this pattern across environments.
 
 ---
 
@@ -123,15 +82,15 @@ function ChunkErrorFallback()
 ```
 
 
-ChunkErrorFallback renders a compact user-facing UI when a lazily loaded page chunk fails to load. It informs the user that loading failed and suggests a possible new version, then provides a Reload button that refreshes the page to fetch fresh assets.
+ChunkErrorFallback is a minimal React function component that renders a small, vertically stacked error UI when a dynamically loaded chunk fails to load. It displays a concise message: “Failed to load page. A new version may be available.” and provides a Reload button that, when clicked, triggers a full page refresh via window.location.reload(). This component is a self-contained presentational fallback intended for use in code-splitting scenarios (lazy-loaded routes) where a chunk load error should offer the user a straightforward recovery path without introducing complex retry logic.
 
 ## Remarks
-ChunkErrorFallback serves as the isolated chunk-failure UX, decoupling the error presentation from the rest of the app logic. It provides a single, reusable recovery surface for code-split routes and can be swapped for a more sophisticated boundary or styled to match the application's design without altering the calling code. The lightweight abstraction keeps chunk-loading failures discoverable and recoverable while staying minimal.
+ChunkErrorFallback isolates the user-facing recovery path from the rest of the UI. By offering a single reload action, it ensures the browser fetches the latest application bundle, which is often the simplest remedy for stale or corrupted chunks. It is intentionally presentational: it does not attempt automatic retries or state recovery, leaving such concerns to higher-level error handling strategies.
 
 ## Notes
-- Reload triggers a full page refresh; in-flight state may be lost.
-- The component assumes a browser environment (window is used directly); consider guards or mocks for SSR/testing.
-- If a different recovery strategy is desired, replace or extend this component without changing usage sites.
+- Reload may cause loss of unsaved data; consider warning the user or integrating with a broader recovery strategy.
+- This component relies on window and DOM availability and will not run in non-browser contexts or during server-side rendering unless used only on the client.
+
 
 ---
 
@@ -144,14 +103,14 @@ function LazyPage(
 ```
 
 
-LazyPage is a React functional component declared as function LazyPage({ children }). The fragment shows the component receives a props object from which it destructures children, but the implementation body isn’t present. Because the rendering strategy isn’t visible, we cannot confirm whether it directly renders its children, wraps them in additional layout, or implements any lazy-loading semantics. In practice, a component named LazyPage would typically act as a lightweight wrapper around routed page content, providing a single place to apply page-level chrome or layout while delegating the actual content to its children.
+LazyPage is a React functional component that receives a single prop, children, and acts as a wrapper around its content within the router. It provides a named, semantic wrapper you can rely on when composing routes or applying consistent layout around pages.
 
 ## Remarks
-To the extent that LazyPage is a wrapper, it provides a stable location to apply page-level chrome (layout, theming scaffolding, or loading boundaries) around routed content, without embedding those concerns into each page component.
+Providing a dedicated LazyPage wrapper isolates routing content from layout concerns and future enhancements. It acts as a conceptual boundary at the routing layer, making it easier to introduce cross-cutting behaviors (such as layout wrappers or lazy-loading strategies) without modifying individual route components. This separation also helps with testing and readability by giving routes a stable wrapper anchor.
 
 ## Notes
-- Be aware of prop forwarding: if you need to pass through props to the rendered output or to a wrapper element, ensure they are forwarded to avoid silent prop loss.
-- The snippet is incomplete; verify the full implementation to understand exact rendering behavior and any lazy-loading or Suspense usage.
+- Keep this wrapper lean; avoid introducing side effects or internal state unless explicitly needed.
+- If you extend it with additional behavior, ensure props contain no mutable shared state and respect React's rendering semantics.
 
 ---
 
@@ -164,18 +123,14 @@ function PageLoader()
 ```
 
 
-PageLoader is a tiny React functional component that renders a loading indicator. It returns a div with className "auth-loading" containing the static text "Loading…". It is a presentational, stateless component intended to indicate a loading state during authentication or route transitions, and it does not accept props or perform side effects.
+Renders a lightweight authentication loading indicator used during route transitions or initial authentication checks. Use PageLoader when you need a consistent, minimal loading state without duplicating markup at call sites.
 
 ## Remarks
-PageLoader serves as a centralized visual cue for authentication-related loading, enabling consistent styling via the "auth-loading" CSS class. It can be swapped out for a spinner or more elaborate loading UI without changing the call sites.
-
-## Example
-```typescript
-<PageLoader />
-```
+PageLoader is a pure presentational component with no props or local state. It centralizes the UX of the authentication-loading state behind a single CSS class, enabling styling changes in one place without touching call sites. If you later replace the implementation with a richer spinner or add accessibility improvements, you can swap it here without cascading changes.
 
 ## Notes
-- It has no props; to customize, modify the component or provide a wrapper.
-- The static text "Loading…" can hinder localization; consider parameterization or i18n if needed.
+- The element is a plain div and currently lacks explicit ARIA live semantics; consider adding role="status" and aria-live="polite" to announce updates to assistive technologies.
+- The text 'Loading…' is not localized; consider extracting it to a translation key if internationalization is required.
+- Styling is delegated to the .auth-loading CSS rule; ensure adequate contrast and responsive behavior across themes.
 
 ---

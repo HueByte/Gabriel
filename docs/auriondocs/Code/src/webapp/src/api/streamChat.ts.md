@@ -22,26 +22,23 @@ export interface StreamChatOptions
 ```
 
 
-StreamChatOptions defines a small, cancellable configuration contract for stream chat operations. It currently exposes an optional signal property (AbortSignal) that enables callers to cancel in-flight operations via an AbortController.
+StreamChatOptions provides optional configuration for chat streaming operations. It currently exposes a single optional member, signal, that accepts an AbortSignal to allow cancellation of an in-flight stream or request.
 
 ## Remarks
-By encapsulating cancellation behind this interface, the API surface remains focused on chat semantics while reusing standard browser and Node cancellation patterns. Implementations should listen to the AbortSignal and terminate any ongoing work promptly, then release resources. This approach also makes cancellation composable with other APIs that accept AbortSignal, allowing a single controller to govern multiple related operations.
+This interface serves as a lightweight cancellation helper for streaming-related APIs. By isolating the cancellation concern into StreamChatOptions, you can pass cancellation semantics alongside other options without embedding AbortSignal logic directly into the calling code. It promotes a consistent pattern for cancelling long-running or continuous stream operations, while remaining unobtrusive for simple, synchronous usage.
 
 ## Example
 ```typescript
 const controller = new AbortController();
 const options: StreamChatOptions = { signal: controller.signal };
 
-// Example usage: a chat API that accepts StreamChatOptions
-await startStreamChatConnection(options);
-
-controller.abort();
+// Pass `options` to any API that accepts StreamChatOptions to enable cancellation via the AbortController.
 ```
 
 ## Notes
-- Some API calls may ignore the signal; always verify the specific API supports cancellation.
-- Aborting usually raises a cancellation error; handle AbortError and perform any necessary cleanup.
-- If signal is omitted, the operation will run to completion unless another cancellation mechanism is triggered.
+- If you provide a signal, ensure you handle the abort event on the consumer side and terminate the operation cleanly to free resources.
+- AbortSignal/Cancellation is only effective with APIs that actively support and observe the signal; otherwise passing a signal has no effect.
+
 
 ---
 
@@ -51,33 +48,71 @@ controller.abort();
 
 ```typescript
 export type AgentEvent =
-  
-  
-  
-  
-  |
+
+  | { type: 'userMessagePersisted'; messageId: string }
+  | { type: 'textDelta'; delta: string }
+  | { type: 'reasoningDelta'; delta: string }
+  | { type: 'toolCall'; messageId: string; toolCallId: string; name: string; argumentsJson: string }
+  | { type: 'toolResult'; messageId: string; toolCallId: string; content: string }
+  | { type: 'assistantMessage'; messageId: string; content: string; reasoningContent?: string | null }
+
+  | { type: 'compactStart'; messageCount: number; currentTokens: number; thresholdTokens: number }
+  | { type: 'compactDone'; messageCount: number; summaryTokens: number }
+  | { type: 'error'; message: string }
+  | { type: 'done' };
 ```
 
 
-AgentEvent is a TypeScript type alias that models the events emitted by the streaming chat API during a send-driven turn. It is a discriminated union where the first and primary variant signals the persistence of the user's message and provides the real database identifier, enabling the client to reconcile its optimistic UI state with the server state without an extra fetch.
+AgentEvent is a TypeScript discriminated union that encodes every server-to-client streaming event emitted during a send-driven chat turn, including message persistence, incremental content deltas, tool interactions, and lifecycle signals. It exists so consumers can render updates incrementally and swap optimistic user-entry IDs for the real database IDs without extra round-trips.
 
 ## Remarks
-AgentEvent serves as the outbound contract for streaming updates related to a user’s message lifecycle. It isolates the moment when the server has committed a user message from other progress updates, allowing the UI to replace temporary identifiers (like tmp-xxxxx) with the server-assigned real IDs in a single, deterministic step. This avoids an unnecessary follow-up GET of the conversation and helps keep the client state in sync with the backend as messages are processed.
+This abstraction centralizes the chat-stream protocol and decouples the UI from the underlying transport. By modeling text and reasoning deltas, tool calls and results, and compacting progress as distinct events, it enables precise, non-blocking rendering and progress indicators. The inclusion of userMessagePersisted, compactStart/compactDone, and error/done signals provides clear lifecycle hooks for the client to manage overlays, status messages, and stream termination.
 
 ## Example
 ```typescript
-function handleEvent(e: AgentEvent) {
-  if (e.type === 'userMessagePersisted') {
-    // Reconcile the client's optimistic message entry with the server-provided real ID
-    // (exact field names depend on the concrete payload shape)
+function renderEvent(ev: AgentEvent) {
+  switch (ev.type) {
+    case 'userMessagePersisted':
+      console.log(`Persisted user message ${ev.messageId}`);
+      // swap tmp- ids to ev.messageId in the UI
+      break;
+    case 'textDelta':
+      // append delta to the current user message draft
+      console.log(`Text delta: ${ev.delta}`);
+      break;
+    case 'reasoningDelta':
+      console.log(`Reasoning delta: ${ev.delta}`);
+      break;
+    case 'toolCall':
+      // show a running tool call in progress
+      console.log(`Tool call: ${ev.name} (id=${ev.toolCallId})`);
+      break;
+    case 'toolResult':
+      console.log(`Tool result: ${ev.content}`);
+      break;
+    case 'assistantMessage':
+      console.log(`Assistant: ${ev.content}`);
+      break;
+    case 'compactStart':
+      console.log(`Compact started: ${ev.messageCount} msgs, tokens=${ev.currentTokens}/${ev.thresholdTokens}`);
+      break;
+    case 'compactDone':
+      console.log(`Compact done: ${ev.summaryTokens} tokens`);
+      break;
+    case 'error':
+      console.error(`Error: ${ev.message}`);
+      break;
+    case 'done':
+      console.log('Stream complete');
+      break;
   }
 }
 ```
 
 ## Notes
-- The exact payload shape carried by userMessagePersisted (beyond carrying the real DB id) is not fully visible in the snippet; inspect the full type definition to rely on the correct property names.
-- Since AgentEvent is a discriminated union, handle all variants explicitly (or provide a safe default) to avoid runtime surprises when new events are added.
-- This event marks the first signal in a send-driven turn; design UI state updates to wait for this acknowledgement before assuming server-side persistence guarantees for the new message.
+- The UI should always clear the compact overlay on compactDone, even if the summary failed (as indicated by the comment in the source).
+- ToolCall and ToolResult share a stable toolCallId to correlate invocations with their results; store that mapping in the UI to present progress per tool.
+- Reasoning content on assistant messages is optional and may be omitted; handle undefined reasoningContent gracefully.
 
 ---
 
@@ -100,15 +135,40 @@ function doFetch(url: string, body: unknown, signal?: AbortSignal): Promise<Resp
 **Returns:** `Promise<Response>`
 
 
-doFetch is a small, opinionated wrapper around fetch that performs a POST with an optional JSON body while reliably carrying cookies across origins and requesting an SSE stream. Use it when you need to start a server-sent events workflow that relies on cookie-based authentication and a JSON payload, rather than duplicating the boilerplate headers and body handling every time.
+doFetch is a small HTTP helper that issues a POST request to the given URL, optionally sending an JSON-encoded body and returning the raw Response promise. It always includes credentials to carry cookies across origins, which is important when the web app and API are or may become cross-origin in deployment. It signals to servers that a streaming response is expected by setting Accept to text/event-stream. The Content-Type header is only added when there is a body to send, avoiding unnecessary headers for empty payloads, and the body is JSON-stringified when present. An optional AbortSignal can be supplied to cancel the request via fetch.
 
 ## Remarks
-It centralizes the cross-origin cookie handshake and the streaming-oriented headers, so callers don't have to repeat credentials and Content-Type logic. It isolates the decision to use 'application/json' only when a body is provided and to request text/event-stream, making future changes (e.g., switching to a different payload strategy) easier to apply in one place. In the bigger picture, it complements other API helpers by standardizing the startup of streaming requests that need authentication cookies.
+This encapsulates the streaming handshake pattern (SSE-style) used by this codebase, guaranteeing cookie propagation and consistent content negotiation across endpoints that stream data. Centralizing the header and body decisions reduces the risk of accidentally omitting credentials or misconfiguring Content-Type on calls that initiate streams. It also clearly expresses cancellation as a first-class concern via the optional AbortSignal.
+
+## Example
+```ts
+// Example: initiate a streaming POST and observe a response
+const ctrl = new AbortController();
+doFetch('/api/streamChat', { room: 'lobby' }, ctrl.signal)
+  .then(res => {
+    if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+    // Consume the response as text for illustration; a streaming consumer may attach to res.body
+    return res.text();
+  })
+  .then(text => {
+    console.log('First chunk/text:', text);
+  })
+  .catch(err => {
+    if (err.name === 'AbortError') {
+      console.log('Fetch aborted');
+    } else {
+      console.error('Fetch error', err);
+    }
+  });
+
+// Cancel after 10 seconds if still pending
+setTimeout(() => ctrl.abort(), 10000);
+```
 
 ## Notes
-- Not a stream parser: the function returns a Response; you must read the body yourself (e.g., via resp.body.getReader() or resp.text()) to handle the SSE.
-- Ensure body is JSON-serializable; non-serializable values may cause JSON.stringify to throw.
-- Cross-origin usage requires server-side support for credentials (Access-Control-Allow-Credentials) and the appropriate origin; otherwise the request may fail with an auth error.
+- JSON.stringify will throw if the body contains circular references or non-serializable values; ensure the payload is JSON-serializable.
+- The function always uses credentials: 'include'; if you must avoid cookies, use a different helper or adjust configuration at call site.
+
 
 ---
 
@@ -120,18 +180,14 @@ It centralizes the cross-origin cookie handshake and the streaming-oriented head
 export function streamChat(
   conversationId: string,
   content: string,
-  opts: StreamChatOptions =
+  opts: StreamChatOptions
 ```
 
 
-Streams a chat message into the specified conversation by delivering the content progressively as it becomes available. Use this when you want real-time feedback or long-form messages to render incrementally, rather than waiting for the complete payload before showing anything to the user.
+Streams chat content into a specified conversation, delivering updates as they become available instead of a single completed payload. The function takes a conversationId, the initial content chunk, and an optional StreamChatOptions object to configure streaming behavior. Use this when you want real-time or incremental delivery of chat content—for example to power live-updating UIs or long-running generation flows—rather than posting a single message.
 
 ## Remarks
-streamChat serves as a higher-level abstraction over the underlying streaming transport used by the web app. It encapsulates the interaction with the chat backend behind a stable API, allowing UI components to render as content arrives. The optional StreamChatOptions parameter configures streaming behavior (for example, chunking strategy or callbacks) without leaking transport details to callers. This separation helps keep the chat rendering responsive and consistent across different backends.
-
-## Notes
-- Streaming implies partial, ordered delivery; don't assume the entire message is available in a single payload.
-- Handle mid-stream errors and cancellation gracefully to avoid leaving the UI in an inconsistent state.
+StreamChatOptions on the dependency surface provides a typed contract for how streaming should behave (e.g., cancellation, pacing, or progress reporting). By isolating streaming logic behind streamChat, the rest of the chat infrastructure can swap in different streaming backends or testing stubs without touching call sites. This separation clarifies that the operation is asynchronous and likely interacts with the transport layer over time, which has implications for error handling and UI state management.
 
 ---
 
@@ -143,20 +199,18 @@ streamChat serves as a higher-level abstraction over the underlying streaming tr
 export function streamRegenerate(
   conversationId: string,
   messageId: string,
-  opts: StreamChatOptions =
+  opts: StreamChatOptions
 ```
 
 
-Initiates a regeneration of the streaming reply for a specific message within a conversation, allowing a fresh stream to be produced for that message. Provide the conversationId, the target messageId, and optional StreamChatOptions to tailor the streaming session; use this when you want to refresh or redo a previously streamed reply without altering the original message structure.
+streamRegenerate is a function that triggers the regeneration workflow for a single message within a specific conversation in the streaming chat context. It takes a conversationId and a messageId to identify the target, plus an optional StreamChatOptions bag to tailor the regeneration behavior.
 
 ## Remarks
-streamRegenerate encapsulates the regeneration workflow behind a simple API boundary. It enables UI layers to request a new stream without implementing back-end regeneration logic themselves, and it relies on the StreamChatOptions type to influence the streaming behavior without exposing internal details.
+This abstraction encapsulates the regeneration behavior behind a focused, reusable API. By taking the conversation and message identifiers, it cleanly expresses intent and reduces the surface area callers must understand about the streaming pipeline. It sits at the boundary between higher-level chat logic and the lower-level streaming implementation, enabling consistent regeneration semantics across different parts of the UI or data layer.
 
-## Example
-```typescript
-streamRegenerate("conversation-42", "message-7", { /* options */ });
-```
-
+## Notes
+- Ensure conversationId and messageId refer to existing entities; misreferenced IDs may result in no-ops or errors depending on the runtime.
+- Because opts defaults to an empty object, callers can omit it for default regeneration behavior; supply specific options only if you need to alter streaming behavior.
 
 ---
 
@@ -168,25 +222,26 @@ streamRegenerate("conversation-42", "message-7", { /* options */ });
 async function* streamSse(
   url: string,
   body: unknown,
-  opts: StreamChatOptions =
+  opts: StreamChatOptions
 ```
 
 
-streamSse is an async generator that streams server-sent events from the given URL by sending the provided payload. It yields each event as it arrives, enabling consumers to process a live stream of messages or updates (for example, real-time chat) rather than awaiting a single response.
+Streams chat updates from a Server-Sent Events endpoint by yielding each incoming event as it arrives. This async generator is designed to be consumed with for-await-of so you can process messages incrementally rather than buffering a full payload.
 
 ## Remarks
-Encapsulates the SSE transport lifecycle and keeps transport concerns separate from business logic. By taking a StreamChatOptions, it centralizes streaming configuration (headers, credentials, and other transport-level settings) so higher-level chat code can subscribe to events without managing the low-level fetch/stream boilerplate.
+This abstraction encapsulates the streaming transport for chat data, allowing higher-level chat logic to focus on rendering and business rules rather than the intricacies of SSE parsing and fetch setup. It emits a stream of event chunks as they arrive, enabling backpressure-friendly processing and incremental updates.
 
 ## Example
 ```typescript
-// Example usage: consume a live stream of events
-for await (const event of streamSse('https://api.example.com/stream', { roomId: 'room-123' }, { headers: { Authorization: 'Bearer token' } })) {
-  console.log('received event:', event);
+for await (const event of streamSse("/api/chat/stream", { channelId: "abc" }, {} as StreamChatOptions)) {
+  // Handle the streamed event (e.g., decode and render)
+  console.log(event);
 }
 ```
 
 ## Notes
-- Cancellation: break the loop to stop streaming and release resources.
-- Error handling: wrap in try/catch to handle errors emitted by the async iterator.
+- The endpoint must support Server-Sent Events (text/event-stream); otherwise iteration may fail or yield no data.
+- Consume with a for-await-of loop; this is an async generator, not a Promise.
+- To cancel the stream, terminate the consumer (e.g., via AbortController) when the stream is no longer needed.
 
 ---

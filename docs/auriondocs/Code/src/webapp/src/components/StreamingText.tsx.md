@@ -19,18 +19,29 @@ interface Props
 ```
 
 
-Props describes the public input contract for StreamingText: the text to display, a flag indicating whether the server-sent events stream is still appending to text (captured at mount; toggling later does not abort the in-flight typewriter — it always finishes), and two optional flags that alter rendering (caret and galactic). The galactic flag renders the leading edge of the reveal in galactic cipher, with the English translation trailing by GALACTIC_LEAD characters. This interface is consumed by StreamingText to govern how and when the text appears during a streaming reveal.
+Props defines the props for the StreamingText component, describing how the streamed text is presented as it arrives from a server-sent events source. It includes the text to display, a flag to enable or disable the typewriter-style animation as the SSE appends, and two optional presentation toggles: caret and galactic mode. The animate flag is captured at mount; toggling it after mount does not abort the in-flight typewriter and the current reveal will complete before any change takes effect. When galactic is enabled, the leading edge of the reveal is shown in galactic cipher while the English translation lags behind by GALACTIC_LEAD characters.
 
 ## Remarks
-Props acts as a small, focused contract that encapsulates the variation in how text is revealed. It separates concerns by letting StreamingText know when to animate, whether to show a caret, and whether to apply the galactic-cipher reveal, without embedding this logic in the component's internal state. The animate flag's mount-scoped semantics prevent mid-flight changes from interrupting an ongoing typewriter run, which helps keep the user experience smooth when the underlying data continues to flow.
+
+This interface serves as a contract between the consumer of StreamingText and its rendering implementation, encapsulating presentation concerns (animation, caret, and galactic reveal) behind a single, stable type. Centralizing these options in Props decouples visual behavior from the component's core rendering logic, allowing different streaming or visualization modes to be swapped with minimal code changes. The mount-time capture semantics for animate (and the galactic reveal behavior) give predictable animation lifecycles, which helps avoid surprising mid-flight state changes.
 
 ## Example
+
 ```typescript
-<StreamingText text="Connecting to server..." animate={true} galactic caret={true} />
+// Example usage of Props
+const example: Props = {
+  text: "Streaming data...",
+  animate: true,
+  galactic: true,
+  caret: true
+};
 ```
 
 ## Notes
-- Changing animate after mount does not abort an in-flight typewriter; to restart the animation you must remount StreamingText.
+
+- The animate flag is captured at mount; toggling it later will not interrupt an in-flight typewriter. If you need to restart the animation, remount the StreamingText component.
+- When galactic mode is enabled, the reveal uses GALACTIC_LEAD as the offset for the English translation; ensure that GALACTIC_LEAD is defined in your environment so the offset behaves as intended.
+
 
 ---
 
@@ -43,15 +54,7 @@ export function StreamingText(
 ```
 
 
-StreamingText is a UI component that renders the provided text with an optional streaming or typing animation. It accepts a text string and control flags: animate turns on the progressive reveal of characters, caret enables a cursor indicator at the end, and galactic toggles a space-themed styling variant. Use it when you want to convey dynamic, real-time text entry or storytelling in interfaces such as chat windows, terminals, or sci‑fi dashboards. When animate is false, the full text is shown immediately; when true, characters appear progressively according to the component's internal timing. The caret flag adds a blinking cursor at the end to imply ongoing streaming.
-
-## Remarks
-StreamingText centralizes the common pattern of dynamic text reveal, decoupling animation concerns from page composition. It provides a consistent API for enabling a typing-like effect and theming through a single prop set, helping maintainable, reusable UI components across the app.
-
-## Notes
-- If the text prop changes during streaming, the component may restart the reveal unless controlled explicitly.
-- The galactic theme may introduce CSS animations or heavier styling; consider performance implications on lower-end devices.
-- When using caret with animation, ensure sufficient contrast so the cursor remains visible against varying backgrounds.
+StreamingText is a lightweight React (TSX) component that renders the provided text with an optional streaming, typing-like reveal. When animate is true, the text appears progressively to simulate typing; when false, the text renders immediately. The caret prop toggles a blinking cursor at the end to reinforce the typing illusion, while galactic switches to an alternate space-themed styling. Use this component when you want to present text with a dynamic, attention-guiding reveal (e.g., chat messages, onboarding steps, or terminal-like UIs) instead of rendering the string in one go.
 
 ---
 
@@ -70,21 +73,20 @@ function tick(now: number)
 | `now` | `number` | — |
 
 
-Drives the incremental, frame-synced reveal of a streaming text display by advancing two cursors toward the target content and scheduling the next reveal based on a computed rate. Use this instead of manually managing timers to progressively render text; it encapsulates the timing and mode-specific logic (galactic vs. non-galactic) and stops when the target is fully revealed.
+Tick is the animation loop that progressively reveals a target string in the StreamingText component by advancing two cursors—gal (the leading index) and en (the end index)—at a rate derived from the current backlog and an optional galactic mode. It schedules itself via requestAnimationFrame until the entire target has been revealed, mutating shared refs and triggering a re-render when progress occurs.
 
 ## Remarks
-This function centralizes the streaming reveal logic, coordinating two cursors (gal and en) and a Galactic mode flag. It uses a time accumulator (nextRevealRef) and a RAF loop to keep the pace consistent with backlog-driven speed, so callers don't need to manage per-character timers. It mutates refs and schedules frames, becoming the single source of truth for the reveal cadence.
+Tick relies on several React refs (cursorsRef, targetRef, galacticRef) to track progress across frames and mutates timing state (nextRevealRef) along with the cursor counters. The reveal rate clamps with MAX_RATE and ramps with backlog using SPEEDUP_PER_BACKLOG_CHAR, enabling a smooth, backlog-driven pacing that adapts as more characters are queued. When progress happens, it signals a render via bump(n => n + 1); if the target is still incomplete, it schedules the next frame with requestAnimationFrame; otherwise it clears the RAF handle. This function is intended to be driven by the animation loop rather than called for synchronous, one-shot rendering.
 
 ## Example
 ```typescript
-// Start streaming reveal loop
-tick(performance.now());
+// Conceptual example: drive a streaming reveal in a requestAnimationFrame loop
+const now = Date.now();
+tick(now); // tick progresses the reveal; the function schedules the next frame internally
 ```
 
 ## Notes
-- Be aware that the function depends on several refs existing in scope (cursorsRef, targetRef, galacticRef, nextRevealRef, rafRef, bump).
-- The reveal rate is bounded by MAX_RATE and BASE_RATE; tuning these constants changes perceived speed and responsiveness.
-- Inactive tabs may pause RAF; the loop resumes when tick is invoked again by the browser's RAF.
-- In Galactic mode, English characters are capped by GALACTIC_LEAD relative to gal characters; ensure this matches intended UX.
+- This function mutates internal state (refs) and has side effects beyond pure computation, so tests and usage should account for frame-based progression.
+- Its behavior depends on external constants (MAX_RATE, BASE_RATE, SPEEDUP_PER_BACKLOG_CHAR, GALACTIC_LEAD); ensure these are defined in scope for predictable pacing and galactic mode handling.
 
 ---

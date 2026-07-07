@@ -32,20 +32,21 @@ function readBool(key: string, fallback: boolean): boolean
 **Returns:** `boolean`
 
 
-Reads a boolean value from localStorage by key and returns a safe boolean. If the key is missing or an error occurs during access, it returns the provided fallback. When a value is present, only the string '1' is treated as true; any other non-null value yields false. This keeps callers from dealing with storage errors and type coercion, providing a predictable boolean result for feature flags or user preferences backed by localStorage.
+Reads a boolean value stored under a given key from localStorage and returns a fallback when the key is missing or the read fails. It treats the string '1' as true and any other non-null value as false; if an error occurs during access to localStorage, the provided fallback is returned.
 
 ## Remarks
-This helper encapsulates the common booleans-from-localStorage pattern behind a stable contract: you always get a boolean, with a safe default. It isolates the '1' sentinel convention for true, so higher-level code can treat the result as a feature flag or preference without caring about storage details. It also gracefully handles environments where localStorage is unavailable by falling back to the provided default.
+Centralizes the common pattern of persisting boolean flags in localStorage while handling environments where localStorage is unavailable. By returning the fallback on missing keys or read errors, it prevents propagation of exceptions to call sites. The implementation uses a strict comparison to '1' to avoid ambiguous truthy values coming from user input or storage. This function is best used when you want a simple, robust read of a boolean preference with a safe default.
 
 ## Example
 ```typescript
-const verboseLogging = readBool('prefs.verboseLogging', false);
+// Example usage: read a feature flag from localStorage
+const showNewDashboard = readBool('showNewDashboard', false);
 ```
 
 ## Notes
-- Only '1' is interpreted as true; everything else yields false, including 'true' or 'yes'.
-- Access is wrapped in try/catch; in restricted environments the fallback is returned silently.
-- It never mutates storage; it only reads.
+- The function never throws; errors are swallowed and replaced with the provided fallback.
+- It only considers '1' as true; other values (e.g., '0', 'true', 'false') are treated as false.
+
 
 ---
 
@@ -60,25 +61,15 @@ function readLegacyHideReactDetails(): boolean
 **Returns:** `boolean`
 
 
-Reads the legacy user preference determining whether React details should be hidden in the UI. It fetches LEGACY_HIDE_REACT_DETAILS_KEY from localStorage and returns true only when the stored string equals '1'. If the key is missing, the value is not '1', or any storage access error occurs, the function returns false. This encapsulation makes it safe to query the preference from places that render UI, without repeating storage handling or guarding against storage unavailability.
+Reads a legacy user preference from localStorage to determine whether React details should be hidden. It reads the value stored under LEGACY_HIDE_REACT_DETAILS_KEY and returns true only if that value is exactly the string '1'; for any other value or if the item is absent, it returns false. The storage access is wrapped in a try/catch; if any error occurs (for example when localStorage is unavailable or access is blocked), the function gracefully returns false. This tiny helper centralizes the legacy preference read, so UI code can rely on a single source of truth for this flag.
 
 ## Remarks
-This function centralizes the legacy-format flag (string '1') and provides a stable default of false when the preference can't be read. It helps keep UI logic simple by abstracting away localStorage access and error handling.
-
-## Example
-```typescript
-// Most common usage: conditionally render elements based on the legacy preference
-if (readLegacyHideReactDetails()) {
-  // hide advanced React details in the UI
-} else {
-  // show React details
-}
-```
+Why this abstraction exists: it isolates the legacy storage key and its interpretation from the rest of the UI logic, allowing storage strategy or key naming to evolve without sprinkling localStorage calls everywhere. It also defines a safe, conservative default: if the flag can't be read, we opt to show React details rather than silently hiding them.
 
 ## Notes
-- Access to localStorage can throw in private/incognito modes or in certain environments; the function catches errors and returns false.
-- Only a value of '1' is treated as true; any other value (including 'true', 'yes', or '0') yields false.
-- LEGACY_HIDE_REACT_DETAILS_KEY must be defined consistently; a mismatch would default to false.
+- Returns true only when the stored value is exactly '1'; any other value yields false.
+- The function is defensive: any storage access error will cause a false return rather than throwing.
+- Relies on LEGACY_HIDE_REACT_DETAILS_KEY being defined elsewhere; if that symbol isn't present, this function cannot read a meaningful value.
 
 ---
 
@@ -98,23 +89,17 @@ export function useBoolPref(key: string, fallback: boolean): [boolean, (next: bo
 | `fallback` | `boolean` | — |
 
 
-UseBoolPref is a React hook that reads and writes a boolean preference by key, returning [value, set]. Use it when you need a simple, hook-based API to track a boolean user preference and have the UI reflect changes across tabs or other parts of the app.
+useBoolPref is a React hook that exposes a boolean user preference stored under a string key. It initializes its value by reading the persisted boolean with readBool(key, fallback). The hook subscribes to two event channels (PREFS_CHANGED_EVENT and the browser storage event) to refresh its value whenever the underlying preference changes, ensuring all components reading the same key stay in sync across tabs. The returned pair [value, set] lets a component read the current preference and update it; the setter writes the new value with writeBool and then updates local state optimistically, so the UI responds immediately while the global change propagates through the event system.
 
 ## Remarks
-The hook encapsulates storage read/write and subscribes to global events so the component stays in sync with the underlying preference. It performs an optimistic update on set, updating local state immediately and relying on the event system to reconcile with the stored value. It also filters change events to refresh only when the relevant key is affected, avoiding unnecessary re-renders for unrelated keys.
 
-## Example
-```typescript
-// Example usage of useBoolPref
-const [dark, setDark] = useBoolPref('ui.darkMode', false);
-
-console.log('Dark mode enabled:', dark);
-setDark(!dark);
-```
+This abstraction centralizes boolean preferences in a key-based store and provides reactivity across components. It decouples UI code from direct storage access and relies on a lightweight event-based invalidation mechanism to keep all consumers aligned. The optimistic update pattern (set immediately after write) gives a snappy UI while deferring final coherence to the shared event stream.
 
 ## Notes
-- No error propagation: writeBool errors are not surfaced; the UI may reflect the requested value even if the underlying storage fails, until a refresh occurs.
-- Key stability matters: changing the key or fallback will reinitialize the hook; ensure keys are stable for the component lifecycle.
+
+- This hook relies on a browser-like environment (window, storage events) and may not work in SSR or non-browser runtimes.
+- It uses an extra event PREFS_CHANGED_EVENT to refresh values; ensure all changes to the same key emit this event so all tabs stay synchronized.
+- There is no explicit error handling around writeBool; exceptions would bubble up to the caller if write fails.
 
 ---
 
@@ -127,27 +112,28 @@ export function useHideThinking(): [boolean, (next: boolean) => void]
 ```
 
 
-useHideThinking returns a tuple [boolean, (next: boolean) => void] representing the user's preference for hiding the 'thinking' indicator and a setter to update it. It delegates to useBoolPref with the HIDE_THINKING_KEY and a default from readLegacyHideReactDetails(), so the preference is persisted across sessions and remains backward-compatible with legacy behavior; use it in components that render or suppress the thinking indicator based on this preference.
+useHideThinking is a React hook that exposes a persistent boolean preference for hiding thinking indicators as a tuple [hideThinking, setHideThinking]. It delegates to useBoolPref with the key HIDE_THINKING_KEY and an initial value derived from readLegacyHideReactDetails(), so components can read and update the user's preference without directly managing storage or migration logic.
 
 ## Remarks
-This hook encapsulates a centralized user preference for hiding the thinking indicator. By delegating to useBoolPref and readLegacyHideReactDetails, it provides a single source of truth and shields UI components from storage details. It fits into a family of useX hooks that manage named boolean preferences across the app, promoting consistency and easier testing.
+By centralizing the preference behind this hook, the app ensures a consistent initial state when migrating from legacy behavior and a single, shared API for all consumers. It hides the implementation details of how the preference is stored, enabling future changes to storage or key naming without touching every consumer.
 
 ## Example
 ```typescript
 const [hideThinking, setHideThinking] = useHideThinking();
-// hideThinking === true -> do not render the thinking indicator
-
-if (!hideThinking) {
-  // render thinking indicator here
+// Use the flag to conditionally render thinking indicators
+if (hideThinking) {
+  // render without thinking indicators
+} else {
+  // render with thinking indicators
 }
 
-// Update the user preference
+// Persist a user choice to hide thinking indicators
 setHideThinking(true);
 ```
 
 ## Notes
-- The setter takes a boolean value; it is not a functional updater. Pass true or false directly.
-- The default value is sourced from readLegacyHideReactDetails(); migrations or changes to the legacy path may require updates to the stored key for future defaults.
+- The initial value uses readLegacyHideReactDetails(), which may reflect legacy behavior; changes to that function may affect the initial state for new sessions.
+- Toggling via setHideThinking updates the persistent preference through useBoolPref, so the value persists across reloads.
 
 ---
 
@@ -160,36 +146,13 @@ export function useHideToolCalls(): [boolean, (next: boolean) => void]
 ```
 
 
-This React hook exposes a user preference for hiding tool-call details in the UI and provides a setter to update that preference. It returns a two-item tuple: [boolean, (next: boolean) => void], where the boolean indicates whether tool calls should be hidden and the function updates that value. The implementation delegates to useBoolPref with the key HIDE_TOOL_CALLS_KEY and uses readLegacyHideReactDetails() as the default when no value is stored, ensuring backward-compatible behavior.
+Returns a persistent UI preference indicating whether tool call details should be hidden, paired with a setter to update that preference. It uses useBoolPref with the key HIDE_TOOL_CALLS_KEY and defaults to readLegacyHideReactDetails() for backward compatibility. Use this hook when you want to conditionally render or suppress tool-call information across the app without managing persistence yourself.
 
 ## Remarks
-This abstraction centralizes the concept of hiding tool calls behind a single, reusable hook, ensuring all components observe the same preference and react to changes consistently. It decouples UI logic from the exact persistence mechanism and preserves a sensible default derived from legacy settings. By encapsulating the preference, developers can toggle visibility without duplicating state management or storage concerns across multiple components.
-
-## Example
-```typescript
-const [hideToolCalls, setHideToolCalls] = useHideToolCalls();
-
-function ToolCallsToggle() {
-  return (
-    <button onClick={() => setHideToolCalls(!hideToolCalls)}>
-      {hideToolCalls ? 'Show Tool Calls' : 'Hide Tool Calls'}
-    </button>
-  );
-}
-
-// Usage in a component
-return (
-  <div>
-    <ToolCallsToggle />
-    {!hideToolCalls && <ToolCallsPanel />}
-  </div>
-);
-```
+This hook centralizes the hide-tool-calls preference, shielding components from the storage key and legacy-default logic. By returning a stable pair, it makes it easy to toggle the visibility of tool-call details and have that choice persist across sessions. The default comes from readLegacyHideReactDetails(), which preserves existing user expectations during migrations and can be evolved without touching callers.
 
 ## Notes
-- The setter updates a persistent user preference; always use the provided setter rather than mutating the boolean value directly.
-- The default value is derived from readLegacyHideReactDetails(), so behavior may reflect legacy app settings unless updated via the setter.
-- This hook is intended for cross-component UI control of tool-call visibility, not for ephemeral local state.
+- Be mindful that the default value is derived from readLegacyHideReactDetails(); in test or non-browser environments where persistence is unavailable, provide a mock or override as needed.
 
 ---
 
@@ -202,33 +165,23 @@ export function useHideToolResults(): [boolean, (next: boolean) => void]
 ```
 
 
-The hook returns a tuple [boolean, (next: boolean) => void] where the boolean indicates whether tool results should be hidden and the function updates that preference. It wraps a generic boolean-preference caller (useBoolPref) with the specific key HIDE_TOOL_RESULTS_KEY and a default derived from readLegacyHideReactDetails(), enabling centralized, consistent control of this UI preference across the app.
+useHideToolResults is a small, reusable hook that exposes a boolean flag indicating whether tool results should be hidden and a setter to update that flag. It derives its initial value from a boolean preference stored under HIDE_TOOL_RESULTS_KEY, falling back to a legacy default via readLegacyHideReactDetails(). Components use this hook to read and persist the user's preference for hiding tool results, avoiding manual reads or writes to the underlying preference store.
 
 ## Remarks
-This domain-specific hook centralizes the "hide tool results" preference, ensuring consistent behavior across components and future refactors. By wiring into the shared boolean-preference mechanism, it also preserves backward-compatible defaults via readLegacyHideReactDetails(), reducing migration risk. Using this hook improves testability and readability by removing direct reads/writes to storage in UI components and clarifying the intent of toggling the UI for tool results.
+By encapsulating this preference in a dedicated hook, the UI remains declarative and easy to reuse across components. It delegates to the shared preference system (useBoolPref) to ensure consistent behavior with other user-facing toggles, and the legacy default path preserves existing user settings when the new preference key has no value.
 
 ## Example
 ```typescript
-const [hide, setHide] = useHideToolResults();
-// Typical usage: bind to a checkbox and conditionally render tool results
-return (
-  <div>
-    <label>
-      <input
-        type="checkbox"
-        checked={hide}
-        onChange={(e) => setHide(e.target.checked)}
-      />
-      Hide tool results
-    </label>
-    {!hide && <ToolResults />}
-  </div>
-);
+const [hideToolResults, setHideToolResults] = useHideToolResults();
+
+// Example: toggle the preference in response to a UI action
+setHideToolResults(!hideToolResults);
 ```
 
 ## Notes
-- The setter accepts a boolean representing the next value; to toggle, compute the next value (e.g., setHide(!hide)).
-- The default value is derived from readLegacyHideReactDetails(), so be aware of any legacy behavior that may influence initial state.
+- The setter in the returned tuple expects a boolean value (next: boolean) and is not a functional updater; you must compute the next value before calling it.
+- readLegacyHideReactDetails provides the initial default when there is no stored value for HIDE_TOOL_RESULTS_KEY, aiding backward compatibility.
+- All mutations feed through useBoolPref, so changes persist across sessions and are reflected consistently wherever the hook is used.
 
 ---
 
@@ -250,21 +203,13 @@ function writeBool(key: string, value: boolean): void
 **Returns:** `void`
 
 
-Persists a boolean preference in localStorage under the provided key by encoding true as '1' and false as '0', then notifies listeners of the change by dispatching a CustomEvent with the PREFS_CHANGED_EVENT type and the key included in the event detail. If localStorage is unavailable (for example in privacy modes or when storage quota is exceeded), the write is skipped and no event is dispatched; the app remains functional and the preference is ephemeral in that case.
+Writes a boolean preference to localStorage under the given key, persisting true as '1' and false as '0', and emits a PREFS_CHANGED_EVENT to notify listeners about the change. If localStorage is unavailable (privacy mode, quota restrictions), the write is skipped and the app continues to function with ephemeral settings.
 
 ## Remarks
-
-Consolidates persistence and change notification for user preferences. The emitted event lets decoupled components refresh state in response to updates without querying storage directly.
-
-## Example
-
-```typescript
-writeBool('darkMode', true);
-```
+Centralizes boolean-flag persistence and decouples UI logic from storage. The emitted event enables reactive updates without polling storage, and the empty catch keeps the UI responsive in environments where storage is disabled—at the cost of persistence in those cases.
 
 ## Notes
-
-- Silent catch hides storage failures; no exception is thrown and no event is dispatched in that path.
-- Relies on a globally defined PREFS_CHANGED_EVENT; ensure it exists and that listeners subscribe to it.
+- localStorage may be unavailable in some contexts; the change is ephemeral when that happens.
+- The function swallows errors; if persistence is essential, provide a fallback mechanism or additional instrumentation.
 
 ---
