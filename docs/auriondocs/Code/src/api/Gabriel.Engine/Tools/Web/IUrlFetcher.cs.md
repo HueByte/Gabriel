@@ -18,15 +18,21 @@ public interface IUrlFetcher
 ```
 
 
-IUrlFetcher defines an asynchronous contract for retrieving the contents of public URLs and returning a sanitized UrlFetchResult for downstream consumption by the agent layer. Implementations should enforce security constraints (allow only HTTP(S) schemes, guard against SSRF by avoiding private or loopback addresses), cap the response size to prevent context overrun, and transform HTML into plain text by stripping scripts, styles, navigation, and tags before returning.
+IUrlFetcher provides a contract for asynchronously fetching the contents of a public URL and returning a cleaned, plain-text representation suitable for consumption by an agent. Implementations are expected to enforce HTTP/HTTPS schemes, reject SSRF-prone addresses (internal/private/loopback), cap response size to protect model context, and convert HTML to text by stripping scripts, styles, navigation, and tags. Use this abstraction instead of performing raw HTTP calls directly when you need a consistent, sanitized input source that can be swapped out without affecting the agent layer (for testing, mocking, or alternate fetch backends).
 
 ## Remarks
-To maintain a clean separation of concerns, this abstraction lets the agent layer remain agnostic to how content is fetched or cleaned. Different fetch strategies (for example, in-process mocks vs. real HTTP clients) can be swapped behind this interface without touching higher layers, and callers rely on UrlFetchResult to represent the outcome and content.
+Isolates network access and content sanitization behind a single abstraction, reducing coupling between the agent and transport concerns. The WebFetchTool relies on this interface, enabling swapping in different fetch implementations (for tests or different environments) without changing the agent code. It also codifies the sanitization policy at the boundary, ensuring uniform plain-text output for downstream processing.
+
+## Example
+```csharp
+// Example usage with a cancellation token
+IUrlFetcher fetcher = /* provided by DI or a test double */;
+UrlFetchResult result = await fetcher.FetchAsync("https://example.org", CancellationToken.None);
+```
 
 ## Notes
-- Validate URL schemes and address scope to prevent SSRF.
-- Honor CancellationToken and avoid blocking indefinitely.
-- Cap/trim response content to keep within model context, signaling truncation in UrlFetchResult if applicable.
+- UrlFetchResult is expected to contain cleaned text, not the original HTML; do not rely on the presence of raw markup in downstream usage.
+- Respect the provided CancellationToken and honor timeouts; callers may cancel the operation to preserve responsiveness.
 
 ---
 
@@ -54,12 +60,30 @@ public sealed record UrlFetchResult(
 | `ContentLength` | `int` | — |
 
 
-UrlFetchResult is an immutable record that represents the outcome of fetching a URL. It exposes the final URL after redirects, the content type, the cleaned textual content, a flag indicating whether the content was truncated due to a cap, and the length of the cleaned content for downstream processing.
+UrlFetchResult is an immutable data carrier that encapsulates the essential outcome of a URL fetch. It records the final URL after redirects, the content type, the cleaned textual content, whether the content was truncated due to a cap, and the length of the cleaned content. This enables callers to reason about fetch results without depending on low-level HTTP details, and to present or analyse the page content in a stable, serializable form.
 
 ## Remarks
-As a single value object, UrlFetchResult decouples the fetch implementation from its consumers. It provides both metadata (FinalUrl, ContentType) and content (Content) in a stable shape that downstream components such as parsers, indexers, or UIs can rely on. Being a record, its equality is value-based and instances are immutable, making it straightforward to cache or deduplicate results. FinalUrl helps you follow redirects, Truncated signals whether the original page was capped, ContentType informs parsing strategy, and ContentLength offers a quick size metric.
+
+As a record, UrlFetchResult provides value-based equality and immutability, making it convenient for caching, deduplication, and passing fetch results across components. The five fields together separate transport concerns (FinalUrl, ContentType) from payload concerns (Content, Truncated, ContentLength), offering a clear contract for consumers that only need the meaningful outcome of a fetch.
+
+## Example
+
+```csharp
+// Example usage: create a result and inspect its properties
+var result = new UrlFetchResult(
+    FinalUrl: "https://example.com/",
+    ContentType: "text/html",
+    Content: "Welcome to Example.com",
+    Truncated: false,
+    ContentLength: 22
+);
+
+Console.WriteLine($"Fetched: {result.FinalUrl}, Type: {result.ContentType}, Truncated: {result.Truncated}, Length: {result.ContentLength}");
+```
 
 ## Notes
-- ContentLength reflects Content.Length after cleaning; if you swap the cleaning strategy, this value will change and should not be treated as the raw page length.
+
+- UrlFetchResult is immutable; use a "with" expression to derive a modified copy if you need a variant.
+- If Truncated is true, Content contains the cleaned portion only, and ContentLength reflects the length of Content, not the original page size.
 
 ---

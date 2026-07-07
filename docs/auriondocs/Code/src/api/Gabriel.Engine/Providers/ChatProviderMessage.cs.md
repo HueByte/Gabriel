@@ -22,18 +22,12 @@ public record ChatProviderMessage(
 | `ToolCalls` | `IReadOnlyList<ChatProviderToolCall>?` | `null` |
 
 
-This record serves as a transport DTO at the IChatProvider boundary, decoupling provider implementations from the domain and persistence concerns. It encodes the four message shapes supported by the OpenAI/xAI wire protocol so chat messages can be transported in a stable, wire-friendly form regardless of internal domain models. Use this symbol whenever you need to marshal messages between chat providers and the rest of the system, rather than passing the raw domain Message entity across the boundary.
-
-Fields map to the shapes:
-- user/system: Content is set; ToolCallId and ToolCalls are null
-- assistant (text): Content is set
-- assistant (tool calls): Content may be null, ToolCalls is set
-- tool (observation): Content is set, ToolCallId is set
+ChatProviderMessage is a transport DTO used at the IChatProvider boundary to carry a single chat message in the wire format supported by OpenAI/xAI. It decouples from the persistence Message entity so providers exchange messages without touching domain persistence concerns and encodes all four wire shapes by combining Content, ToolCallId, and ToolCalls with a Role.
 
 ## Remarks
-This transport DTO acts as the boundary abstraction between provider implementations and the domain, preserving serialization semantics and protecting persistence concerns. It consolidates the wire-protocol shapes into a single, stable carrier and clarifies how each combination of fields should be interpreted by the adapter surrounding the IChatProvider boundary.
+By centralizing the mapping from domain messages to the wire protocol, this type keeps transport concerns isolated from persistence and domain logic. It supports the four shapes described in the comments: user/system (Content set; ToolCallId/ToolCalls null), assistant (text) (Content set; ToolCallId/ToolCalls null), assistant (tool calls) (Content optional; ToolCalls set; ToolCallId null), and tool (observation) (Content set; ToolCallId set; ToolCalls null). The ToolCalls collection references ChatProviderToolCall entries to describe individual tool invocations.
 
 ## Notes
-- The fields Content, ToolCallId, ToolCalls are nullable; follow the contract for each shape.
-- When using tool-calls shape, provide a non-null ToolCalls collection; Content may be omitted.
-- Tool (observation) messages require ToolCallId to identify the invocation.
+- Be mindful of nullability to express shapes; only the non-null fields matter for a given message shape.
+- For tool observations, ToolCallId should be set and ToolCalls should be null.
+- When representing an assistant message that includes tool calls, ToolCalls should be populated and Content may be null or set as appropriate.

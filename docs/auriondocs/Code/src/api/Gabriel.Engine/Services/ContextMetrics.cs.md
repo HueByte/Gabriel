@@ -44,18 +44,20 @@ public record ContextMetrics(
 | `ConversationTokens` | `int` | — |
 
 
-ContextMetrics is a record that captures a snapshot of token usage and decision-related context when preparing the next turn. It is surfaced via IAgentService.GetContextMetricsAsync so the UI can display how much of the current context window is used and whether a summarization or trimming will occur for the upcoming turn. The per-category breakdown fields (SystemPromptTokens through ConversationTokens) mirror exactly what ToProviderHistory assembles, enabling a grid visualization that adds up to CurrentTokens in a way that reflects the backend's actual decision-making.
+ContextMetrics is an immutable snapshot that captures how tokens are consumed for the current turn and how that consumption is distributed across contributing sources (system prompts, memories, tools, and the conversation). It is produced by GetContextMetricsAsync and surfaced to the UI so developers can display a faithful indicator of context usage and whether a summarization step was applied.
 
 ## Remarks
-ContextMetrics provides a stable, serializable snapshot of the contextual baggage considered for the next turn. It decouples the UI from provider internals, letting dashboards display a “context used / until compact” indicator that remains in sync with how the engine will compose or trim messages. It helps diagnose and tune the system by revealing where token usage concentrates (prompts, memories, tools, or ongoing conversation).
+ContextMetrics acts as a stable contract between backend context evaluation and the frontend visualization. It aggregates category-level token counts to support consistent visual indicators and debugging. The record is immutable, ensuring a single snapshot can be reused for display without downstream mutation.
 
 ## Example
 ```csharp
-// Most common usage: fetch and display current context usage
-var metrics = await agentService.GetContextMetricsAsync(...);
-Console.WriteLine($"CurrentTokens={metrics.CurrentTokens}, ConversationTokens={metrics.ConversationTokens}, SystemPromptTokens={metrics.SystemPromptTokens}");
+public async Task ShowMetrics(IAgentService agent, Guid conversationId, CancellationToken ct)
+{
+    ContextMetrics m = await agent.GetContextMetricsAsync(conversationId, ct);
+    Console.WriteLine($"Current: {m.CurrentTokens} tokens; ContextWindow: {m.ContextWindowTokens}; Summarized: {m.IsSummarized} (SummaryTokens={m.SummaryTokens})");
+}
 ```
 
 ## Notes
-- The per-category buckets are intended to sum into the overall CurrentTokens when the same per-message overhead is accounted for; do not interpret the buckets as exact independent totals.
-- CompactThresholdRatio is a double; comparisons should consider floating-point precision and potential rounding differences between components.
+- ContextMetrics is a snapshot; values reflect the moment GetContextMetricsAsync completes and may change with subsequent turns. Do not rely on cross-call invariants beyond the current retrieval.
+- To analyze historical provider behavior, consult ToProviderHistory or related diagnostics; ContextMetrics focuses on the current-turn accounting rather than full history.

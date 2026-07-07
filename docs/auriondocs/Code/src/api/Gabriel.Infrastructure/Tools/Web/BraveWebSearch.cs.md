@@ -8,14 +8,28 @@ public sealed class BraveWebSearch : IWebSearch
 ```
 
 
-BraveWebSearch is a concrete implementation of IWebSearch that queries the Brave Search API over HTTP. It relies on a dependency-injected HttpClient (named BraveSearch) configured in DI to perform requests against Brave's /search endpoint, then maps the API payload into WebSearchResult items and returns them as a read-only list.
+BraveWebSearch is a concrete IWebSearch implementation that queries the Brave Search API via a plain GET to /search with the provided query and a configured API key. It returns a list of WebSearchResult objects mapping Brave results to your domain, and it enforces a small 1–10 result cap and fast fail if the API key isn't configured.
 
 ## Remarks
+BraveWebSearch isolates the Brave API interaction behind a simple, DI-friendly service. It guards against misconfiguration by throwing when the API key is not configured, ensuring fast feedback during startup or runtime. The class leverages a preconfigured named HttpClient so base address, timeout, and authentication header are defined in one place, reducing repetitive plumbing across the codebase. When the payload is absent or fields are missing, it gracefully falls back to empty values for titles/URLs to preserve a stable surface for consumers.
 
-By encapsulating Brave Search specifics behind BraveWebSearch, callers stay decoupled from transport details and the Brave API payload shape. The class centralizes error handling and configuration concerns: it throws to signal missing API key configuration, logs and surfaces HTTP errors as exceptions, and translates the API response into the domain model. The internal mapping layer also ensures optional API fields default to safe empty strings, preserving a stable surface for consumers.
+## Example
+```csharp
+// Example: usage with DI-provided dependencies
+public async Task RunDemo(
+    IHttpClientFactory httpFactory,
+    IOptions<BraveSearchOptions> options,
+    ILogger<BraveWebSearch> logger,
+    CancellationToken ct)
+{
+    var brave = new BraveWebSearch(httpFactory, options, logger);
+    var results = await brave.SearchAsync("csharp latest", 3, ct);
+    foreach (var r in results)
+        Console.WriteLine($"{r.Title} - {r.Url}");
+}
+```
 
 ## Notes
-
-- Requires BraveSearchOptions.IsConfigured; if not, an InvalidOperationException is thrown with guidance on configuring the API key.
-- The requested result count is clamped to the range 1–10; values outside this range are sanitized.
-- The HttpClient used must be registered under the BraveSearch name in DI; the client configuration provides BaseAddress, timeout, and the authentication header.
+- If Brave's API key is not configured, calling SearchAsync throws InvalidOperationException with guidance on enabling Tools:Web:Brave:ApiKey.
+- BraveWebSearch relies on a named HttpClient ("BraveSearch"); ensure your Dependency Injection setup wires BaseAddress, Timeout, and the ApiKey header in one place.
+- The limit parameter is clamped to the range 1–10; callers requesting outside values will receive at most ten results.

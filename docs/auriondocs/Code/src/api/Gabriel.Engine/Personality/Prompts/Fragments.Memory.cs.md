@@ -8,17 +8,11 @@ public static partial class Fragments
 ```
 
 
-Fragments is a small utility container for prompt fragments used to shape the model's prompts. The PersonaMemory member stores the long-term-memory guidance that instructs the agent on how to interact with memory tools (memory_save, memory_list, memory_remove) and when to persist information. This fragment is designed to be appended after the static persona block so memory capabilities are presented as functional constraints rather than as part of the model's identity.
+Fragments is a static partial class that hosts memory-related text fragments used to shape the model’s persona. The PersonaMemory constant contains the memory-system guidance: when to save user information, how to reference memory tools (memory_save, memory_list, memory_remove), formatting conventions, and boundaries about what not to persist. This fragment is appended after the static persona block so the model treats memory capabilities as an operational instruction rather than core identity.
 
 ## Remarks
-Fragments centralizes memory-policy text, making it easy to adjust or reuse across prompts without duplicating content. It clarifies the separation between the core persona and memory behavior, supporting consistent behavior across environments and test scenarios. The static const nature ensures the policy remains stable at runtime while still being accessible from code.
-
-## Example
-```csharp
-// Example: including memory guidance in the system prompt
-string systemPrompt = Fragments.PersonaMemory + "\n" + otherPersonaContent;
-```
+Fragments acts as a modular repository of prompt fragments; the partial class pattern lets other parts of the codebase extend its content without mutating existing code. PersonaMemory centralizes long-term memory policy, ensuring consistent behavior across conversations and projects. It decouples memory policy from other persona fragments, making it easier to evolve memory rules independently.
 
 ## Notes
-- If memory tools aren't registered the builder can skip this fragment cleanly without rewriting anything upstream.
-- The fragment is a long, raw string literal; consider impact on prompt length and maintainability when integrating into larger prompts.
+- The string contains verbatim memory guidance intended to be embedded in prompts; changes should be reviewed for potential impact on user privacy and model behavior.
+- Because PersonaMemory is a raw string literal, indentation and formatting are preserved; be mindful when editing to keep readability intact.

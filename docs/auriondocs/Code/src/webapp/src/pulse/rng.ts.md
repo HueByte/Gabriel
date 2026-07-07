@@ -19,25 +19,30 @@ export type Rand = () => number
 ```
 
 
-Rand is a type alias for a no-argument function returning a number. It represents a pluggable source of numeric values, commonly used as a random-number generator. By depending on Rand instead of directly calling a specific RNG, APIs can swap in different number sources—such as Math.random, a seeded generator, or a deterministic stub—without changing their call sites.
+Rand is a type alias for a function that takes no arguments and returns a number. It represents a numeric supplier—something that yields a value when invoked—without requiring a concrete numeric value up front. Use Rand when a consumer should remain agnostic about where the number comes from, allowing you to swap in an actual RNG, a seeded generator, or a test double without changing call sites.
 
 ## Remarks
 
-Abstracting the number source behind Rand decouples generation from consumption, enabling dependency injection and easier testing. It signals the intent that randomness (or numeric output) is provided by a supplied function rather than baked into the caller. This makes it straightforward to swap in deterministic sequences for tests or to tailor the distribution without modifying surrounding logic.
+By abstracting the source of numbers behind Rand, components can inject different RNG strategies, improving testability and configurability. It sits at the boundary between pure data types and behavior, enabling deterministic behavior in tests and pluggable randomness in production.
 
 ## Example
 
 ```typescript
-// Example usage
-const randomSource: Rand = Math.random;
-const samples = Array.from({ length: 5 }, () => randomSource());
+// Common usage: provide a Rand implementation
+const myRand: Rand = () => Math.random();
+
+// Consumer that uses Rand
+function nextValue(rng: Rand): number {
+  return rng();
+}
+
+console.log(nextValue(myRand));
 ```
 
 ## Notes
 
-- Rand is a no-arg function that yields a number; the exact distribution is implementation-defined.
-- For deterministic tests, provide a Rand that returns fixed values or follows a seeded sequence.
-- If you pass a shared Rand across modules, ensure its stateful behavior remains predictable and documented.
+- Rand is a type alias; it does not create a runtime function. You must supply a function value whose type matches Rand.
+- If you need deterministic tests, inject a Rand that returns a fixed sequence or a seeded generator to reproduce results.
 
 ---
 
@@ -58,20 +63,15 @@ export function mulberry32(seed: number): Rand
 **Returns:** `Rand`
 
 
-Mulberry32(seed) returns a tiny, deterministic pseudo-random number generator (PRNG) seeded with the provided 32-bit unsigned seed. The returned function advances an internal state and yields numbers in [0, 1) with uniform distribution, making it ideal for lightweight randomness in tests, procedural generation, or simulations where cryptographic security is not required.
+mulberry32(seed) creates a deterministic pseudorandom number generator and returns a function that, on each call, produces a uniform value in [0, 1). Use it when you need reproducible randomness keyed by a seed (for tests, procedural content, or simulations) instead of Math.random.
 
 ## Remarks
-Because the returned value is a closure over its internal 32-bit state, the sequence is fully determined by the seed and the number of times you call it. Use this when you need repeatable randomness across runs or environments without pulling in a heavier RNG. It is not cryptographically secure and should not be used for security-critical purposes.
-
-## Example
-```typescript
-const rnd = mulberry32(42);
-console.log(rnd()); // deterministic value in [0, 1)
-```
+Because mulberry32 uses a closure over a 32-bit state, it provides a lightweight, self-contained RNG without shared global state. The function relies on a small mix of arithmetic and bitwise operations to transform the internal state into a new pseudorandom value each call. This makes it fast and deterministic, but not suitable for cryptographic purposes. It’s ideal for reproducible experiments where you want to replay the same sequence by using the same seed.
 
 ## Notes
-- Not cryptographically secure; use for tests, demos, or non-secure simulations.
-- The generator's internal state is captured in a closure; sharing a single instance across concurrent tasks may require external coordination.
+- Not cryptographically secure; use for non-secure randomness only.
+- The seed is masked to a 32-bit unsigned integer (seed >>> 0); NaN or non-numeric seeds map to 0.
+- Each call advances the internal state and returns a value in [0, 1).
 
 ---
 
@@ -86,12 +86,15 @@ export function randomSeed(): number
 **Returns:** `number`
 
 
-Generates a 32-bit unsigned random seed by sampling Math.random and coercing the result into a non-negative integer. It multiplies the [0,1) value from Math.random by 0x100000000 (2^32) and then applies an unsigned right shift (>>> 0) to convert it to a 32-bit unsigned integer, yielding a value in the range 0 through 4294967295. This function is useful when you need a numeric seed to initialize a seeded RNG, ensuring you work with a fixed-width integer rather than a floating-point sample.
+Generates a non-sensitive 32-bit seed from the built-in Math.random source. It scales Math.random() by 2^32 and converts the result to an unsigned 32-bit integer, yielding a value in the range 0 to 4294967295. Call randomSeed() when you need a numeric seed to initialize a non-cryptographic PRNG or to parameterize tests; it is not suitable for cryptographic purposes because Math.random is not cryptographically secure.
 
 ## Remarks
-Encapsulating seed generation in randomSeed provides a single, discoverable source for 32-bit seeds. It decouples the concerns of randomness acquisition from RNG initialization, so components can swap RNG implementations without changing their seed-creation logic. The left-hand operation (Math.random) is a standard source of pseudo-random values in environments where cryptographic security is not required.
+This utility provides a simple, consistent way to obtain a 32-bit seed from the standard randomness source, decoupling seed creation from a specific RNG implementation. It guarantees the returned value fits a 32-bit unsigned range, which aligns with common PRNG interfaces. If cryptographic randomness is required, use a crypto API (for example, crypto.getRandomValues) instead.
 
 ## Notes
-- Not cryptographically secure; Math.random is not suitable for cryptographic seeds. For secure seeds, consider using crypto.getRandomValues (or Node's crypto module) to produce 32-bit seeds.
+- Not cryptographically secure; do not use for security tokens or password generation.
+- Math.random quality can vary by environment; for reproducible seeds, consider using a dedicated PRNG or a fixed seed.
+- The return type is a JavaScript number; all values up to 2^32 - 1 are exactly representable in IEEE-754 double precision.
+
 
 ---

@@ -4,9 +4,9 @@
 
 ## Contents
 
-- [AgentService_overview](#agentservice_overview)
-- [TurnPrompts](#turnprompts)
 - [AgentService](#agentservice)
+- [TurnPrompts](#turnprompts)
+- [AgentService](#agentservice-1)
 - [AppendMemory](#appendmemory)
 - [ExecuteToolSafelyAsync](#executetoolsafelyasync)
 - [GenerateSummaryAsync](#generatesummaryasync)
@@ -29,7 +29,7 @@
 
 ---
 
-## AgentService_overview
+## AgentService
 > **File:** `src/api/Gabriel.Engine/Services/AgentService.cs`  
 > **Kind:** class
 
@@ -38,37 +38,15 @@ public class AgentService : IAgentService
 ```
 
 
-A long-lived service that orchestrates a single agent turn for a conversation: validating and persisting the incoming user message, selecting the model to use, assembling the turn-level system prompt (persona, project, memories, tools), creating a scoped tool execution context, and streaming the agent's events back to the caller via an `IAsyncEnumerable<AgentEvent>`. Reach for this service when you need to run a conversational agent turn end-to-end (including tool invocation, prompt construction, compaction and post-processing) rather than calling a provider or model directly.
+Orchestrates a single assistant turn for a conversation and exposes it as a streaming sequence of AgentEvent values. AgentService validates input and conversation state, resolves the model selection and per-turn prompts (persona, project system prompt, memory, tools), populates the tool execution context, runs the provider streaming loop, persists the user and assistant messages and updates conversation state, and applies compaction and response post-processing. Use this service when you want the full end-to-end agent behavior (prompt building, tool wiring, provider streaming, state persistence and post-processing) rather than calling lower-level providers or repositories directly.
 
 ## Remarks
-The implementation centralizes per-turn responsibilities that must remain consistent across retries and across the streaming pipeline: model selection is resolved once up-front, stable prompt pieces are loaded once for the turn, and the conversation state + incoming user message are persisted before streaming begins so timeline semantics remain correct even on client disconnects. A small retry loop (bounded and linear-backoff) lives inside the agent loop specifically to work around a provider-level hiccup where the provider returns a successful stream with an empty final text; HTTP resilience layers cannot observe this because the HTTP response is already "successful".
-
-AgentService also creates GabrielToolBridge instances on demand for a call; it holds the bridge logger so the lightweight bridge can be instantiated per-call without requiring a full factory abstraction.
-
-## Example
-```csharp
-// Stream events from a single agent turn and handle them as they arrive.
-await foreach (var agentEvent in agentService.RunAsync(conversationId, userInput, cancellationToken))
-{
-    switch (agentEvent.Type)
-    {
-        case AgentEventType.PartialResponse:
-            // write partial text to client
-            break;
-        case AgentEventType.ToolInvocation:
-            // execute tool and feed result back into the loop
-            break;
-        case AgentEventType.Complete:
-            // finalize persistence / metrics
-            break;
-    }
-}
-```
+This class centralises the high-level agent workflow: it coordinates repositories (conversation, project), the provider registry and model catalog, memory and tool services, the system-prompt builder, and the response post-processor. Two implementation details are exposed as design decisions: (1) a bounded retry policy for the provider "empty stop" condition (handled inside the agent loop because the HTTP layer receives a successful 200 streaming response), and (2) AgentService retains an `ILogger<GabrielToolBridge>` so it can instantiate GabrielToolBridge on demand for each call without needing a factory service.
 
 ## Notes
-- The service implements a bounded retry for the specific case of a provider returning an empty final text: there are two additional retries (three attempts total) with a linear backoff (attempt N waits N * EmptyStopRetryDelayMs). This is deliberate and not intended as a generic retry policy.
-- Validation and persistence happen before SSE/stream headers are sent so that failures surface as regular HTTP error responses (4xx/ProblemDetails) instead of an interrupted stream.
-- Model selection, prompt pieces (persona/project/memory/tools), and tool-mode decisions are resolved once at turn start and flowed through helpers to ensure consistent behavior (compaction thresholds, metrics and provider calls) during the entire turn.
+- RunAsync validates and persists the incoming user message up-front and may throw before any streaming begins; callers should expect synchronous validation errors (e.g. 4xx) to happen before the SSE/stream is opened.
+- The agent implements a small, bounded retry loop for transient provider responses that finish with an empty assistant text: EmptyStopMaxRetries controls extra attempts (two extra attempts = three total) and retries use a linear backoff of N * EmptyStopRetryDelayMs.
+- GabrielToolBridge is instantiated per-call and is treated as stateless across invocations; AgentService keeps only the bridge logger and creates the bridge when needed.
 
 ---
 
@@ -94,15 +72,13 @@ private sealed record TurnPrompts(
 | `Tools` | `IReadOnlyList<ToolDescriptor>` | — |
 
 
-TurnPrompts is a private, immutable bundle of the inputs used to build a single turn of the AgentContext; it groups the persona prompt, optional project and memory blocks, and the list of available ToolDescriptor items so AgentContext.Build can assemble the turn without callers reordering pieces.
+TurnPrompts is an internal, private record that bundles the per-turn prompts used to build an AgentContext. It captures the essential inputs—PersonaPrompt, optional ProjectPrompt, optional MemoryBlock, and the Tools collection—so AgentContext.Build can assemble the final prompts in one place rather than callers rearranging pieces.
 
 ## Remarks
-This internal type ensures the per-turn prompt components are captured atomically and cannot be shuffled by external code; grouping them into a private record preserves invariants and simplifies validation. The Tools collection is exposed as `IReadOnlyList<ToolDescriptor>`, signaling that the set of tools for a given turn is fixed at construction time; the actual list is prepared by the surrounding AgentContext.Build and should not be modified after capture.
+Private, sealed and internal to the wiring for AgentContext.Build, TurnPrompts acts as a single source of truth for the inputs that drive per-turn prompting. It keeps public API surface stable by preventing outsiders from reordering or injecting pieces; the assembly happens at AgentContext.Build. The fields map directly to runtime inputs: a required PersonaPrompt, optional ProjectPrompt, optional MemoryBlock, and a Tools list of ToolDescriptor.
 
 ## Notes
-- Internal implementation detail: TurnPrompts is private and not part of the public API; its structure can change without warning across revisions.
-- Nullable fields: ProjectPrompt and MemoryBlock are optional; consumers should account for potential null values when composing or interpreting a turn.
-- Immutability discipline: Tools is an IReadOnlyList, which prevents direct mutation via the interface; treat the captured list as a snapshot and avoid mutating the underlying collection after creation.
+- Do not rely on TurnPrompts from outside its containing type; it is an internal implementation detail and may change without notice.
 
 ---
 
@@ -153,9 +129,15 @@ public AgentService(
 | `logger` | `ILogger<AgentService>` | — |
 | `toolBridgeLogger` | `ILogger<GabrielToolBridge>` | — |
 
-**Returns:** `public`
 
+Initializes an AgentService by wiring together its numerous collaborators via dependency injection and storing them on internal fields. This constructor does not perform work itself but establishes the runtime composition that enables the agent to access conversations, projects, tooling, memory, prompts, and logging during operation.
 
+## Remarks
+This constructor acts as the composition root for the Gabriel Engine's agent, centralizing the cross-cutting services needed at runtime such as tool invocation, memory, and prompt generation. By taking `IOptions<AgentOptions>` and unwrapping Options.Value, it ensures configuration is provided consistently and available to downstream components. This pattern also improves testability by allowing mocks or fakes of the collaborators to be supplied in unit tests.
+
+## Notes
+- Ensure all dependencies are registered in the DI container; missing registrations will throw during construction.
+- Accessing options.Value assumes a configured AgentOptions, so configuration must occur at startup.
 
 ---
 
@@ -177,26 +159,14 @@ private static void AppendMemory(StringBuilder sb, Core.Entities.MemoryEntry m)
 **Returns:** `void`
 
 
-Formats a Core.Entities.MemoryEntry as a Markdown fragment and appends it to the provided StringBuilder. It emits a header like "### [type] Name", with the memory type converted to lowercase and placed in brackets, followed by the memory's Description on the next line, a blank line, and then the memory's Body, followed by another blank line. This helper centralizes the rendering of memory entries when the AgentService builds its documentation, ensuring a consistent Markdown schema across entries.
+Formats a MemoryEntry into a Markdown block and appends it to the supplied StringBuilder. It writes a header that shows the memory's type (lowercased) and its name, then includes the memory's description and body, separated by blank lines. This helper consolidates the rendering logic for memory entries so the same style is used wherever documentation is produced.
 
 ## Remarks
-This method encapsulates the presentation concern for memory entries, forcing a uniform Markdown layout so that all memory documentation produced by the AgentService looks and reads the same way. By pulling the formatting logic into a single place, changes to the header style, separators, or spacing affect every entry consistently and predictably.
-
-## Example
-```csharp
-// Example of the fragment produced for a memory entry
-// m.Type = MemoryType.Feature, m.Name = "Logging", m.Description = "Enables structured logging.", m.Body = "Detailed rules and examples..."
-// Generated fragment (conceptual):
-// ### [feature] Logging
-// Enables structured logging.
-//
-// Detailed rules and examples...
-```
+Centering the formatting in one place ensures consistent presentation of memory entries across the generated docs and makes future styling changes straightforward. It operates purely on the MemoryEntry's Type, Name, Description, and Body and relies on the caller to supply the target StringBuilder. Because it is private, this method is an implementation detail of the surrounding document-generation path rather than a reusable API for external callers.
 
 ## Notes
-- The content is injected directly into the fragment (no escaping performed). If Description or Body contain Markdown syntax, it will be rendered as-is.
-- This method assumes non-null Description and Body; callers should ensure MemoryEntry fields are populated to avoid empty lines in the output.
-
+- The method does not perform input validation; it assumes non-null arguments. Passing a null MemoryEntry or null properties can yield incomplete output or a NullReference at runtime.
+- This is a private helper used by the document-generation path; external code should not rely on calling it directly.
 
 ---
 
@@ -219,7 +189,16 @@ private async Task<string> ExecuteToolSafelyAsync(ChatProviderToolCall call, Gui
 **Returns:** `Task<string>`
 
 
-Documentation for symbol 'ExecuteToolSafelyAsync' has been submitted. The narrative describes its safe, logged, and timed tool invocation behavior, the soft-error heuristic, and relevant caveats around cancellation and null/unknown results.
+Executes a named tool safely by locating it in the internal registry, invoking its asynchronous ExecuteAsync with cancellation support, and returning the textual observation. It handles missing tools gracefully by returning a standard error and logs the event; it distinguishes soft errors (strings starting with 'Error') from successful results and catches exceptions, converting them to user-facing error messages.
+
+## Remarks
+At its core, this method acts as an orchestration wrapper around tool invocations. It centralizes cross-cutting concerns: lookups, latency measurement, structured logging, and consistent error signaling. By treating 'soft' errors as non-fatal warnings, it preserves the normal flow while making failures observable for operators and diagnostics. The cancellation token is threaded to the underlying tool, enabling cooperative cancellation.
+
+## Notes
+- Soft-errors are detected by observing if the tool's result starts with the prefix "Error" (case-insensitive). If a tool returns an error string that does not begin with this prefix, it will be treated as a non-error result.
+- If the requested tool name is not registered, the method returns the string "Error: tool '<name>' is not registered." and logs a warning.
+- The method never throws; it catches exceptions from tool execution, logs them as errors with elapsed time, and returns a user-friendly error string like "Error executing <tool>: <message>". Also, if the tool returns null, the method yields an empty string.
+
 
 ---
 
@@ -247,15 +226,17 @@ private async Task<string> GenerateSummaryAsync(
 **Returns:** `Task<string>`
 
 
-Generates a concise, factual summary of a conversation by optionally folding in a previously produced summary and a collection of messages to summarize. It builds a system prompt and the serialized turns, then streams a final summary from a pluggable backend configured by ModelSelection and returns the accumulated text.
+Generates a concise, per-call summary by constructing a structured chat prompt and streaming the assistant’s response. It accepts an optional previously computed summary, a list of messages to summarize, a model/provider selector, and a cancellation token. The method defines a system prompt that enlists the model as a dedicated, factual summarizer and then builds the user prompt from either the existing summary plus new turns or a fresh list labeled as the conversation to summarize. Each message in the toSummarize collection is appended in the form [Role] content, using fallback labels like "(requested tools)" when tool calls are present or "(no content)" when content is missing. A history consisting of the system prompt and the user content is sent to the resolved provider, which streams delta updates until a FinishEvent is observed. The accumulated deltas form the final summary string, which is returned trimmed.
+
+Dependencies: Message, ChatProviderMessage, ToolDescriptor, StringBuilder, MessageRole, Array
 
 ## Remarks
-By decoupling summary generation from the caller through a pluggable provider registry, this method enables swapping AI backends or models without modifying the caller. It streams the summary as deltas, allowing progress to be consumed incrementally while still producing a complete string once finished. The prompt is tailored to produce a concise, factual recap that preserves key facts, decisions, ongoing threads, and user preferences, while omitting greetings and non-essential chatter. The method also cleanly folds an existing summary with new turns to maintain continuity.
+This method centralizes the summarization interaction behind a single, provider-agnostic surface. By standardizing the system prompt and the user payload, it ensures consistent behavior across different chat providers and models. The incremental capability (accepting an optional previousSummary) enables folding new turns into an existing summary without reprocessing the entire history, which is essential for long-running or interactive sessions.
 
 ## Notes
-- Content placeholders: If a message's Content is null and ToolCallsJson is present, the text "(requested tools)" is inserted; otherwise the text "(no content)" is inserted. This can introduce placeholders into the final summary.
-- No tools are supplied to the summarization provider (an empty ToolDescriptor array); if tool-assisted summarization is required, adjust the invocation accordingly.
-- The method relies on a streaming provider that yields TextDeltaEvent and FinishEvent; cancellation or a missing FinishEvent can cause the operation to hang or be aborted unexpectedly.
+- The provider is resolved via _providerRegistry using the supplied ModelSelection; mismatched providers may yield different formatting or capabilities.
+- Tool usage within summarized turns is signaled by placing "(requested tools)" when ToolCallsJson is present, since the actual tool results aren’t embedded in the summary payload here.
+- The method streams text deltas until a FinishEvent, so partial results are collected progressively; cancellation via the token is respected. 
 
 ---
 
@@ -279,23 +260,15 @@ public async Task<ContextMetrics> GetContextMetricsAsync(
 **Returns:** `Task<ContextMetrics>`
 
 
-Computes and returns a ContextMetrics object for the specified conversation. It validates the authenticated user, loads the conversation with its messages, resolves the current model selection and context window, calculates threshold tokens based on the window and the selected ratio, loads the turn prompts, builds an AgentContext, derives a token breakdown, and finally returns a ContextMetrics that exposes totals and per-group token counts along with metadata such as whether the conversation has been summarized and how many messages remain after context reduction.
+Retrieves a ContextMetrics snapshot for a specific conversation by validating the caller, loading the full conversation with its messages, resolving the active model selection and its context window, loading the relevant prompts, building the agent context, and computing a breakdown of token usage across all components. The returned metrics enable the UI to render trigger lines consistently with backend processing, show whether the conversation is summarized, and display token attribution for system, project, memory, tools, and the conversation.
 
 ## Remarks
-By centralizing the construction of the context metrics, this method ensures consistent measurements across the UI and server logic. It ties together user access, conversation retrieval, prompt assembly, and token accounting, yielding a single authoritative snapshot of context usage for a given conversation. The calculation of threshold tokens is aligned with the UI trigger logic (matching MaybeCompactAsync) to avoid UI/backend drift.
-
-## Example
-```csharp
-// Example usage
-var metrics = await agentService.GetContextMetricsAsync(conversationId, cancellationToken);
-// Access metrics such as metrics.CurrentTokens, metrics.ContextWindowTokens, metrics.CompactThresholdTokens, etc.
-```
+This method centralizes authentication, data access, model resolution, and token accounting behind a single API boundary, so callers don't need to reimplement these concerns. By deriving the breakdown via AgentContext.ComputeBreakdown, it guarantees consistent token attribution across the various prompt origins (system, project, memory, tools) and the message history. Using the same threshold ratio as the backend's calculation path ensures the UI's trigger visualization lines up exactly with the actual processing boundary.
 
 ## Notes
-- UnauthorizedAccessException is thrown when the caller is not authenticated.
-- NotFoundException is thrown if the specified conversation cannot be found.
-- If the selected window is zero or negative, CompactThresholdTokens will be zero; the threshold derives from either the selected CompactThreshold or the global option.
-
+- Throws UnauthorizedAccessException when the current user is not authenticated. 
+- Throws NotFoundException if the specified conversation cannot be found for the user. 
+- CancellationToken ct is honored by all asynchronous operations and is propagated through the call chain.
 
 ---
 
@@ -317,30 +290,14 @@ private async Task<string?> LoadMemoryBlockAsync(Guid? projectId, CancellationTo
 **Returns:** `Task<string?>`
 
 
-Formats the user's saved memories as a single system message. It loads memory entries for the specified conversation, then presents them in two sections: user-scope memories (apply everywhere) first, followed by project-scope memories (apply only within this project). Each entry is formatted by AppendMemory. If there are no memories to inject, the method returns null.
+Formats the user's saved memories as a single system message for the model. It groups memories by scope (user-scope first, project-scope after) so the model can tell which entries apply globally versus only within this project, and it returns null when there is nothing to inject. It fetches the memories, builds a memory block starting with [Saved memories], describes each entry's scope, type, and body, and delegates the per-entry formatting to AppendMemory, placing user-scope memories under '## User-scope memories' and project-scope memories under '## Project-scope memories' in that order.
 
 ## Remarks
-The abstraction centralizes how durable user memories are woven into prompts, ensuring consistent formatting and clear separation of global versus project-scoped context. By ordering user-scope memories before project-scope ones, it preserves broad continuity while respecting project boundaries. The actual formatting of each memory item is delegated to AppendMemory, keeping this method focused on orchestration and grouping.
-
-## Example
-```csharp
-// Example output structure (structure shown for illustration; actual formatting is delegated to AppendMemory)
-[Saved memories]
-Durable facts the user has asked Gabriel to remember. Apply these unless the user contradicts them in the current conversation. Each entry has a scope (user = applies everywhere; project = only in this project), a type (user/feedback/project/reference), and a body.
-
-## User-scope memories
-- Remembered: The user prefers concise answers.
-- Remembered: The user values privacy and wants data kept private.
-
-## Project-scope memories
-- Project Alpha: Deadline is 2025-12-31.
-- Project Beta: Key stakeholder is Alice.
-```
+Centralizes how saved memories are transformed into a system prompt, ensuring a consistent structure across callers. It separates global (user-scope) memories from project-scoped ones to preserve the intended applicability, and it delegates the actual entry formatting to AppendMemory, so changes to memory rendering stay isolated from retrieval logic.
 
 ## Notes
-- Returns null when there are no memories to inject; consumers must handle absence gracefully.
-- The output order is always user-scope first, then project-scope.
-- The per-entry formatting is delegated to AppendMemory; changing AppendMemory could affect the overall appearance.
+- Returns null when there are no memories to inject; callers must handle the null to avoid injecting an empty system block.
+- The formatting of individual memories is delegated to AppendMemory; changes to that helper will affect the appearance of the memory block.
 
 ---
 
@@ -363,15 +320,15 @@ private async Task<string?> LoadProjectSystemPromptAsync(Conversation conversati
 **Returns:** `Task<string?>`
 
 
-Loads and returns an optional, project-scoped system prompt for the current conversation. If the conversation has a ProjectId, the method fetches the project; on success and if the project is not the default (legacy) entry, it builds a snippet starting with a line that declares the project name and a guidance line about memory scope (preferring scope='project' for project-specific facts and using scope='user' only when memory should persist beyond the project). If the project defines a SystemPrompt, that prompt is appended after a blank line. If there is no ProjectId, or the project cannot be found, or it is the default project, the method returns null.
+LoadProjectSystemPromptAsync is an internal helper that resolves a per-project system prompt for a conversation. When the conversation is associated with a non-default project, it loads the project data and builds a prompt that identifies the project and educates memory-scoping behavior, including a recommendation to scope memory to the project for project-specific facts and to use the user scope otherwise. If the project defines a SystemPrompt, that content is appended to the assembled prompt. If there is no ProjectId, or the project cannot be loaded, or the project is the default, the method returns null, signaling that no project-specific augmentation is needed.
 
 ## Remarks
-Encapsulates the project-scoped prompt assembly logic, centralizing how project data influences memory prompts. By isolating the retrieval and assembly in one place, callers avoid duplicating project checks and guarantee consistent guidance across prompts. It also gracefully handles missing or default projects by returning null rather than failing.
+This abstraction centralizes the construction of project-scoped context, ensuring consistent guidance for memory persistence across conversations tied to a given project. By returning null in non-applicable cases, it cleanly separates project-specific augmentation from generic, cross-project behavior and avoids injecting unnecessary context.
 
 ## Notes
-- Return value can be null; the caller must handle.
-- If a non-default project exists but SystemPrompt is empty/whitespace, only the header line is included.
-- This method is asynchronous and accepts a CancellationToken ct; callers should await and may cancel.
+- Returns null when there is no eligible project or when the project is the default.
+- The method is private and intended to be used within its containing class to assemble project-scoped prompts consistently.
+- It relies on a repository lookup to fetch project data and uses StringBuilder for efficient string construction.
 
 ---
 
@@ -399,21 +356,13 @@ private async Task<TurnPrompts> LoadTurnPromptsAsync(
 **Returns:** `Task<TurnPrompts>`
 
 
-Loads and aggregates the per-turn prompts for a given conversation turn by fetching the project system prompt, memory block, and the persona prompt derived from the current conversation state and mode, then selecting tool descriptors according to ToolMode. The method returns a TurnPrompts object that bundles these four pieces so downstream steps (compact decision, streaming, and UI metrics) observe a single, coherent snapshot of context and capabilities for the turn.
+Loads and assembles the per-turn prompts used to drive a single assistant turn. It asynchronously fetches the project-specific system prompt, the memory block for the current project, and a persona prompt built from the current conversation state and mode, then selects the available tool descriptors based on the active ToolMode. The method returns a TurnPrompts instance containing the persona prompt, the project prompt, the memory block, and the set of tool descriptors; this object is consumed by the provider call and UI metrics pathways to ensure the turn reflects the latest context and capabilities.
 
 ## Remarks
-By centralizing prompt composition, this method guarantees that all parts of the turn pipeline share the same inputs and decisions. It separates the concern of data gathering from the rendering or transport layers, reducing drift between the model's context and the available tools. The ToolMode switch is explicit: ToolMode.None yields an empty descriptor list to avoid advertising capabilities the model cannot use, while other modes provide the full set through descriptors.
-
-## Example
-```csharp
-// Example usage within the agent's turn flow (note: method is private; shown for conceptual clarity)
-var prompts = await LoadTurnPromptsAsync(conversation, userId, selection, cancellationToken);
-```
+Centralizes per-turn prompt composition to guarantee consistency across streaming and non-stream paths. By constraining the advertised tools to the current ToolMode, it prevents exposing capabilities the model can't use and aligns the runtime prompts with user intent.
 
 ## Notes
-- If ToolMode.None, the returned tools list is empty, ensuring no tooling capabilities are advertised to the model.
-- The prompts are loaded sequentially within this method; failures in any step propagate as exceptions to the caller.
-- The memory block is retrieved using the project identifier from the conversation; ensure the project context is initialized prior to calling this method.
+- The fetches are performed sequentially; parallelizing them could reduce latency but would require ensuring a single, consistent snapshot of prompts.
 
 ---
 
@@ -441,9 +390,7 @@ private async IAsyncEnumerable<AgentEvent> MaybeCompactAsync(
 **Returns:** `IAsyncEnumerable<AgentEvent>`
 
 
-Decides whether to trigger a rolling-summary compact during the current turn. It builds the full AgentContext from the conversation, persona, project, memory, tools, and current summary, then compares the resulting token breakdown against a threshold derived from the model’s context window and the configured CompactThreshold. If the threshold is exceeded, it selects a block of recent messages to summarize and emits an AgentCompactStart event to drive a UI overlay while the potentially slow summarization runs. If summarization succeeds, it updates the conversation with the new summary, persists changes, and emits AgentCompactDone with the number of messages compacted and the summary’s token count; if the summarization fails or returns empty, it logs a warning and emits AgentCompactDone with zero tokens, allowing the turn to proceed un-compacted. The method is invoked as part of the engine's turn processing to balance prompt complexity and cost by keeping the visible conversation within the provider’s window size.
-
-
+Decides whether to trigger a rolling-summary compact this turn by comparing the full agent context token footprint against the configured compact threshold. It builds a complete breakdown of persona, project, memory, summary, tools, and the current conversation, and uses either the per-model CompactThreshold or the global AgentOptions.CompactThreshold to determine if trimming is warranted. When the current token load exceeds the threshold, it selects a cut point through the conversation (respecting CompactKeepLast and previously summarized ground), gathers the messages to summarize, and requests a new summary via GenerateSummaryAsync. The method frontloads an AgentCompactStart event so the UI can display a compacting overlay, then performs the potentially slow summarization. If the summary call fails or returns an empty result, it emits AgentCompactDone with zero tokens and lets the turn proceed un-compacted, while logging the issue. On success, it updates the conversation with the new summary, persists changes, logs the outcome with token counts, and emits AgentCompactDone with the number of messages compacted and the resulting summary token count. This symbol therefore centralizes the decision and orchestration for rolling context maintenance, ensuring long conversations stay within provider limits while keeping the visible summary up to date.
 
 ---
 
@@ -464,22 +411,15 @@ private static string Preview(string? text)
 **Returns:** `string`
 
 
-Produces a compact, single-line preview of the given text for logs or lightweight displays. If the input is null or empty, it returns the literal string "(empty)". It collapses newline characters into spaces so multi-line content stays on one line, then truncates the result to the configured LogPreviewLimit, appending an ellipsis when the text exceeds the limit.
+Produces a compact, single-line preview of the provided text for logging or concise display. If the input is null or empty, it returns the literal string '(empty)'. The method collapses newline characters to spaces so multi-line content stays on a single line, then returns either the full flattened string or a truncated version up to the configured LogPreviewLimit, appending a Unicode ellipsis to indicate omitted content.
 
 ## Remarks
-Centralizes the preview formatting inside AgentService to ensure consistent handling of nulls, line breaks, and length-limiting across all callers. By encapsulating this logic in a single helper, changes to the preview behavior (such as a different limit or how newlines are collapsed) affect all usages in one place rather than scattering similar code throughout the class.
-
-## Example
-```csharp
-// Example: multi-line text is collapsed to a single line
-var input = "alpha\nbeta\r\ngamma";
-var result = Preview(input); // e.g., "alpha beta  gamma" (single line, truncated with '…' if too long)
-```
+Internal helper that centralizes how textual previews are produced for logs and UI fragments within the service. It guarantees that multi-line input does not blow up log lines and that nulls are represented by a clear placeholder rather than an empty line. By delegating this logic to a single method, all call sites share a consistent representation.
 
 ## Notes
-- Null or empty inputs yield "(empty)".
-- CR and LF characters are replaced with spaces; multiple spaces may appear for Windows CRLF sequences.
-- The trailing ellipsis uses the Unicode character "…"; ensure your log viewer supports it.
+- Truncation relies on the LogPreviewLimit threshold; longer text is cut off and suffixed with '…'.
+- The length calculation is character-based, not bytes, so surrogate pairs or combining characters can affect when truncation happens.
+- Null or empty input yields '(empty)' rather than an empty string.
 
 ---
 
@@ -505,25 +445,24 @@ public async Task<IAsyncEnumerable<AgentEvent>> RegenerateAsync(
 **Returns:** `Task<IAsyncEnumerable<AgentEvent>>`
 
 
-RegenerateAsync re-creates a new assistant reply for a specific message in a conversation by reusing the existing user state and streaming the resulting events. It validates the caller, ensures the target message is an active assistant message, deactivates the current variant group so older variants are hidden from history, then loads prompts and the model selection before streaming the regenerated results via RunStreamAsync. This method is used when a user wants to iterate on an assistant turn and explore alternative variants without re-sending the user input.
+RegenerateAsync orchestrates a server-side regeneration of a previous assistant reply within a specified conversation by replaying the same user state and selecting a fresh model path for that turn. It validates authentication, loads the target conversation with its messages, and ensures the target is an active assistant message before deactivating its variant group and persisting the change. After determining the current model selection, it loads the necessary prompts for regeneration, resets the per-conversation tool context, and streams the new events via RunStreamAsync, yielding a refreshed assistant reply while keeping the original variant group identity so the UI can navigate between alternatives.
 
 ## Remarks
-Serves as a high-level orchestration that ties together authentication, data access, variant management, and streaming of results. By deactivating the variant group, it guarantees the UI and history assembly present only the active path while still allowing navigation to other alternatives within the same group. The regeneration is performed against the original user state, and compaction is performed inside RunStreamAsync to produce a continuous event stream.
+RegenerateAsync exists to provide a non-destructive way to refine an assistant turn by re-running the same user input against the model pipeline while preserving the surrounding history. It coordinates state transitions around variant groups to ensure future history assemblies don't resurrect the old reply and to keep the UI's variant-picker coherent. By reusing the same groupId, the client can continue to present alternative replies side-by-side.
 
 ## Example
 ```csharp
-// Example usage: asynchronously stream regenerated events for a past assistant message
-await foreach (var ev in agentService.RegenerateAsync(conversationId, assistantMessageId, ct))
+// Example usage: stream regeneration results for a given turn
+await foreach (var evt in agentService.RegenerateAsync(conversationId, assistantMessageId, ct))
 {
-    // Handle the streamed AgentEvent (e.g., render to UI, log, etc.)
+    // Process each AgentEvent as it arrives (e.g., update UI, log, etc.)
 }
 ```
 
 ## Notes
-- Requires an authenticated user; unauthenticated calls throw UnauthorizedAccessException.
-- The target message must be an active assistant message; otherwise a NotFoundException or DomainException is thrown.
-- Deactivates the variant group and persists changes; callers should refresh their view accordingly.
-- This method returns a streaming sequence; use await foreach and avoid eagerly enumerating to prevent buffering large results.
+- The method may throw UnauthorizedAccessException if there is no authenticated user, NotFoundException when the conversation or target message cannot be found, or DomainException if the target message is not an assistant message or is not an active variant.
+- The regeneration does not introduce a new user message and relies on the original turn's state; compaction happens inside RunStreamAsync as the stream yields events.
+- This operation streams AgentEvent objects, allowing callers to react to updates in real time as the regeneration unfolds.
 
 ---
 
@@ -544,7 +483,15 @@ private async Task<ModelSelection> ResolveModelSelectionAsync(CancellationToken 
 **Returns:** `Task<ModelSelection>`
 
 
-Centralised model-resolution helper: all entry points route through this private method to determine the active ModelSelection from the current user preferences. It fetches the preferences with _userPrefs.GetAsync using the provided CancellationToken and then delegates to _modelCatalog.Resolve to produce a ModelSelection based on prefs.PreferredProvider and prefs.PreferredModel. This design ensures that changes to user settings take effect on the very next turn by funneling resolution through a single, authoritative path.
+Resolves the current ModelSelection by reading the user's preferences asynchronously and translating them through the model catalog. This centralized helper ensures all code paths select the same model configuration, so changes made on the settings page take effect on the very next turn.
+
+## Remarks
+
+By funneling provider and model choice through a single resolution point, this method decouples storage of preferences from how the runtime resolves which model to use. It guarantees a consistent mapping from the user's PreferredProvider and PreferredModel to a runtime ModelSelection, avoiding divergent behavior across entry points. The comment in code notes that changes propagate on the next turn, and this method enforces that timing.
+
+## Notes
+
+- OperationCanceledException may be thrown if ct is canceled or if underlying calls fail; this method does not swallow exceptions and callers should handle them accordingly.
 
 ---
 
@@ -570,24 +517,23 @@ public async Task<IAsyncEnumerable<AgentEvent>> RunAsync(
 **Returns:** `Task<IAsyncEnumerable<AgentEvent>>`
 
 
-Orchestrates one turn of the ReAct-powered assistant for a given conversation: it validates the input, persists the user message, resolves a model upfront, loads the per-turn prompts, establishes the project-scoped tool context, and streams the turn’s events as an `IAsyncEnumerable<AgentEvent>` via RunStreamWithUserPreambleAsync.
+Runs a single turn of the per-conversation agent by validating input, loading the relevant conversation context, persisting the user message, updating state, resolving the model to use, assembling stable turn prompts, and then streaming the turn’s events as an `IAsyncEnumerable<AgentEvent>`.
+
+This method validates inputs up-front to allow a global error handler to return a 4xx with ProblemDetails for bad user content, requires an authenticated user, and loads the target conversation along with its messages. It persists the user message before streaming so the timeline remains consistent even if the client disconnects during the turn. The per-turn model selection is resolved once and passed through all helpers to ensure consistent behavior across the compacting, provider call, and metrics calculations. Turn prompts (persona, project scope, memory, and tools) are loaded once and reused for the entire turn, and a scoped tool context is established so project-scoped tools operate against the correct project.
+
+Finally, the method delegates to RunStreamWithUserPreambleAsync to produce the streaming sequence. The wrapper yields a preamble that includes the persisted user message’s real DB id and then streams the model’s events, including any compacting progress (e.g., CompactStart/CompactDone) as the response is generated.
+
+In short: this is the high-level orchestrator for a single chat turn that yields real-time, event-based feedback to the client rather than a single, blocking reply.
 
 ## Remarks
-This symbol acts as the single turn orchestrator in the chat workflow, centralizing validation, persistence, model resolution, prompt assembly, and streaming so all subsystems share a consistent turn boundary. It ensures a clean 4xx response path by validating inputs before any streaming headers are emitted and by throwing domain/auth.exceptions early. The turn's selected model is committed up-front and propagated through the prompt loading, decision thresholds, and metrics, guaranteeing alignment across the rendering and evaluation steps. It also prepares a project-scoped tool context so tools like list/read project files operate within the correct project.
-
-## Example
-```csharp
-// Most common usage: asynchronously consume the streaming events for a turn
-await foreach (var evt in agentService.RunAsync(conversationId, userInput, ct))
-{
-    // Handle AgentEvent (e.g., render to UI, feed SSE, etc.)
-}
-```
+This symbol serves as the orchestration hub for a turn in the interactive agent experience. By centralizing validation, authentication, persistence, state evolution, model selection, and prompt assembly, it guarantees a consistent lifecycle for every user turn and a predictable stream of AgentEvent objects. The selected model and the assembled prompts are threaded through all downstream steps, ensuring alignment between decision boundaries, tool descriptors, and the resulting stream. The streaming pattern supports responsive UIs via SSE-like clients, enabling users to see interim progress while the model generates the final reply.
 
 ## Notes
-- Validation up-front ensures a clean 4xx ProblemDetails response before streaming headers are sent.
-- The user message is persisted prior to streaming to keep the conversation timeline consistent even if the client disconnects mid-turn.
-- A single model selection is determined and reused for thresholds, provider calls, and metrics to ensure consistent behavior throughout the turn.
+- If userInput is null or whitespace, a DomainException is thrown to map to a 4xx response; callers should handle DomainException in the API pipeline.
+- If there is no authenticated user, an UnauthorizedAccessException is thrown, signaling a 401 response at the API boundary.
+- If the conversation cannot be found for the given user, a NotFoundException is thrown with the conversation resource and id, signaling a 404 response.
+- The method returns an IAsyncEnumerable; consumers must iterate the sequence to trigger the streaming process and side effects.
+
 
 ---
 
@@ -617,14 +563,15 @@ private async IAsyncEnumerable<AgentEvent> RunStreamAsync(
 **Returns:** `IAsyncEnumerable<AgentEvent>`
 
 
-Streams agent events by coordinating the conversation with the chosen chat provider, handling tool invocation, and sequencing context across iterations. It starts by compacting the current conversation to ensure the summarizer output is present in the history, then wraps the base provider in an Emulated tool bridge when needed. It then iterates up to MaxIterations, streaming from the provider and yielding AgentTextDelta and AgentReasoningDelta events as they arrive, while collecting ToolCallReadyEvent entries for potential tool invocations. If the provider hiccups and returns an empty turn (no text, no tool calls, and usually no reasoning), an internal short retry loop rebuilds the provider history and retries a bounded number of times with delays before surfacing an error. Each iteration rebuilds the AgentContext to incorporate the latest tool results and prior turns into the provider history, so subsequent streams see a complete, up-to-date conversation.
+Runs a streaming session against a chat provider to produce AgentEvent updates while coordinating tool execution and context history. It first emits any pre-existing compacted events, then selects the active provider (wrapping it in GabrielToolBridge when tool emulation is enabled). It iterates up to MaxIterations, rebuilding the conversation history for every pass and streaming events from the provider, translating them into AgentEvent payloads (text deltas, reasoning deltas) and queuing tool calls that the agent can execute. If the provider returns an empty result accompanied by a Stop finish reason, it retries a bounded number of times with delays to recover from transient hiccups. The method yields events as they arrive, and the per-iteration context ensures that tool calls and their results become part of the next history.
 
 ## Remarks
-Acts as the streaming nucleus of the agent service, encapsulating the interplay between context creation, provider streaming, and tool integration. The Emulated mode path uses GabrielToolBridge to enrich prompts with tool docs and capture tool invocation details without changing the underlying provider. The per-iteration context rebuild guarantees that tool results and prior turns are reflected in the subsequent provider history, preserving coherence across the turn boundary.
+This method acts as the orchestration boundary between the high-level conversation and the tool-augmented provider. It supports both native and emulated tool modes by optionally wrapping the base provider with GabrielToolBridge to inject tool documentation into the system prompt. Rebuilding the history per iteration ensures that tool calls and results from earlier iterations are preserved in subsequent invocations, preserving causal flow across the interactive loop.
 
 ## Notes
-- Cancellation: The [EnumeratorCancellation] CancellationToken ct is observed by the streaming provider; canceling ct stops streaming promptly.
-- Retry semantics: EmptyStopMaxRetries and EmptyStopRetryDelayMs implement resilience; repeated retries reuse the same history to recover from transient hiccups.
+- This is a private method; its usage is internal to the agent service and not part of the public API.
+- CancellationToken ct is threaded through to the provider stream; canceling it will terminate the streaming loop.
+- The retry-on-empty behavior relies on EmptyStopMaxRetries and EmptyStopRetryDelayMs to recover from transient hiccups, which can affect latency under flaky provider responses.
 
 ---
 
@@ -656,7 +603,13 @@ private async IAsyncEnumerable<AgentEvent> RunStreamWithUserPreambleAsync(
 **Returns:** `IAsyncEnumerable<AgentEvent>`
 
 
-Streams a private async streaming helper that yields an initial AgentEvent to persist the user message and then streams the remainder of the conversation by delegating to RunStreamAsync. The first yielded event, AgentUserMessagePersisted, establishes the persistence side-effect prior to delivering subsequent events, ensuring a consistent and expected lifecycle for a user message as the stream unfolds. The method preserves the streaming contract of RunStreamAsync while guaranteeing that the user message is recorded before processing the rest of the stream, using the supplied userMessageId, conversation, optional variantGroupIdOverride, prompts, model selection, and cancellation token.
+Emits a preamble into the agent event stream by first yielding a AgentUserMessagePersisted event for the given userMessageId, and then streaming the remainder from RunStreamAsync. This pattern ensures the consumer observes that the user's message has been persisted before processing subsequent agent events produced for the conversation.
+
+## Remarks
+By separating the persistence acknowledgement from the streaming logic, this wrapper centralizes the preamble behavior and guarantees ordering: the preamble appears before any events from RunStreamAsync. The method delegates the heavy lifting to RunStreamAsync, so changes to streaming behavior remain isolated to that implementation. The ct cancellation token is passed through, ensuring consumers can cancel the whole sequence gracefully.
+
+## Notes
+- The first element of the returned IAsyncEnumerable is a persistence event, not a reply event; downstream code should handle it accordingly.
 
 ---
 
@@ -678,10 +631,14 @@ private static int SelectCompactCutIndex(IReadOnlyList<Message> messages, int ke
 **Returns:** `int`
 
 
-Walks back from the end keeping at least `keepLast` messages, then keeps walking until we land on a User message - that's our cut boundary. Doing this avoids ever cutting between an assistant's tool_calls and the matching tool results, which the model needs to see together.
+SelectCompactCutIndex determines where to trim a message history by keeping at least keepLast messages from the tail and then stepping backward to the nearest User message; the resulting index marks a cut boundary. This prevents splitting an assistant's tool_calls from the corresponding tool results, ensuring the model sees both sides of a tool interaction in one prompt.
 
-This private static helper computes the boundary index into a sequence of messages. It begins from the position that would leave at least `keepLast` messages at the end and scans backward until it finds a User message. The returned index marks the cut point, ensuring that a user turn is preserved intact with any subsequent tool invocations and their results. If the history is too short or no User boundary is found, the method returns 0, effectively trimming from the start.
+## Remarks
+By centralizing this boundary logic, the function encodes a subtle but important rule for history truncation: preserve user-facing context while keeping tool interactions whole. The cut index is used by higher-level code to produce a compacted history without breaking the linkage between a tool call and its tool results, which improves the model's ability to reason about the outcome.
 
+## Notes
+- Caller must ensure keepLast >= 1; a value of 0 would result in indexing messages[Count] and can throw.
+- If no User message is found before the start of the list, the function returns 0, effectively cutting at the start.
 
 ---
 
@@ -702,13 +659,7 @@ private static string SerializeToolCalls(IReadOnlyList<ChatProviderToolCall> cal
 **Returns:** `string`
 
 
-Serializes a collection of ChatProviderToolCall items into a JSON string that records each call as a uniform object. Each element includes the call's id, a type marker set to 'function', and a nested function descriptor containing the tool name and its arguments. The arguments are preserved as a JSON string (ArgumentsJson) so the caller can transport, store, or display the exact invocation data without re-parsing it here. This helper is used internally to serialize the sequence of tool invocations for auditing, replay, or UI presentation without requiring external callers to assemble the shape manually.
-
-## Remarks
-Internal helper centralizes serialization of tool-calls into a stable, consumable format. By fixing the outer shape and using 'type' = 'function', it enables downstream components to treat tool invocations uniformly, regardless of which specific tool was called. It also decouples the representation of arguments from the code that triggers the calls, since ArgumentsJson is already a JSON string.
-
-## Notes
-- ArgumentsJson is embedded as a string in the serialized payload; consumers should parse the outer JSON before inspecting function.arguments if they need to access the structured argument data.
+Serializes a collection of ChatProviderToolCall objects into a compact JSON array. For each call, it emits an object with id, a fixed type of 'function', and a nested function descriptor carrying the call's Name and ArgumentsJson. This helper is useful when you need a transport-friendly, platform-agnostic representation of tool invocations rather than the full rich object.
 
 ---
 
@@ -721,14 +672,14 @@ private const int EmptyStopMaxRetries = 2
 ```
 
 
-EmptyStopMaxRetries bounds the number of additional retry attempts the agent will undertake for the "provider finished Stop with empty text" hiccup. Since the resilience pipeline cannot detect this as an error (the response is a 200 stream with empty content), the retry logic is implemented in the agent loop; two extra attempts are allowed, for a total of three tries, using a linear backoff where the wait on the N-th retry is N * EmptyStopRetryDelayMs.
+Bounded retries for the 'provider finished Stop with empty text' hiccup. This field defines how many additional retry attempts are performed inside the agent loop when an empty response is observed after a Stop operation. The HTTP resilience pipeline cannot catch this edge because the response is a 200 stream with empty content, so the retry has to live in the application layer. With EmptyStopMaxRetries set to 2, there are three total attempts (the initial try plus two retries). The retries use a linear backoff: on the N-th retry, the delay is N times EmptyStopRetryDelayMs.
 
 ## Remarks
-This constant isolates a narrowly scoped retry policy for a rare edge-case, preventing it from influencing general error handling. It ensures transient blanks can be ridden out without delaying real failures, while keeping the overall retry behavior simple and predictable within the agent's operation.
+This small constant encodes a resilience strategy: it bounds the cost of a rare, non-fatal anomaly while preserving responsiveness to real failures. It pairs with EmptyStopRetryDelayMs to tune the latency of recovery and to keep the retry logic localized in the agent loop rather than leaking into higher layers. In short, it prevents an endless loop on transient blanks while avoiding punitive delays on persistent failures.
 
 ## Notes
-- Changing this constant requires recompilation and affects the retry cap for this edge-case across the class.
-- It relies on EmptyStopRetryDelayMs to compute the actual wait time; if that value changes, the real backoff duration will scale accordingly, so keep them in sync for expected timing.
+- The effective number of attempts is 1 + EmptyStopMaxRetries (three total when EmptyStopMaxRetries is 2).
+- Misinterpreting this value as the total allowed attempts can lead to under- or over-retrying; adjust with care.
 
 ---
 
@@ -741,24 +692,15 @@ private const int EmptyStopRetryDelayMs = 500
 ```
 
 
-This private constant defines a fixed pause duration, in milliseconds, used by the AgentService when retrying stop-related logic. It provides a throttle to prevent busy-waiting in scenarios where a stop operation may require multiple attempts before completing.
+This private constant defines the delay, in milliseconds, between consecutive stop-retry attempts in the AgentService. A value of 500 corresponds to half a second between retries, helping to balance responsiveness against busy-wait risk when stopping the service under load.
 
 ## Remarks
-This centralized delay keeps stop-retry pacing consistent and expresses the intent that retries should be spaced out rather than hammering resources. It also aids maintainability: changing a single value adjusts all stop-retry behavior within this class without scattering magic numbers.
-
-## Example
-```csharp
-// Within a retry loop for stopping an agent
-while (!StopConditionMet())
-{
-    Thread.Sleep(EmptyStopRetryDelayMs);
-    AttemptStop();
-}
-```
+Centralizes retry pacing to a single, named constant rather than scattering the magic number in the stop logic; this makes it easier to tune behavior without changing control flow.
+Because it is declared as const, the value is baked into the assembly at compile time, signaling that this is an internal tuning lever rather than runtime configurability.
 
 ## Notes
-- Changing the constant affects all in-class stop-retry delays; tests that rely on timing may need adjustments.
-- Because it is private, the exact value is an implementation detail; observe behavior (not the literal delay) when validating correctness.
+- Changing the value changes how long a stop retry may take during idle or contention, so adjust with care and validate shutdown latency.
+- It's a compile-time constant; to change it, a rebuild is required, and there is no runtime configuration exposed by this symbol.
 
 ---
 
@@ -771,23 +713,22 @@ private const int LogPreviewLimit = 240
 ```
 
 
-Defines the maximum number of characters included in log messages that preview tool arguments and results. It keeps log output concise by truncating large payloads—such as a fetched web page or a long file read—before writing to logs.
+Defines the maximum number of characters included in log messages that describe tool arguments or results, preventing log files from ballooning with large payloads. Developers rely on it to produce a concise preview of potentially big data during AgentService logging, rather than dumping full payloads.
 
 ## Remarks
-This constant enforces a single, consistent limit on how much of a payload is shown in logs, reducing noise while retaining enough context for troubleshooting. Being a private, compile-time constant, it is an internal implementation detail and not configurable at runtime. If you require more verbose previews, you must change the constant and rebuild. The preview reflects only the logged portion of the payload and does not alter the actual data processed by the system.
+This private constant centralizes the log-preview limit for the AgentService's logging logic, ensuring consistent truncation across all payload previews. By capping previews, it helps protect sensitive data from being inadvertently logged and preserves log readability and performance. Because the value is compile-time and private, changes are isolated to this class, avoiding unintended ripple effects on public APIs.
 
 ## Example
 ```csharp
-// Example using the shared log preview limit
+// Example usage within the AgentService class
+string payload = "some potentially long payload text that should be truncated for logs";
 string preview = payload.Length > LogPreviewLimit
     ? payload.Substring(0, LogPreviewLimit) + "…"
     : payload;
-logger.Log("Payload preview: " + preview);
 ```
 
 ## Notes
-- Truncation is by character count, so it may cut through a surrogate pair or combining character in rare Unicode sequences; use a Unicode-safe truncation approach if your payloads include such content.
-- The value is a compile-time constant and cannot be changed at runtime; to adjust it, modify the code and recompile.
-- Avoid logging sensitive data even within the preview; redact or exclude secrets as a best practice.
+- The constant is private; it cannot be modified at runtime. To change the limit, the code must be updated and the project rebuilt.
+- 240 characters is a practical default to balance useful context with log size and privacy considerations; adjust with awareness of logging and compliance constraints. 
 
 ---

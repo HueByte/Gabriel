@@ -35,23 +35,15 @@ public sealed record WebSearchDiagnosticsResponse(
 | `WindowSize` | `int` | — |
 
 
-Represents the response payload for the Web Search Diagnostics endpoint. It aggregates per-provider stats recorded within the requested lookback window, exposing one entry for each provider that logged events in that window. The Providers property contains the sequence of WebSearchProviderStatsDto objects describing the stat details per provider. The HasUnhealthyProvider flag serves as a UI hint: it is true when any provider's most recent outcome was a failure, or when there have been no successful calls in the window, which prompts the UI to display a warning badge. The WindowSize property communicates the number of recent events used to compute the stats, enabling the UI to phrase results like “based on the last 200 search calls.”
+WebSearchDiagnosticsResponse is the response payload for the GET /diagnostics/web-search endpoint. It wires together, in a single, immutable shape, one entry per provider that has recorded events in the requested lookback window, along with a global health flag and the window size used to compute the metrics.
 
 ## Remarks
-Architecturally, WebSearchDiagnosticsResponse acts as a stable transport contract between the diagnostics data gatherer and the presentation layer. It bundles per-provider metrics with a derived health signal so the UI can convey risk without re-reading raw logs. Because it is a record, it provides value-type semantics that simplify equality comparisons, caching, and change detection across API boundaries.
-
-## Example
-```csharp
-var response = new WebSearchDiagnosticsResponse(
-    Providers: new List<WebSearchProviderStatsDto> { /* provider stats here */ },
-    HasUnhealthyProvider: true,
-    WindowSize: 200
-);
-```
+This is an immutable transport contract represented as a sealed record, ensuring the data cannot be mutated after creation. Providers is a read-only collection of per-provider statistics, while HasUnhealthyProvider provides a concise UI signal to indicate that at least one provider failed recently (or had no successful calls within the window), which the UI can use to show a warning indicator. WindowSize communicates the scope of the statistics (the number of recent events) so users understand the recency and volume of the data.
 
 ## Notes
-- The HasUnhealthyProvider flag is a UI cue derived from recent provider outcomes and is not a guaranteed holistic health assessment.
-- The WindowSize communicates the scope of the statistics; ensure it matches the interpretation presented to users (e.g., "based on the last N search calls").
+- The HasUnhealthyProvider flag encodes both a failure in the most recent outcome and the absence of any successful calls within the lookback window; consumers should treat it as a global health cue for the diagnostics view.
+- This type is designed for network serialization; preserve the property names Providers, HasUnhealthyProvider, and WindowSize to ensure compatibility across clients and servers.
+
 
 ---
 
@@ -95,7 +87,16 @@ public sealed record WebSearchProviderStatsDto(
 | `IsUnhealthy` | `bool` | — |
 
 
-Sealed record WebSearchProviderStatsDto serves as an immutable snapshot of a single web search provider's diagnostics data. It captures the provider’s display name (derived from the System column with the "web_search." prefix stripped), usage statistics (TotalCalls, SuccessfulCalls, ErrorCalls, EmptyCalls), optional timestamps for the last success and last failure, optional context for the last failure (LastFailureQuery and LastFailureMessage), the provider’s average latency in milliseconds (AvgLatencyMs), and a flag indicating health status within the monitored window (IsUnhealthy). This object is intended for transport to diagnostics endpoints and UI components that monitor provider health and performance, rather than for in-depth per-call logic.
+WebSearchProviderStatsDto is a diagnostic data transfer object that aggregates a provider's usage and health for web search diagnostics. It surfaces the provider name, throughput metrics (TotalCalls, SuccessfulCalls, ErrorCalls, EmptyCalls), recency of activity (LastSuccessAt, LastFailureAt), failure context (LastFailureQuery, LastFailureMessage), performance (AvgLatencyMs), and a derived health indicator (IsUnhealthy). Use this DTO when returning per-provider diagnostics to dashboards, alerts, or analytics so that consumers can compare reliability and latency across providers and surface quick health signals.
+
+## Remarks
+IsUnhealthy serves as a high-level health signal derived from recent activity for the provider: if there were any events in the observed window and either there are zero successful calls or the most recent event was a failure, the provider is considered unhealthy. This enables UI dashboards and alerting logic to flag problematic providers without re-computing state from individual counters.
+
+## Notes
+- IsUnhealthy is meaningful only when there have been events in the observed window; if TotalCalls == 0, the health flag reflects no activity to judge. Use TotalCalls in conjunction with IsUnhealthy if you need stricter semantics.
+- LastFailureQuery and LastFailureMessage may be null; guard against nulls when displaying or logging.
+- LastSuccessAt and LastFailureAt are optional, so handle their absence when deriving trends or rendering timelines.
+- DateTimeOffset semantics imply awareness of time zones and offsets when presenting or persisting data.
 
 
 ---

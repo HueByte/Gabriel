@@ -8,23 +8,22 @@ public class NotFoundException : Exception
 ```
 
 
-Thrown when a requested aggregate is missing; this exception signals a not-found condition in the domain and is intended to translate to an HTTP 404 in API responses. Throw it during lookups when a concrete entity cannot be located, instead of returning null or a generic error, so upper layers can consistently map the outcome to a not-found response. It also carries contextual data—Resource and Key—that identify what was missed.
+NotFoundException signals that a requested aggregate or resource could not be located. It carries contextual details—the Resource name and the Key used to locate it—so callers can distinguish what was missing and how to respond (for example by translating to HTTP 404 semantics in API layers). When a lookup fails, this exception is thrown to propagate a precise, domain-meaningful not-found signal; the generated message follows the pattern '<resource> with key '<key>' was not found.'
 
 ## Remarks
-NotFoundException serves as a domain-level signal that a particular resource was not found, decoupling not-found handling from transport concerns. By carrying Resource and Key, it provides actionable context for logs and clients while enabling centralized exception handling to translate the condition to a 404 consistently across endpoints.
+
+This abstraction centralizes the notion of a missing entity, separating the detection of absence from how that absence is surfaced to callers. By exposing Resource and Key, it enables targeted logging and consistent error handling across layers that participate in retrieval.
 
 ## Example
-```csharp
-public Order GetOrder(string orderId)
-{
-    var order = _orderRepository.Find(orderId);
-    if (order == null)
-        throw new NotFoundException("Order", orderId);
 
-    return order;
-}
+```csharp
+var customerId = 42;
+object key = customerId;
+throw new NotFoundException("Customer", key);
 ```
 
 ## Notes
-- The exception's message is constructed from Resource and Key (e.g. "Order with key '123' was not found."); be mindful of leaking sensitive information in logs or API responses by sanitizing the Key where appropriate.
-- Use NotFoundException strictly for missing-resource scenarios; for permissions or other failures, prefer a different exception type and HTTP semantics.
+
+- The Key is stored as object; pass simple values or composite keys as appropriate.
+- The exception formats its message using Resource and Key, so be mindful of logging sensitive data contained in the key.
+- Catch NotFoundException when you want to translate to a 404 response or to handle missing data distinctly from other errors.

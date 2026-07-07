@@ -18,13 +18,14 @@ function pickPalette()
 ```
 
 
-pickPalette returns a random element from PALETTES by selecting an index with Math.random. It should be used whenever you need to choose a palette at runtime instead of hard-coding or wiring the choice at multiple call sites.
+pickPalette returns a randomly selected element from the PALETTES array. It encapsulates the common pattern of choosing a random palette so callers don't need to repeat the Math.random-and-index logic each time they need a palette for theming or UI styling.
 
 ## Remarks
-This function centralizes the randomness and the dependency on PALETTES, turning a scattered, ad-hoc palette selection into a single reusable utility. It relies on PALETTES being a non-empty array at runtime; by importing this function you commit to keeping the palette list in one place.
+pickPalette centralizes the source of palettes and the randomness, decoupling call sites from the PALETTES collection. This makes it easier to swap out how palettes are provided (for example, lazy loading, filtering, or deterministic testing) without changing every consumer.
 
 ## Notes
-- If PALETTES is empty, the function yields undefined. Ensure PALETTES is non-empty or guard with a fallback in calling code.
+- If PALETTES.length is 0, the function yields undefined because the computed index will be 0 and PALETTES[0] is undefined. Ensure at least one palette exists before relying on a return value.
+- For deterministic tests, you can mock Math.random or PALETTES to produce a known index, keeping tests fast and simple.
 
 ---
 
@@ -44,20 +45,21 @@ function sampleGradient(stops, t)
 | `t` | — | — |
 
 
-Interpolates a color along a defined sequence of RGB stops for a given parameter t in the range [0, 1]. It clamps t, handles the single-stop case by returning that color, and linearly blends the RGB channels between adjacent stops with per-channel rounding. Use this function when you need a smooth gradient color corresponding to a normalized position rather than choosing a fixed color or precomputing a gradient map.
+Computes a color at position t along a gradient defined by a sequence of RGB stops. The function clamps t to the range [0,1], linearly interpolates between the two surrounding stops, and returns the resulting [r,g,b] with each component rounded to the nearest integer. If only one stop is provided, it returns that color directly.
 
 ## Remarks
-This is a pure, deterministic function with no side effects. It operates on RGB triplets where each channel is in the 0–255 range and returns a new triplet by per-channel linear interpolation with rounding. The function handles the edge cases of a single stop and of t at the boundaries, making it suitable for sampling intermediate colors in UI palettes or theme generators.
+sampleGradient is a pure function with deterministic output for the same inputs, making it suitable for palette generation and gradient previews. It expects stops to be ordered from start to end and to be 3-element arrays representing RGB values. The interpolation uses the derived segment length based on the number of stops, so non-uniform spacing between stops is honored along the t parameter. Note that channels are rounded to integers, which can slightly bias the result for very small or very large values.
 
 ## Example
 ```javascript
-sampleGradient([[255,0,0],[0,0,255]], 0.5)
-// => [128, 0, 128]
+const stops = [[0, 0, 0], [255, 0, 0], [255, 255, 0]];
+const c = sampleGradient(stops, 0.25); // [128, 0, 0]
+console.log(c);
 ```
 
 ## Notes
-- Requires at least one stop; zero stops will cause a failure.
-- Output channels are rounded to integers (0–255).
-- t is clamped to [0, 1]; values outside this range are treated as endpoints.
+- Requires at least one stop; an empty stops array will lead to undefined behavior in normal usage.
+- The result is an integer RGB triplet due to rounding; use non-rounded calculations if you need fractional channels.
+
 
 ---

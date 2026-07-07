@@ -22,32 +22,14 @@ public abstract record ChatProviderEvent
 ```
 
 
-ChatProviderEvent is the abstract base type for all streaming events produced by IChatProvider.StreamAsync. It represents the set of events that can occur during a streaming session and enables consumers to handle different event shapes via polymorphism. The provider buffers partial tool-call deltas internally and only emits a ToolCallReady event when a call is fully assembled, so downstream code receives complete payloads without reassembling JSON fragments.
+ChatProviderEvent is the abstract base record for streaming events produced by IChatProvider.StreamAsync. The provider buffers partial tool-call deltas internally and only emits a fully assembled ToolCallReady event, so consumers receive cohesive, fully formed messages rather than partial JSON fragments. As an abstract record, ChatProviderEvent cannot be instantiated directly and serves as the common root for concrete, streaming event types produced during chat sessions.
 
 ## Remarks
-The abstraction isolates streaming semantics from the concrete payloads, allowing the provider to optimize buffering and payload shaping without leaking those details to callers. It also enables a clean separation between the transport/assembly layer and the business logic that handles completed tool calls.
-
-## Example
-```csharp
-// Consumer pattern: handle concrete event types as they arrive
-await foreach (ChatProviderEvent e in chatProvider.StreamAsync())
-{
-    switch (e)
-    {
-        case ToolCallReady ready:
-            // process the completed tool call
-            break;
-        default:
-            // handle or ignore other event types
-            break;
-    }
-}
-```
+ChatProviderEvent provides a stable envelope for the chat-streaming events. By exposing all events through a single base type, the streaming pipeline can evolve by adding new derived event shapes without changing consumer code that iterates over `IAsyncEnumerable<ChatProviderEvent>`. It also encapsulates the buffering and reassembly policy inside the provider, keeping the consumer logic focused on handling completed events.
 
 ## Notes
-- Do not instantiate ChatProviderEvent directly; it is abstract.
-- The stream yields only fully assembled events (e.g., ToolCallReady); do not rely on partial fragments.
-- Use type-pattern matching to access payloads of derived events.
+- This type is abstract; you cannot instantiate ChatProviderEvent directly. Use a derived event type at runtime (e.g., ToolCallReady) when handling events.
+- When processing the stream, prefer pattern matching against concrete derived event types rather than inspecting a generic interface, as new event shapes may be introduced.
 
 ---
 
@@ -66,14 +48,17 @@ public sealed record FinishEvent(FinishReason Reason) : ChatProviderEvent
 | `Reason` | `FinishReason` | — |
 
 
-FinishEvent signals that the current provider turn is complete: the provider has nothing more to emit, and the included FinishReason explains why the turn ended. As a sealed record deriving from ChatProviderEvent, it participates in the same event-stream contract as other provider events, but it is the canonical terminal signal developers check for to know when to stop consuming further events for that turn.
+FinishEvent is a terminal event in the chat provider's event stream. It signals that the provider has nothing more to emit for the current turn and carries a FinishReason describing why emission has ended. As a sealed record, it is immutable and supports value-based equality, and it derives from ChatProviderEvent to participate in the shared event-handling pipeline.
 
 ## Remarks
-By representing the end of a turn as a dedicated type, the system can distinguish between ongoing data and termination. It centralizes end-of-turn behavior in one symbol, enabling consumers to perform cleanup, transition to the next turn, or present a completed response to the user based on the FinishReason. The FinishReason value is intended to be interpreted by the consumer to determine next steps; this abstraction decouples production of messages from termination semantics.
+
+FinishEvent serves as the canonical end-of-turn marker in the provider’s event stream. By representing termination as its own event type, downstream components can treat completion uniformly alongside other events, simplifying lifecycle management and error handling. The FinishReason communicates the rationale for termination, enabling callers to distinguish between normal completion, a soft stop, or an error condition, without inspecting internal provider state. Because the type is sealed, its termination contract is preserved and not extended by accidental subtypes.
 
 ## Notes
-- Terminal nature: do not emit further ChatProviderEvent values after receiving FinishEvent within the same turn; subsequent events can be treated as out of band or ignored.
-- FinishReason semantics: ensure alignment between producer and consumer; misalignment can lead to incorrect post-turn handling.
+
+- FinishEvent is a reference-type record with value-based equality; instances compare equal if their Reason matches.
+- It is immutable; Reason is set at construction and cannot be changed.
+- Treat FinishEvent as a clean terminal signal; ensure downstream handlers implement finish logic for all FinishReason values.
 
 ---
 
@@ -92,7 +77,15 @@ public sealed record ReasoningDeltaEvent(string Delta) : ChatProviderEvent
 | `Delta` | `string` | — |
 
 
-ReasoningDeltaEvent represents an incremental token from the model's reasoning stream. It is emitted by chat providers that expose a separate thinking channel (e.g., Grok 4, DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking) as a distinct stream from the final assistant answer. The event carries a Delta string containing the latest segment of the model's internal chain-of-thought, distinct from the final assistant answer. Consumers that want to display or log the thinking in real time can subscribe to this event; however, the Delta is internal reasoning data and should not be treated as the final answer or persisted alongside it. Persistence of final content remains separate from the reasoning stream.
+ReasoningDeltaEvent is a sealed record that carries a single string Delta and represents an incremental token of the model's reasoning produced when a streaming reasoning channel is available. It is emitted as part of the ChatProviderEvent stream separate from the final assistant answer. Consumers should treat the Delta as internal chain-of-thought content that can be appended to a live thinking log or debug trace, while the final answer is constructed from other events and persisted separately. Use this symbol when your UI or tooling needs real-time visibility into the model's reasoning steps; if you do not require streaming insight or must avoid exposing thinking tokens to users, you can ignore these events.
+
+## Remarks
+This event abstraction decouples streaming reasoning from the final content, enabling clients to subscribe to a dedicated thinking channel without polluting the final answer payload. It supports transparency, debugging, or advanced user interfaces that display the model's evolving thoughts. Remember that this content can reveal internal reasoning, so treat it as sensitive in production scenarios and guard its exposure accordingly.
+
+## Notes
+- Delta tokens may arrive in multiple chunks; design consumers to append rather than replace and initialize with a clean accumulator per session.
+- Do not display reasoning tokens to end users by default; gate exposure to comply with privacy and policy constraints.
+- If your provider does not emit a reasoning channel, this event type will not be produced.
 
 ---
 
@@ -111,29 +104,32 @@ public sealed record TextDeltaEvent(string Delta) : ChatProviderEvent
 | `Delta` | `string` | — |
 
 
-TextDeltaEvent represents a chunk of incremental text emitted by a streaming chat provider. It carries a Delta string that should be appended to reconstruct the full message as deltas arrive, enabling progressive rendering and processing of partial content.
+TextDeltaEvent represents a single incremental token of assistant-provided text in a streaming chat workflow. Each instance carries the Delta string and is emitted as part of a sequence of deltas; consumers accumulate these tokens, in arrival order, to reconstruct the full assistant message.
 
 ## Remarks
-As a sealed record deriving from ChatProviderEvent, TextDeltaEvent is immutable and participates in the chat provider's event taxonomy. This abstraction enables streaming consumption: you receive small text fragments as they arrive, and you can render or accumulate them progressively without waiting for a final payload. Maintain the arrival order, since the final message is the concatenation of deltas in sequence.
+Placed in the stream alongside other TextDeltaEvent instances, this symbol isolates the notion of a fragment of generated text from the provider's overall event payload. It solves the problem of incremental rendering by enabling consumers to start displaying or processing partial results immediately, while subsequent deltas arrive. By inheriting from ChatProviderEvent, it participates in the provider's event-based pipeline and relies on the ordering guarantees of delta emission to produce coherent messages.
 
 ## Example
 ```csharp
-// Example: accumulate deltas to form the complete message
-var accumulated = new System.Text.StringBuilder();
+// Assemble a complete message from delta tokens
+using System.Linq;
 
-void OnEvent(ChatProviderEvent e)
+var deltas = new TextDeltaEvent[]
 {
-    if (e is TextDeltaEvent delta)
-        accumulated.Append(delta.Delta);
-}
+    new TextDeltaEvent("Hel"),
+    new TextDeltaEvent("lo"),
+    new TextDeltaEvent(", " ),
+    new TextDeltaEvent("world!")
+};
 
-string GetCompleteMessage() => accumulated.ToString();
+string finalMessage = string.Concat(deltas.Select(d => d.Delta));
+// finalMessage == "Hello, world!"
 ```
 
 ## Notes
-- Deltas are incremental and may be fragments; do not assume each Delta ends at a word boundary.
-- If deltas arrive from multiple threads, synchronize access to the accumulator; the event sequence preserves order for a single stream, but consumer code may require synchronization when aggregating.
-
+- Ensure deltas are processed in arrival order; out-of-order assembly leads to garbled text.
+- TextDeltaEvent is a record; it is immutable by design—do not mutate its Delta after creation.
+- If the delta stream ends unexpectedly, the final concatenation may yield an incomplete message.
 
 ---
 
@@ -154,23 +150,20 @@ public sealed record ToolCallReadyEvent(string Id, string Name, string Arguments
 | `ArgumentsJson` | `string` | — |
 
 
-Represents a complete, ready-to-execute tool call payload produced by the chat tooling pipeline. It carries three fields—Id, Name, and ArgumentsJson—and serves as a dispatched instruction to the tool runner to execute the named tool with the supplied arguments.
+ToolCallReadyEvent is a concrete, immutable signal indicating that a tool invocation has been prepared and is ready to be executed by the tool execution layer. It carries three pieces of data: Id, a unique identifier used to correlate this event with downstream responses; Name, the identifier of the tool to invoke; and ArgumentsJson, a JSON-encoded payload containing the tool's input parameters. As a sealed record that extends ChatProviderEvent, it participates in the chat provider's event stream as the canonical form of a "ready-to-call tool" notification.
 
 ## Remarks
-Acts as a transport boundary between preparation and execution. By encapsulating the invocation details in an immutable record, it enables reliable auditing, correlation, and retry strategies across the tool invocation workflow.
+ToolCallReadyEvent isolates the readiness state from the actual dispatching logic, enabling clean routing of tool invocations through the chat system. Its immutability and structural equality simplify caching, testing, and reasoning about event streams. The Id links the lifecycle across queuing, dispatch, and response, while Name and ArgumentsJson carry the essential tool identity and payload for execution.
 
 ## Example
 ```csharp
-var ready = new ToolCallReadyEvent(
-    Id: "tool-001",
-    Name: "WeatherForecast",
-    ArgumentsJson: "{\"location\":\"Seattle\",\"units\":\"metric\"}"
-);
+// Example: creating a ready-to-dispatch tool call
+var ready = new ToolCallReadyEvent("tool-42", "SpellCheck", "{\"text\":\"Ths is an exmple.\"}");
 ```
 
 ## Notes
-- ArgumentsJson must be valid JSON; otherwise the executor may fail to parse.
-- Id should be unique per invocation to avoid misrouting or clobbering concurrent invocations.
+- Ensure ArgumentsJson is valid JSON and matches the tool's expected argument schema. Misformatted or unexpected payloads may fail at the execution stage.
+- This type is immutable; if you need to alter data, construct a new ToolCallReadyEvent instance with the updated values.
 
 ---
 
@@ -189,32 +182,33 @@ public enum FinishReason
 ```
 
 
-FinishReason enumerates why a chat provider's generation finished. It signals whether the assistant produced a final response (Stop), requested tool invocations to continue the dialogue (ToolCalls), hit the model’s output length limit (Length), or encountered a provider-side failure (Error).
+FinishReason encodes why a chat provider finished producing a response. It enables the caller to decide what to do next - stop streaming, initiate a tool-invocation loop, handle a token-length cutoff, or respond to an error - without peeking into the generation details.
 
 ## Remarks
-FinishReason acts as a contract between the generation engine and the orchestration layer, abstracting control flow decisions away from raw text content. It enables clean streaming semantics by distinguishing normal completion from required tool execution, length-induced termination, or error conditions, and guides the caller on how to proceed within the chat pipeline.
+This enum provides a concise, language-native signal for flow control in the chat pipeline. It separates the act of producing content from the orchestration logic, allowing callers to react consistently to natural termination (Stop), tool-driven continuation (ToolCalls), length-bound termination (Length), or a provider failure (Error).
 
 ## Example
 ```csharp
 switch (finishReason)
 {
     case FinishReason.Stop:
-        // Normal completion; end of response stream
+        // normal completion, no further action
         break;
     case FinishReason.ToolCalls:
-        // Execute required tool invocations and continue streaming
+        // trigger tool invocation loop
         break;
     case FinishReason.Length:
-        // Content reached token limit; consider truncation or requesting more budget
+        // content length reached; consider trimming or stopping
         break;
     case FinishReason.Error:
-        // Propagate or handle provider-side failure
+        // surface error to caller or retry
         break;
 }
 ```
 
 ## Notes
-- ToolCalls implies the agent loop will resume after performing the necessary tool invocations.
-- Length may indicate truncation; callers might retry with a larger token budget or adjust prompts.
+- Exhaustive handling is recommended; missing a case can lead to incomplete control flow in some contexts.
+- ToolCalls is a signaling primitive, not a guarantee of successful tool execution.
+
 
 ---

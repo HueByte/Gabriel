@@ -8,12 +8,12 @@ public sealed class HashTool : ITool
 ```
 
 
-HashTool computes a cryptographic hash of input text (UTF-8) and returns the digest as a lowercase hexadecimal string, prefixed by the algorithm used (for example, 'sha256: ...'). It is a pure function with no I/O or external side effects, intended for fingerprinting or checksumming strings to produce stable identifiers rather than guessing a digest manually.
+HashTool computes a cryptographic hash digest of the given text and returns it as lowercase hexadecimal. It is a pure function with no I/O or external dependencies, encoding text as UTF-8 and returning a string in the form "<algo>: <hex>"; the default is sha256 and the supported algorithms are md5, sha1, sha256, and sha512 (md5/sha1 are legacy checksums only).
 
 ## Remarks
-HashTool provides a simple, deterministic hashing interface behind a single, well-defined entry point. It supports sha256 (default), sha512, sha1, and md5, while clearly signalling that md5/sha1 are legacy checksums and not suitable for security purposes. By handling UTF-8 encoding and the algorithm prefix in a single place, it prevents inconsistencies in digest computation across callers and promotes consistent, comparable fingerprints.
+HashTool provides a stable, verifiable fingerprint of a string without touching outside resources, which makes it ideal for content-addressable storage, cache keys, integrity checks, or any scenario where a deterministic digest is required. It’s designed as a small, testable unit: given the same text and algorithm, it always yields the same lowercase hex digest, enabling straightforward comparisons in higher-level logic.
 
 ## Notes
-- The input text is limited to 1,000,000 characters; inputs longer than this trigger a validation error.
-- The 'algo' parameter must be one of md5, sha1, sha256, or sha512; md5/sha1 are legacy and should be avoided for security-related use cases.
-- Output format is the chosen algorithm name followed by a colon and a lowercase hexadecimal digest (e.g., 'sha256: <digest>'). If the arguments are invalid, the function returns a string starting with 'Error: ...'.
+- The tool expects a JSON payload with a required "text" field and an optional "algo" field; invalid JSON or a missing/incorrect "text" yields a HashException with a descriptive message.
+- The input text is capped at 1,000,000 characters to avoid excessive memory usage.
+- The "algo" must be one of: md5, sha1, sha256, or sha512; md5/sha1 are provided for legacy checksums only.

@@ -8,31 +8,14 @@ public class RefreshToken
 ```
 
 
-Represents a server-side, persisted refresh token and encapsulates its lifecycle (creation time, expiration, revocation and replacement). Reach for this type when you need a single authoritative record for a user's refresh token in the database — the class stores only a token hash (the plaintext token is returned to clients only at issuance) and exposes simple methods and properties used by token rotation and revocation logic.
+Represents a server-side refresh token record used for issuing and validating refresh-token exchanges. Use this type when persisting refresh tokens (store the token's hash, not the plaintext) and when implementing rotation/revocation logic: tokens are created via the Create factory, can be revoked, and can be marked as replaced by a successor token.
 
 ## Remarks
-This entity is designed to support a rotation-first refresh policy: each successful refresh issues a new token and the previous token is marked as replaced. The class stores a TokenHash (the source comments indicate a SHA-256 hash is expected) rather than the plaintext token so a database leak does not immediately expose active sessions. The private parameterless constructor exists to allow persistence frameworks/ORMs to materialize instances while the static Create factory enforces required fields when creating a new token from application code.
+This class models the token lifecycle and encodes the rotation policy: a new refresh operation should create a replacement token and call MarkReplacedBy on the old token. The plaintext token is only returned to the client at issuance; the database should persist TokenHash (the SHA-256 hash of the token) so a DB leak doesn't directly expose active tokens. The type enforces invariants (private setters, validation in Create) so callers must use the Create factory to instantiate a token; a private parameterless constructor remains for persistence/ORM materialization.
 
-## Example
-```csharp
-// Create a new refresh token record for a user
-var lifetime = TimeSpan.FromDays(30);
-var tokenHash = ComputeSha256Hash(plaintextToken);
-var refreshToken = RefreshToken.Create(userId, tokenHash, lifetime);
-
-// Check status
-if (refreshToken.IsActive) { /* allow refresh */ }
-
-// Revoke explicitly (idempotent)
-refreshToken.Revoke();
-
-// Mark that this token was replaced by another token
-refreshToken.MarkReplacedBy(replacementTokenId);
-```
+Computed properties surface the token state: IsActive is true when the token is not revoked and not expired; IsRevoked and IsExpired reflect those individual conditions. Revoke and MarkReplacedBy set RevokedAt (only once) and MarkReplacedBy also records the replacement token id. Create sets ExpiresAt relative to UtcNow and Id/CreatedAt are initialized automatically.
 
 ## Notes
-- Create throws ArgumentException if userId is Guid.Empty or tokenHash is null/whitespace.
-- MarkReplacedBy throws ArgumentException if replacementId is Guid.Empty.
-- Revoke and MarkReplacedBy set RevokedAt only if it was previously null, so repeated calls are safe (idempotent for the timestamping).
-- IsActive and IsExpired use DateTimeOffset.UtcNow for comparisons; tests that assert time-dependent behavior should control or mock the clock.
-- The class does not validate the hashing algorithm or format of TokenHash — callers are responsible for producing a secure (e.g. SHA-256) hash before calling Create.
+- The TokenHash parameter should be the hashed form of the plaintext token (the class itself does not hash input).
+- Time comparisons use DateTimeOffset.UtcNow; distributed systems should account for clock skew when evaluating expiration.
+- Revoke and MarkReplacedBy set RevokedAt only if it was null (they are safe to call multiple times without changing the first-revoked timestamp).

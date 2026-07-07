@@ -8,34 +8,29 @@ internal static class Patterns
 ```
 
 
-A collection of small, deterministic procedural pattern generators used to produce scalar values in the range [0, 1] from a pixel coordinate (x, y) and a normalized time t. Each pattern exposes a Params record type, an Init(Random, size) helper that seeds pattern parameters (typically using the provided RNG and image size), and a sampling function that evaluates the pattern at (x, y, t). These patterns are intended for palette-based generators and are designed for loop continuity so sampling at t = 0 and t = 1 yields the same frame.
+A collection of small, deterministic 2D procedural pattern primitives that map a pixel coordinate (x,y) and a normalized time t ∈ [0,1) to a scalar in [0,1]. Use these when you need loop-continuous animated pattern samples for palette indexing; each pattern exposes an Init helper that produces a randomized parameter record and a sampling function that accepts (x, y, t, params).
 
 ## Remarks
-The class centralizes multiple visual primitives (plasma, directional waves, spirals, pulses, etc.) and separates parameter initialization from sampling. This makes it straightforward to produce repeatable visuals by seeding the provided Random and reusing the returned Params records across many sample calls. Init methods compute size-aware centers (Cx, Cy) as size / 2.0 - 0.5 so patterns are naturally centered for a square grid. The sampling functions use trigonometric combinations and exponentiation (sharpness) to produce varied and tunable textures while guaranteeing temporal wraparound for smooth looping.
+These patterns are lightweight building blocks intended for a frame generator that converts scalar values to palette indices. They are designed for loop continuity (sampling at t = 0 and t = 1 should produce the same image) and return values normalized to [0,1]. Each pattern pairs a readonly record struct (parameters) with an Init method that seeds reasonable defaults from a Random plus a sampling function that takes the parameter record by in to avoid copies. Parameters commonly control frequency, phase/speed, sharpness (via Math.Pow), and a pattern center (Cx, Cy) which is initialized to size / 2.0 - 0.5 so coordinates are pixel-centered.
 
 ## Example
 ```csharp
-// Create a deterministic plasma pattern for a 64x64 grid and sample one frame.
+// Create a deterministic Plasma pattern for a given canvas size
 var rng = new Random(12345);
-int size = 64;
+int size = 64; // canvas size used to compute Cx/Cy
 var plasmaParams = Patterns.PlasmaInit(rng, size);
-double t = 0.25; // normalized time in [0,1)
-int paletteLength = 16;
-var frame = new int[size][];
-for (int y = 0; y < size; y++)
-{
-    frame[y] = new int[size];
-    for (int x = 0; x < size; x++)
-    {
-        double v = Patterns.Plasma(x, y, t, in plasmaParams); // v in [0,1]
-        int index = (int)Math.Floor(v * paletteLength) % paletteLength;
-        frame[y][x] = index;
-    }
-}
-// `frame` now contains palette indices for the sampled plasma pattern.
+
+// sample at pixel (x, y) and normalized time t (0 <= t < 1)
+double x = 10.5, y = 20.5, t = 0.25;
+double value = Patterns.Plasma(x, y, t, in plasmaParams);
+// 'value' is in [0, 1] and can be mapped to a palette index.
+
+// Waves usage is analogous:
+var wavesParams = Patterns.WavesInit(rng, size);
+double w = Patterns.Waves(x, y, t, in wavesParams);
 ```
 
 ## Notes
-- t is a normalized time value on [0,1). The functions use TwoPi * t, so t values differing by integer amounts produce identical results (t = 1 wraps to t = 0).
-- Init methods set Cx and Cy to size / 2.0 - 0.5; pass x/y coordinates that match this pixel-center convention (0..size-1) for correct centering.
-- The Init methods use the caller-supplied Random; for reproducible patterns, reuse a seeded Random. Sampling functions themselves are pure and thread-safe, but Init is not thread-safe if the same Random is used concurrently.
+- t is expected to be normalized to the cycle [0,1). Although the functions mathematically handle t values outside that range, the class is authored with loop continuity in mind (t==0 and t==1 should match).
+- Sharpness parameters are applied as exponents (Math.Pow) and increase contrast; values significantly >1 make transitions steeper.
+- Parameter records include Cx/Cy set to size/2 - 0.5 to center patterns on pixel grids; keep that convention when supplying custom params.

@@ -18,15 +18,30 @@ public interface IWebSearch
 ```
 
 
-IWebSearch defines an asynchronous abstraction over a web search provider and returns a read-only list of WebSearchResult for a given query. Use this interface when you want to query the web behind the scenes while keeping the provider pluggable—swap Brave, Tavily, SerpAPI, or any other implementation in Infrastructure without touching the agent layer, rather than calling a concrete HTTP client directly.
+IWebSearch defines an asynchronous contract for a web search service, abstracting away the concrete provider from the rest of the system. It allows the agent layer to request search results without depending on a particular provider, enabling swapping implementations in Infrastructure without touching higher-level code.
 
 ## Remarks
-This abstraction isolates the agent-facing code from provider-specific HTTP details and response mapping, enabling you to swap in any compliant search service by changing only the Infrastructure implementation. WebSearchResult is the shared data shape that flows from the provider into the rest of the system, promoting a consistent consumption surface across different providers.
+IWebSearch serves as a crucial decoupling boundary between infrastructure and application logic. By depending on this interface, the system can experiment with Brave, Tavily, SerpAPI, or any future provider while keeping the agent and business logic stable. It also supports testing by letting developers provide lightweight mock implementations.
+
+## Example
+```csharp
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class EmptyWebSearch : IWebSearch
+{
+    public Task<IReadOnlyList<WebSearchResult>> SearchAsync(string query, int limit, CancellationToken ct)
+    {
+        // No external calls in this mock; return an empty result set.
+        return Task.FromResult<IReadOnlyList<WebSearchResult>>(new List<WebSearchResult>());
+    }
+}
+```
 
 ## Notes
-- Propagate cancellation: pass the CancellationToken through to the underlying network calls and cancel promptly when ct is canceled.
-- Respect the limit: return at most `limit` results; if the provider yields more, trim to the requested count.
-- Avoid blocking: implementors should use true asynchronous I/O and handle transient network failures with appropriate error handling.
+- Observe the CancellationToken ct and propagate it to any awaited I/O operations to support cooperative cancellation.
+- Implementations should perform real asynchronous I/O rather than blocking threads, and avoid throwing unless truly exceptional conditions occur.
 
 ---
 
@@ -47,14 +62,21 @@ public sealed record WebSearchResult(string Title, string Url, string Snippet)
 | `Snippet` | `string` | — |
 
 
-WebSearchResult is an immutable value object that represents a single entry returned by a web search. It aggregates a Title, a navigable Url, and a contextual Snippet, making it a convenient, transportable payload for UI rendering, API responses, or caching.
+WebSearchResult is a lightweight, immutable value object that models a single web search result, bundling its Title, Url, and Snippet for easy display and comparison. It is designed for transport and aggregation of search results within Gabriel.Engine and related tooling, providing a strongly-typed container instead of ad-hoc dictionaries or tuples.
 
 ## Remarks
-WebSearchResult provides a stable, minimal contract between a search provider and its consumers. By being a sealed record with value-based equality, it supports reliable comparisons, deconstruction, and safe sharing across layers without mutating state. The simple shape also makes it easy to serialize to JSON for API responses or cache stores, while preserving the original data.
+Being a sealed record ensures value-based equality and prevents inheritance, making it safe to use as keys in dictionaries or in equality-checked collections. It also serves as a clear contract for search result data, reducing the surface area of misinterpretation when results flow through the system.
+
+## Example
+```csharp
+var result = new WebSearchResult(
+    Title: "OpenAI",
+    Url: "https://openai.com",
+    Snippet: "OpenAI develops AI models and tooling."
+);
+```
 
 ## Notes
-- This record is immutable; use with-expressions to create modified copies if needed.
-- Url is a string; validate or convert to a Uri in consuming code if you need strict URL semantics.
-- Snippet may contain HTML or formatting; escape accordingly when rendering to UI to avoid injection or misformatting.
+- URLs are not validated or normalized by this type; downstream code should enforce URL validity as needed.
 
 ---

@@ -8,12 +8,12 @@ public class BraveSearchOptions : IConfigSection<BraveSearchOptions>
 ```
 
 
-BraveSearchOptions is a typed configuration container for the Brave Web Search integration. It binds to the Tools:Web:Brave configuration section and exposes BaseUrl, ApiKey, and TimeoutSeconds, plus a derived IsConfigured flag that indicates whether an API key has been supplied. Use this class to configure the Brave search provider from your configuration (environment variables, user secrets, appsettings.json, etc.). The BaseUrl must end with a trailing slash to ensure correct URL composition to /res/v1/web/search; if ApiKey is empty, the search tool will report unconfigured instead of attempting requests.
+BraveSearchOptions is a configuration container that holds the settings required to configure Brave's web search integration. It participates in the app's configuration system via IConfigSection and exposes BaseUrl, ApiKey, TimeoutSeconds, and a computed IsConfigured flag used to enable or disable the Brave search feature at runtime.
 
 ## Remarks
-BraveSearchOptions participates in the application's configuration binding as a concrete [`IConfigSection<BraveSearchOptions>`](IConfigSection.cs.md). It centralizes Brave search settings, letting code read a single, strongly-typed object instead of scattering constants and strings. The static SectionName guides the binder to the Tools:Web:Brave section; the default values enable a safe, testable configuration out of the box.
+
+These settings centralize the Brave Search integration behind a simple, strongly-typed surface. The SectionName identifies the configuration key used by the framework to bind configuration data. IsConfigured provides a clear runtime check before attempting to use the Brave API. Note that the BaseUrl must end with a trailing slash to ensure the final endpoint resolves to /res/v1/web/search when concatenated with a relative path, and an empty ApiKey disables the feature gracefully instead of throwing.
 
 ## Notes
-- Trailing slash in BaseUrl is required to form the correct endpoint; omitting it will cause the final request path to be misassembled.
-- ApiKey should be stored securely and supplied via environment variables or a secret store; avoid logging or emitting it.
-- IsConfigured is derived from ApiKey; avoid binding to this property or persisting a separate value.
+
+- The ApiKey default is empty; always guard with IsConfigured to avoid unconfigured Brave API errors.

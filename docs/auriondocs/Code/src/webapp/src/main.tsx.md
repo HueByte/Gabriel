@@ -4,11 +4,10 @@
 > **Kind:** file
 
 
-This file serves as the web application's entry point. It bootstraps the React UI by installing a one-time authentication interceptor for the API client, importing global styles, and rendering the App into the root DOM node inside React StrictMode.
+This file is the application entry point: it bootstraps the UI by installing a one-time authentication interceptor for the HTTP client, loading global styles, and mounting the App into the root element inside React.StrictMode.
 
 ## Remarks
-This module centralizes startup concerns for the web UI, ensuring authentication resilience and consistent styling before user-facing code runs. By performing the interceptor installation and mounting inside StrictMode, it keeps environment setup isolated from business logic.
+This module centralizes startup concerns that affect the entire application, separating bootstrapping from component logic. By installing the authentication interceptor and loading global styles in one place, it guarantees consistent behavior and styling before any component renders. It also enables development-time protections like StrictMode, helping reveal potential unsafe lifecycles and effects during development.
 
 ## Notes
-- The non-null assertion on document.getElementById('root') assumes an element with id 'root' exists in the HTML; if it is missing, the bootstrap will fail at runtime.
-- The auth interceptor is installed once on module load; reloading this module in development tools or hot-reloading environments should not re-run the bootstrap unintentionally.
+- Be aware that this file runs side effects at import time (interceptor installation and root rendering); avoid importing it in test environments that don't want full bootstrap behavior.

@@ -18,24 +18,20 @@ interface LocationState
 ```
 
 
-LocationState defines the minimal shape of a navigation state used when routing to a login page. Its from field, if provided, carries the originating pathname so the app can redirect back after a successful login. This lightweight type keeps the login flow decoupled from a concrete router implementation while expressing exactly which piece of state is needed for post-authentication navigation.
+LocationState describes the shape of the navigation-state you attach when redirecting to login to preserve the user's intended destination. It includes an optional from field, which itself may contain an optional pathname, signaling where the user wanted to go before authentication.
 
 ## Remarks
-This interface encapsulates a common pattern in guarded routes: capture where the user came from without coupling to a specific routing object. By modeling only an optional from with an optional pathname, it allows callers to pass through arbitrary routing state while a login page can still determine a sensible redirect. It sits between the navigation plumbing and the UI, enabling a smooth user experience without leaking router internals into business logic.
+LocationState decouples routing intent from the login UI, enabling post-authentication redirects without forcing a full location object into the login page. It is a tiny, typed contract that makes the navigation context explicit for future maintenance. Because both from and pathname are optional, code consuming LocationState should defensively read these fields and provide sensible fallbacks.
 
 ## Example
 ```typescript
-// Example usage with a router that stores the previous path in location.state
-function loginRedirect(state?: LocationState) {
-  const path = state?.from?.pathname ?? '/';
-  // navigate to `path` after login
-}
+// Example usage showing a redirect-after-login state
+const state: LocationState = { from: { pathname: '/dashboard' } };
 ```
 
 ## Notes
-- Guard against undefineds with optional chaining when reading `state?.from?.pathname`.
-- When persisting or sending this state across boundaries, ensure all values are JSON-serializable (pathname is a string).
-- If you extend this interface with additional fields, update all call sites to reflect the new shape and keep the interface minimal for routing concerns.
+- Both from and pathname are optional; any consumer should guard reads and provide defaults.
+- This interface describes a fragment of location state and is not a full routing object on its own.
 
 ---
 
@@ -48,24 +44,14 @@ export function LoginPage()
 ```
 
 
-LoginPage renders the sign-in screen for Gabriel, handling email/password input, password visibility, and submission flow. It uses useAuth to perform authentication and React Router to redirect back to the originally requested URL (or '/' as a fallback) after a successful login, while managing busy and error states to prevent concurrent submissions and surface failures to the user.
+LoginPage is a React functional component that renders a complete sign-in form and coordinates the login flow using an authentication hook and router navigation. It redirects users to the originally requested URL after a successful login (or to '/' if none was saved), while providing input state, a password visibility toggle, a transient 'busy' state, and inline error feedback.
 
 ## Remarks
-It acts as a presentational and orchestrator component: it delegates authentication to useAuth, orchestrates navigation with useNavigate/useLocation, and coordinates simple UI state. It sits at the boundary between protected routes and the rest of the app, providing a cohesive login UX while keeping business logic out of the UI layer.
-
-## Example
-```typescript
-import { LoginPage } from './LoginPage';
-import { Routes, Route } from 'react-router-dom';
-
-<Routes>
-  <Route path="/login" element={<LoginPage />} />
-</Routes>
-```
+LoginPage centralizes the login UX for protected routes, isolating UI concerns from the authentication mechanism. It relies on a convention where a ProtectedRoute stores the target path in location.state.from, and then uses navigate(from, { replace: true }) to restore the user's navigation history in a non-disruptive way. The avatar seed is intentionally ephemeral and cosmetic to keep the login screen feeling fresh without persisting user state.
 
 ## Notes
-- The redirect target is read from location.state.from; if the original route doesn't set it, the user is redirected to '/' by default. Ensure any protected route passes the intended destination.
-- The avatar seed is cosmetic and does not persist across sessions; re-rolls on each visit.
-
+- The busy flag disables inputs and the login button during submission to prevent duplicate requests.
+- Error handling surfaces a message when login fails; the message is either the exception message or a generic 'Login failed.'
+- The show/hide password toggle is accessible via a dedicated button with proper aria-label and title attributes; the password input switches between 'password' and 'text' types accordingly.
 
 ---

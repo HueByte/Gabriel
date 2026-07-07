@@ -8,25 +8,29 @@ public class Conversation
 ```
 
 
-Represents a user-scoped chat thread and its metadata: identity, owner (UserId), optional project containment, visual avatar seed/overrides, a rolling summary used for history assembly, serialized per-conversation state, interaction mode, timestamps, and the ordered message collection. Use the static Create(...) factory to construct new conversations (the parameterless ctor is reserved for EF Core), read messages via the Messages property, and use the GetState/SetState helpers to work with the JSON state blob.
+Represents a single user-scoped chat thread: persistent metadata, visual identity (avatar seed / overrides), summarization state and the ordered message collection. Reach for this domain entity when creating, loading or mutating conversations in business logic or repository code; use the static Create factory to construct new conversations so required invariants (UserId, ProjectId, AvatarSeed and a sensible default Title) are applied.
 
 ## Remarks
-Conversation is the aggregate root for a single chat thread. Repositories filter by UserId so each user only sees their own conversations; ProjectId is nullable to support a migration/backfill path where pre-auth conversations are later assigned to a user's default project. The Summary and SummarizedThroughMessageId fields are used when assembling provider context: the stored summary is prepended as a system message and the messages it covers are dropped so provider context remains bounded. AvatarSeed provides a stable visual identity per conversation (stored as a long but constrained to a JS-safe uint32 range), while PatternOverride/PaletteOverride allow the conversation to opt out of the seed-derived visuals (the sequence service prefers project-level overrides when present).
+The class is tuned for an evolving production schema and UI integration. ProjectId is nullable on the entity to support a lazy migration strategy (pre-auth conversations remain project-less and are assigned a default project later). Conversation.StateJson stores a serialized ConversationState in a single JSON column because its shape evolves and the app never queries individual fields directly; callers should use the designated accessors (GetState/SetState) rather than manipulating StateJson text. Mode is nullable so a null value can mean "use the global default" without backfilling. AvatarSeed is persisted as a long for the database but is kept within a JS-safe uint32 range so it round-trips cleanly through JSON and the client-side avatar generator. The message collection is held internally as a `List<Message>` and exposed as an IReadOnlyList to prevent external mutation; EF Core requires the private parameterless constructor for materialization.
 
 ## Example
 ```csharp
-var conv = Conversation.Create(userId: user.Id, projectId: project.Id, title: "Ideas for Q4");
-// Add messages via repository or domain methods. Read-only view:
-var messages = conv.Messages; // IReadOnlyList<Message>
+// Create a new conversation for persistence
+var userId = Guid.Parse("4d6f3b2a-...-0001");
+var projectId = Guid.Parse("7a9f1c2b-...-0002");
+var conv = Conversation.Create(userId, projectId, title: "Project planning chat");
 
-// Read and write conversation state through helper methods (not a plain property):
-var state = conv.GetState();
-state.TurnCount += 1;
-conv.SetState(state);
+Console.WriteLine(conv.Id);         // assigned on construction
+Console.WriteLine(conv.Title);      // provided title (trimmed) or conv.Id if none supplied
+Console.WriteLine(conv.AvatarSeed); // stable seed chosen at creation
+
+// Messages are exposed as a read-only list; add/remove via the domain methods on Conversation (not shown here).
+var messages = conv.Messages;
 ```
 
 ## Notes
-- ProjectId is intentionally nullable for backward compatibility; some conversations may be unassigned until a lazy backfill assigns a Default project for the user.
-- AvatarSeed is stored as long in the DB but constrained to the JS-safe uint32 range to ensure it round-trips through JSON and JS clients without precision loss.
-- StateJson is a versioned JSON blob (ConversationState). Its shape may evolve and is not intended for direct querying — use GetState/SetState to access it.
-- Mode is nullable: null means the system default (Chatty). An explicit null allows adding a future "use the user's default" behavior without colliding with an explicit Chatty value.
+- The Create factory throws ArgumentException for empty userId or projectId; callers must supply non-empty GUIDs.
+- Existing records may have ProjectId == null due to migration/backfill; code that relies on ProjectId should handle that case.
+- Do not edit StateJson directly; use the provided state accessors (GetState/SetState) so evolving shapes are handled consistently.
+- Mode == null means "use the system/default mode"; an explicit Mode value overrides that.
+- Messages are exposed as IReadOnlyList; mutation is controlled by Conversation's own methods to preserve invariants and keep EF Core change-tracking consistent.

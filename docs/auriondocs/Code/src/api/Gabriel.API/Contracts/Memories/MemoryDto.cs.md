@@ -39,30 +39,13 @@ public sealed record MemoryDto(
 | `UpdatedAt` | `DateTimeOffset` | — |
 
 
-MemoryDto is the transport-facing representation of a MemoryEntry; this immutable record serves as the data contract for API boundaries and inter-layer transfers, mirroring the MemoryEntry shape. ProjectId null means the memory is user-scoped, while a non-null ProjectId binds it to a specific project and governs visibility inside that project.
+MemoryDto is the API-facing data contract for a single memory entry; it mirrors the MemoryEntry entity's visible fields so clients can read or write memory data, while omitting internal user ownership. The nullable ProjectId signals scope: null means user-scoped, non-null ties the memory to that project and restricts visibility accordingly.
 
 ## Remarks
-This abstraction decouples the external contract from the internal MemoryEntry domain, enabling evolution of the domain model without breaking clients. The optional ProjectId encodes access scope at the boundary, supporting UI or API layers to filter or enforce visibility. CreatedAt and UpdatedAt provide temporal context for synchronization and user interfaces. MemoryDto focuses on serialization-friendly fields suitable for data transfer.
-
-## Example
-```csharp
-// Example: construct a MemoryDto from a domain entity
-MemoryEntry entry = GetMemoryEntryFromRepository(...);
-MemoryDto dto = new MemoryDto(
-    entry.Id,
-    entry.ProjectId,
-    entry.Type,
-    entry.Name,
-    entry.Description,
-    entry.Body,
-    entry.CreatedAt,
-    entry.UpdatedAt);
-```
+MemoryDto serves as a boundary object between the domain model and API clients. By including CreatedAt and UpdatedAt, it provides timing metadata without exposing internal identifiers like UserId, and the optional ProjectId communicates visibility scope without leaking ownership across boundaries. When mapping MemoryEntry instances for API responses or requests, map Id, Type, Name, Description, Body, CreatedAt, UpdatedAt, and ProjectId into MemoryDto.
 
 ## Notes
-- ProjectId may be null; clients should handle this to represent user-scoped memories.
-- Body can be large; consider view-level truncation or streaming for list endpoints.
-- CreatedAt/UpdatedAt reflect persistence times; ensure correct time zone handling when presenting to users.
+- Be aware that ProjectId == null marks user-scoped memories; clients should treat null as private to the user and apply project-based filters accordingly.
 
 ---
 
@@ -90,38 +73,25 @@ public sealed record SaveMemoryRequest(
 | `Body` | `string` | — |
 
 
-SaveMemoryRequest is an immutable data transfer object that represents the payload sent to the POST /api/memories endpoint when upserting a memory entry. It carries an optional ProjectId, the memory's Type (restricted to specific categories), a Name, a Description, and the Body content. The endpoint upserts the memory idempotently based on the caller's UserId, the optional ProjectId, and the Name; sending the same request multiple times updates the existing memory rather than creating duplicates.
+SaveMemoryRequest is a data transfer object used as the body payload for POST /api/memories. It carries the memory metadata and content that will be upserted; the server uses an idempotent upsert keyed on (UserId, ProjectId, Name). The UserId is derived from the caller's authentication context, and is not part of this payload. The object requires Name, Description, and Body, while Type discriminates the memory category and must be one of: user, feedback, project, or reference. The optional ProjectId allows scoping the memory to a particular project; when omitted, the memory can be considered not bound to a project. This is a sealed, immutable record, ensuring value-based equality and predictable data transfer across API boundaries.
 
 ## Remarks
-SaveMemoryRequest exists to validate and transport the essential fields required to create or update a memory record. It cleanly separates transport concerns from the domain model by using a record type; it also makes required fields explicit and supports optional association to a project. The Type field is expected to be one of: "user", "feedback", "project", or "reference".
+This DTO exists to keep the HTTP boundary clean: a simple, language-native representation of the memory to be stored. By using a record, the payload remains immutable and easy to compare across layers, which helps with change detection and testing. The nullable ProjectId provides flexibility for project-scoped or global/test memories, while Name acts as a stable identifier within the given scope. The Type field being a string (rather than an enum) preserves forward-compatibility with potential new categories without requiring API surface changes.
 
 ## Example
 ```csharp
-// Common usage: create a memory associated with a project
-var req = new SaveMemoryRequest(
-    ProjectId: Guid.Parse("d1a1c6a2-3b2a-4f8b-9a9b-2a8a7e5e7f3b"),
-    Type: "reference",
-    Name: "Architecture Decision",
-    Description: "AD for memory about architecture decision",
-    Body: "Details of the architecture decision..."
-);
-```
-
-```csharp
-// Or create a memory without a project association
-var req2 = new SaveMemoryRequest(
-    ProjectId: null,
-    Type: "user",
-    Name: "Personal note",
-    Description: "Notes about user experience",
-    Body: "User preferences and context..."
+var request = new SaveMemoryRequest(
+    ProjectId: Guid.NewGuid(),
+    Type: "project",
+    Name: "IntroNotes",
+    Description: "High-level notes for the project kickoff",
+    Body: "{ \"summary\": \"Initial summary of project goals and milestones\" }"
 );
 ```
 
 ## Notes
-- UserId is not included in SaveMemoryRequest; the identity used for upsert is derived from the authenticated user context. Ensure your API client supplies the correct authentication context.
-- ProjectId is optional; a null value means the memory is not linked to a specific project. Ensure server-side handling aligns with this semantics.
-- Type is a free-form string in the payload but is expected to be one of the defined categories; validation should enforce this to avoid invalid memories.
-
+- Type must be one of the allowed values; validation should occur in the API layer since the field is a plain string here.  
+- ProjectId is nullable; when null, the memory may be treated as not tied to a specific project.  
+- Ensure Description and Body contain content that is safe for storage and display, considering length limits and sanitization as required by the API.
 
 ---

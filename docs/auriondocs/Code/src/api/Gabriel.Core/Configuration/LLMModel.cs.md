@@ -8,37 +8,38 @@ public class LLMModel
 ```
 
 
-Represents per-model metadata for a hosted LLM. Use this type when adding or editing the models a provider exposes (size/price/context window/tool handling) or when reading model properties for token accounting, cost estimation and tool-routing.
+Represents per-model configuration and pricing used by the application to talk to an LLM provider. Store the wire-level model identifier (the exact string sent to the provider), context window size, per-million-token pricing for input/output and optional cache read/write costs, plus how the model should handle tool calls. Use this type when adding or editing provider models in configuration so switching models can be a config change rather than a code change.
 
 ## Remarks
-This class is a compact configuration/DTO that lets the system treat multiple models from a single provider as configurable entries rather than hard-coded behavior. ApplicationUser.PreferredModel (a per-user override) and runtime discovery (GET /api/models) interact with these entries: IsActive is a bootstrap/default selection only, discovery returns all entries regardless of IsActive, and some settings (CompactThreshold) fall back to global AgentOptions when not set. The ContextWindowTokens and CompactThreshold are consumed by token-accounting and summarization logic; pricing fields feed cost-estimation and billing code.
+LLMModel centralizes the metadata needed by token-accounting, cost-estimation, model discovery, and runtime selection. IsActive acts as a bootstrap/default selection but per-user preferences (PreferredModel on ApplicationUser) override it at runtime; discovery endpoints return all configured models regardless of this flag. CompactThreshold is nullable so it can inherit a global fallback from AgentOptions when not set per-model. ToolMode controls whether tools are handled natively, emulated, or disabled for this specific model.
 
 ## Example
 ```csharp
-// Define a model in configuration
+// Create a model entry and compute the dollar cost for a call that used 12,345 tokens.
 var model = new LLMModel
 {
     Name = "grok-4.3",
     IsActive = true,
-    ContextWindowTokens = 262_144,
-    CompactThreshold = 0.18, // prefer to compact at ~18% of window
-    InputPricePerMTokens = 0.30m,   // USD per 1,000,000 input tokens
-    OutputPricePerMTokens = 0.40m,  // USD per 1,000,000 output tokens
-    CacheReadPricePerMTokens = 0.05m,
-    CacheWritePricePerMTokens = 0.10m,
+    ContextWindowTokens = 200_000,
+    CompactThreshold = null, // fall back to AgentOptions if null
+    InputPricePerMTokens = 0.50m, // $0.50 per 1,000,000 input tokens
+    OutputPricePerMTokens = 0.75m,
+    CacheReadPricePerMTokens = 0m,
+    CacheWritePricePerMTokens = 0m,
     ToolMode = ToolMode.Native
 };
 
-// Rough per-call cost for 1,500 input tokens and 2,500 output tokens
-decimal inputTokens = 1500m;
-decimal outputTokens = 2500m;
-decimal cost = (model.InputPricePerMTokens * (inputTokens / 1_000_000m))
-             + (model.OutputPricePerMTokens * (outputTokens / 1_000_000m));
+var agentOptions = new AgentOptions { CompactThreshold = 0.18 };
+// effective compact threshold uses model override when present, otherwise global
+double effectiveCompact = model.CompactThreshold ?? agentOptions.CompactThreshold;
 
-Console.WriteLine($"Estimated cost: ${cost:F6}");
+int tokensUsed = 12_345;
+decimal inputCost = model.InputPricePerMTokens * tokensUsed / 1_000_000m;
+decimal outputCost = model.OutputPricePerMTokens * tokensUsed / 1_000_000m;
+decimal totalCost = inputCost + outputCost;
 ```
 
 ## Notes
-- Pricing fields are USD per million tokens. Multiply by (tokens / 1_000_000) to compute per-call cost; a value of 0 means "free" or "unknown" and is treated as free by accounting — validate non-zero for accurate cost tracking.
-- CompactThreshold is nullable and, when null, the system falls back to AgentOptions.CompactThreshold; set it only when you need a model-specific override (e.g. to remain inside a cheaper vendor tier).
-- IsActive is a default/bootstrap selection only. Per-user PreferredModel overrides runtime choice, and model discovery returns every configured model regardless of IsActive.
+- Pricing values are USD per million tokens; divide by 1_000_000 and multiply by actual tokens used to get per-call dollars.
+- A zero price is treated as "free or unknown" by accounting; validate non-zero pricing for any model you mark as active if you require accurate cost tracking.
+- If CompactThreshold is null the system should fall back to AgentOptions.CompactThreshold; set the per-model value only when you need to override global behavior (for example to keep a conversation inside a cheaper tier of a provider).

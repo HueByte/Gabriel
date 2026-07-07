@@ -8,12 +8,11 @@ public interface ITokenEstimator
 ```
 
 
-Estimates the number of tokens that text or a sequence of messages would consume when prepared for a language model. Use this interface to approximate prompt size or quota usage without committing to a specific tokenizer, so callers can swap in a real BPE-based implementation later without changing call sites.
+ITokenEstimator is a lightweight abstraction that exposes two token-estimation strategies: EstimateText for a single string and EstimateMessages for a sequence of Message instances. It enables callers to approximate how many tokens would be consumed when preparing inputs for token-limited models without binding to a specific tokenizer implementation. The interface is intentionally behind a simple contract so callers can remain agnostic to how tokens are counted, allowing a naive character-based approach to be swapped later for a real BPE tokenizer without changing call sites.
 
 ## Remarks
-By abstracting token counting behind an interface, callers remain decoupled from tokenization details and can swap in test doubles or lightweight estimators during development. The two members, EstimateText and EstimateMessages, cover raw text payloads and chat-history scenarios respectively, and should produce consistent counts for the same input. Implementations should be deterministic and side-effect-free to ensure predictable budgeting.
+This abstraction decouples token accounting from the underlying tokenizer, enabling consistent budgeting for model inputs and preflight validation. It centralizes token estimation logic, making it easier to calibrate, test, and evolve tokenizer strategies across the codebase. By operating on the Message type, it supports reasoning about the token cost of a conversation payload when preparing requests to chat models.
 
 ## Notes
-- Null input: EstimateText(text: null) should yield a safe, defined result (often 0 tokens); respect the contract of your implementation.
-- Thread-safety: Not guaranteed; if the estimator is shared across threads, ensure thread-safety in the implementation or enforce single-threaded usage.
-- Enumeration considerations: EstimateMessages may iterate the input; materialize if you need to reuse the collection to avoid multiple traversals.
+- The text parameter is nullable; implementations must handle nulls gracefully (e.g., treat null as producing zero tokens).
+- If you rely on EstimateMessages, decide which parts of Message contribute to token count (for example Content versus ToolCallsJson) and document the policy to avoid budget mismatches across components.

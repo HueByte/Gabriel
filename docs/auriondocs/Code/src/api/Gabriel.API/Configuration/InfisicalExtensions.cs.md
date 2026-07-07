@@ -8,22 +8,10 @@ public static class InfisicalExtensions
 ```
 
 
-InfisicalExtensions exposes a canonical, ASP.NET Core–style extension for wiring Infisical into a .NET application's configuration pipeline. The AddInfisical method follows the Options-pattern: callers supply an `Action<InfisicalOptions>` to configure the InfisicalOptions instance, after which an InfisicalConfigurationSource is registered with the IConfigurationBuilder. The extension returns the same builder to enable fluent, chainable configuration (similar to AddDbContext or AddSwaggerGen). This decouples Infisical setup from application startup logic and centralizes configuration in a single, testable place.
+Adds Infisical as a configuration source to an IConfigurationBuilder. Use it when you want to source configuration values from Infisical at startup by configuring InfisicalOptions via the canonical Options-pattern and then registering an InfisicalConfigurationSource with the builder.
 
 ## Remarks
-This extension encapsulates the Infisical configuration concerns behind a lightweight, reusable surface. By accepting a delegate to configure InfisicalOptions, it cleanly separates how options are provided from how the configuration source is consumed, helping tests substitute options and validating the integration at startup time.
-
-## Example
-```csharp
-// Typical usage during application startup
-var builder = new ConfigurationBuilder();
-builder.AddInfisical(opts => {
-    // Configure options here (properties depend on InfisicalOptions)
-    // e.g. opts.ProjectId = "my-project"; opts.SecretsEndpoint = "https://...";
-});
-```
+This method mirrors the well-known options pattern (think AddDbContext/AddSwaggerGen) to build options from a caller-supplied action and pass them to a configuration source. It delegates the actual retrieval and provider construction to InfisicalConfigurationSource, keeping Infisical integration consistent with other configuration providers and enabling fluent chaining with other configuration sources.
 
 ## Notes
-- Calling AddInfisical multiple times registers multiple InfisicalConfigurationSource instances; the final configuration depends on the ordering of sources within IConfiguration.
-- Ensure required properties on InfisicalOptions are set within the configure delegate to avoid runtime configuration issues.
-- This pattern keeps Infisical-specific setup isolated from business logic, aligning with standard .NET startup conventions.
+- If required fields are omitted or misconfigured, the Infisical configuration source may not be able to fetch secrets at startup.

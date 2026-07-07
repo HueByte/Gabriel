@@ -8,19 +8,22 @@ public static partial class Fragments
 ```
 
 
-Fragments is a static container for prompt fragments used by the Gabriel Engine to assemble its system prompts. In particular, PersonaStatic stores the static persona block that defines the engine's identity, its default operating mode, and the boundaries it should observe when replying. The string is designed to be assembled at runtime by GabrielSystemPromptBuilder, which substitutes the {name} token from PersonalityOptions.Name (defaulting to 'Gabriel'), enabling project-specific personas without touching this file. Memory guidance is intentionally kept separate in Fragments.PersonaMemory and may be omitted if memory tools are not registered. The static block concludes with the phrase 'Hard prohibitions', providing a reliable anchor point for per-turn fragments to append memory/mode specifics without corrupting the base block.
+Fragments is a static partial class that provides the base identity seed used to construct Gabriel's system prompts. The key member, PersonaStatic, is a raw, multi-line string literal containing the identity and operating guidelines that are prepended before every reply. The {name} token inside this string is substituted at runtime by GabrielSystemPromptBuilder from PersonalityOptions.Name, enabling per-project personas without touching the code. Memory guidance is intentionally kept separate in Fragments.PersonaMemory and may be omitted when memory tools aren’t registered. This base block ends with a "Hard prohibitions" marker so per-turn fragments (e.g., mode or memory blocks) can append cleanly without disturbing the foundational persona.
 
 ## Remarks
-Fragments acts as the canonical, central source of the agent's identity and behavioral rules. By isolating the static persona in Fragments, the system can swap the displayed name per project while preserving a consistent baseline. It also cleanly separates identity and memory concerns: PersonaMemory handles memory guidance, while PersonaStatic ensures a predictable header is present before every reply. This design reduces duplication and makes it easier to evolve the persona independently from per-turn prompts.
+
+Fragments uses a static partial class to provide a stable, reusable base persona while allowing project-specific customization and extension. By decoupling the identity (PersonaStatic) from memory and mode concerns, it supports a clean layering model: the base identity is defined here, while per-turn behavior and optional memory augmentation are composed at runtime.
 
 ## Example
+
 ```csharp
-// Example: runtime substitution of the {name} placeholder
-string raw = Fragments.PersonaStatic;
-string concrete = raw.Replace("{name}", "Astra");
+// Example: apply the {name} substitution to build a usable system prompt
+var options = new PersonalityOptions { Name = "Gabriel" };
+string prompt = Fragments.PersonaStatic.Replace("{name}", options.Name);
 ```
 
 ## Notes
-- The {name} token is substituted at runtime by the system (GabrielSystemPromptBuilder) from PersonalityOptions.Name; do not rely on the static string containing a final name during design.
-- Changing the static block affects all responses; prefer adjusting memory or per-turn prompts (PersonaMemory) for dynamic behavior rather than altering PersonaStatic.
-- Memory guidance is intentionally separate; if memory tools are unavailable, PersonaMemory content may not be injected, so ensure the system can operate with the base static block alone.
+
+- The {name} placeholder is intended to be substituted at runtime; do not remove or alter it unless you intend to override the substitution mechanism.
+- PersonaStatic is defined as a raw string literal; its formatting is preserved, including line breaks and embedded quotes.
+- The class is static and partial, signaling that the complete set of prompts can be extended across multiple files/fragments; per-turn fragments are appended to this base, not replace it.

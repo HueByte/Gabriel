@@ -8,27 +8,14 @@ public sealed class GrepTool : ITool
 ```
 
 
-Search file contents under a resolved root using a regular expression or a literal string. GrepTool walks files matched by a glob, skips binary files and common noisy directories by default, and emits ripgrep-style hits (path:line:content) with optional context lines — use it when you need a safe, configurable in-process content search within the agent's workspace.
+Search file contents under a resolved root using a .NET regular expression or a literal string. GrepTool walks files that match a provided glob (default "**/*"), skips common noisy directories by default, avoids scanning binary files and very large files, and emits ripgrep-style hits in the form path:line:content. Use this tool when you need fast, repository-scoped content search with options for literal matching, case sensitivity, limited context lines, and upper bounds on the number of matches.
 
 ## Remarks
-GrepTool implements ITool and delegates root resolution to an IAgentPathResolver (the `mode`/`root_path` parameters control how the root is resolved). It exposes a JSON parameters schema that controls pattern vs. literal matching, globbing, context lines, case sensitivity, per-run match limits and directory exclusions. The implementation purposely enforces per-file and global byte caps and a hard maximum on reported matches to avoid consuming excessive CPU or memory when scanning large trees or binary blobs.
-
-## Example
-```csharp
-// Search for "TODO" in all C# files, case-insensitive with one line of context.
-var grep = new GrepTool(agentPathResolver);
-var args = new {
-    pattern = "TODO",
-    path_glob = "**/*.cs",
-    context_lines = 1,
-    case_sensitive = false
-};
-var argumentsJson = System.Text.Json.JsonSerializer.Serialize(args);
-string result = await grep.ExecuteAsync(argumentsJson, CancellationToken.None);
-Console.WriteLine(result); // ripgrep-style hits or an Error: ... message
-```
+GrepTool is a file-scanning helper that integrates path resolution (via the injected IAgentPathResolver) with a regex-backed content search. It deliberately applies several safety limits — per-file and global byte caps, maximum matches, and directory excludes — so it can be run against large workspaces without overwhelming the host or returning noisy results. The ParametersJsonSchema exposes knobs for literal vs. regex matching, glob-based file selection, context lines, and match caps; these are the surface for tailoring searches while the implementation enforces hard limits.
 
 ## Notes
-- The `pattern` parameter is required; set `literal=true` to match the pattern as a literal string (it will be escaped via Regex.Escape).
-- Default noisy directories are skipped (node_modules, bin, obj, .git, dist, .vs, .idea, .vscode); pass an empty `exclude_dirs` array to disable these defaults.
-- The tool enforces caps (per-file byte cap, global byte cap, and a hard cap on matches). Large files, binary files, or very large trees may produce fewer results than an unbounded search would.
+- Lines longer than an internal cap are truncated for display — very long single lines may be shortened.
+- The tool enforces both a per-file byte cap and a global byte cap to avoid scanning huge binaries or logs; very large files may be skipped even if they match the glob.
+- By default several noisy directories are excluded (node_modules, bin, obj, .git, dist, .vs, .idea, .vscode); pass an empty exclude_dirs array to disable that behavior.
+- Use literal=true to search for an exact string (the pattern is escaped); otherwise the pattern is treated as a .NET regular expression.
+- The ParametersJsonSchema limits context_lines to at most 5 and max_matches to at most 1000; the implementation also has a lower default for interactive use.

@@ -16,11 +16,10 @@ public record ToolDescriptor(string Name, string Description, string ParametersJ
 | `ParametersJsonSchema` | `string` | — |
 
 
-ToolDescriptor is a provider-facing representation of a tool's metadata. It carries the tool's Name, Description, and a JSON Schema describing the shape of its arguments. This record is designed for serialization and transmission to downstream components (for example, prompt-generation or orchestration layers) so tools can be discovered and their inputs validated against a standard interface.
+ToolDescriptor is a provider-facing record that carries metadata about a tool: its Name, a human-readable Description, and a JSON Schema (ParametersJsonSchema) describing the tool's argument shape to the model. It is used when you need to transmit or present tool metadata for invocation without exposing implementation details.
 
 ## Remarks
-ToolDescriptor decouples tool interface declarations from invocation logic. By storing the parameter shape as a JSON Schema string, it enables dynamic tooling workflows where the same metadata surface can describe diverse tools without changes to the consumer code.
+This abstraction decouples tool metadata from its concrete implementation, enabling tooling pipelines to evolve independently. The ParametersJsonSchema enables dynamic generation and validation of inputs, allowing UIs or models to adapt to different tools without code changes.
 
 ## Notes
-- The ParametersJsonSchema must be a valid JSON Schema in string form; consumers rely on it to validate and surface required parameters.
-- As a record, ToolDescriptor is immutable and supports "with" expressions to create modified copies.
+- Ensure the JSON schema string is valid JSON and properly escaped in the C# string literal; invalid JSON or escaping can lead to runtime parsing errors.

@@ -4,4 +4,12 @@
 > **Kind:** file
 
 
-Program.cs is the application entry point for Gabriel.API. It bootstraps Serilog early to capture startup events, constructs the ASP.NET Core WebApplication, and wires the hosting environment, DI services, and middleware that shape the API. The file loads secrets from Infisical before service registration, binds InfisicalOptions, and configures AuthOptions so those values are available to the rest of the app. It sets up a global API prefix for controllers, enables Swagger for API exploration, adds ProblemDetails and a custom GlobalExceptionHandler to unify error responses, and configures Cross-Origin Resource Sharing based on configuration. It also defines a per-day log file sink using Serilog's Map sink, ensuring log rotation and shared file access during runtime. In short, this symbol is the centralized bootstrap that determines how the application starts, how secrets are resolved, how logging is configured, and how global API conventions are applied.
+Program is the application’s entry point for the Gabriel API. It orchestrates the web host startup by configuring Serilog as the primary logging pipeline, loading configuration and secrets at bootstrap time, and wiring essential services and middleware. From loading Infisical secrets early to bind InfisicalOptions and AuthOptions, to applying a global API prefix and Swagger, this file establishes the cohesive startup sequence that all HTTP requests flow through before the app begins handling traffic.
+
+## Remarks
+Centralizes startup choreography: logging bootstrap, secret provisioning, config binding, and middleware registration all in one place. The early Infisical load ensures subsequent services see real-time config values, while the global API prefix enforces consistent routing across controllers. Swapping the logging pipeline to Serilog at startup decouples early startup diagnostics from the rest of the app's logging, improving observability during deploys.
+
+## Notes
+- The bootstrap logger runs before the host's logging pipeline is built, so startup errors are captured in the console regardless of later configuration.
+- The FileLog settings are optional; if the FileLog section is missing, default values are used for path, template, and file size limits.
+- Global route prefixing ("api") changes all controller routes; to opt-out, remove the GlobalRoutePrefixConvention usage.

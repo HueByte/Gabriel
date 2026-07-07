@@ -8,12 +8,12 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
 ```
 
 
-This class defines the EF Core mapping for the Conversation aggregate, telling the ORM how to persist Conversations: table name, keys, columns, indexes, and the one-to-many link to Messages. It also enforces encapsulation of the Messages collection via a private backing field and supports lazy-populated fields like StateJson and SummarizedThroughMessageId, plus a nullable ProjectId to ease migrations.
+Configures the EF Core model for the Conversation aggregate. This class implements IEntityTypeConfiguration&lt;Conversation&gt; and directs how conversations are persisted: the table name, primary key, required fields, optional fields, and the relationships that compose the aggregate. It also defines the indices used by common dashboard queries and maps the private Messages backing field to ensure mutations go through the domain's invariants.
 
 ## Remarks
-By separating persistence concerns into ConversationConfiguration, the domain model remains clean and the schema can evolve independently via migrations. The configuration centralizes common query shapes (e.g., indexes on UserId/UpdatedAt and ProjectId/UpdatedAt) and supports lazy initialization of derived state while preserving the aggregate's invariants through a controlled Messages collection.
+By mapping the private _messages backing field, callers mutate the Messages collection through the aggregate, preserving encapsulation and invariants. Several properties are intentionally nullable or constrained to support lazy initialization or partial data: ProjectId and StateJson are optional, while PatternOverride and PaletteOverride have length limits to guard database size. The two indices (UserId, UpdatedAt) and (ProjectId, UpdatedAt) optimize dashboard and project-filter queries; cascade delete ensures Messages are removed when a Conversation is deleted, preserving referential integrity.
 
 ## Notes
-- Field-backed Messages: The navigation is configured to use a private backing field (_messages), enforcing encapsulation of the Messages collection.
-- Cascade delete: Deleting a Conversation cascades to its Messages.
-- Nullable ProjectId: ProjectId is nullable to support pre-migration conversations and backfill when a user visits a project.
+- The Messages navigation uses a private backing field and Field access mode, so EF mutates the _messages collection strictly through the aggregate.
+- Mode is stored as an int (nullable) to represent the ConversationState enum; null implies the default behavior at read time.
+- If new properties are added to Conversation that participate in the model, update this configuration accordingly and re-run migrations to keep the schema in sync.

@@ -8,12 +8,12 @@ public class NaiveTokenEstimator : ITokenEstimator
 ```
 
 
-NaiveTokenEstimator provides a coarse token count for text and messages using a simple 4-char-per-token heuristic plus a small per-message overhead, intended for rough context-window budgeting in development or prototype settings. It is not a substitute for real BPE tokenization; switch to a proper tokenizer if token-level accuracy matters.
+NaiveTokenEstimator provides a rough token count for text and messages using a simple 4 characters per token heuristic. It is intended to support context-window budgeting in development or prototype scenarios before integrating a production-grade tokenizer. It implements ITokenEstimator and exposes two entry points: EstimateText, which estimates tokens for a single string, and EstimateMessages, which sums token estimates for a collection of Message instances, including a small per-message overhead for role markers and separators and separate estimates for content, tool calls, and tool call identifiers. This class is a drop-in substitute during early stages and can be replaced by a real tokenizer without changing its consumers.
 
 ## Remarks
-This abstraction exists to enable quick, deterministic budgeting without shipping a full tokenizer. It centralizes a minimal token-counting strategy that complements the integration with a language model by offering predictable, fast estimates. It is especially useful during early development or exploratory UI work where exact counts are unnecessary.
+This abstraction exists to provide a lightweight, dependency-free way to approximate token usage during development, enabling predictable budgeting of what can fit within a context window. By implementing the ITokenEstimator interface, callers can swap in a production-ready tokenizer later with minimal code changes, keeping token accounting centralized. It also aligns token estimation with the Message model by accounting for message content and associated tool-calls as part of the total estimate.
 
 ## Notes
-- It is intentionally approximate; do not rely on it for billing or quotas.
-- Per-message overhead is fixed (8 characters) and may not reflect your exact protocol/serialization.
-- Counts are based on string lengths; non-ASCII or multi-byte characters may affect actual token counts.
+- The 4 characters per token heuristic is intentionally coarse and may misestimate token counts for real models and languages.
+- Per-message overhead (8 in this implementation) is a fixed cost added for each Message, independent of its actual content; adjust only if the surrounding protocol or messaging surface changes.
+- Null or empty text yields zero tokens; ToolCallsJson and ToolCallId are included in the per-message estimate even if they are null or empty.

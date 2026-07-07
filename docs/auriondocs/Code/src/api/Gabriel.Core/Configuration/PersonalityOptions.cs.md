@@ -8,11 +8,4 @@ public class PersonalityOptions : IConfigSection<PersonalityOptions>
 ```
 
 
-PersonalityOptions is a strongly-typed configuration container that defines the runtime persona and streaming tempo for Gabriel. It binds to the 'Personality' configuration section and is consumed to inject the persona name into system prompts and few-shot blocks, while also tuning how the assistant streams text. The Name field determines the display name used for the persona (default 'Gabriel'). MinThinkingDelayMs/MaxThinkingDelayMs model the initial 'thinking' pause before the first delta is forwarded, creating a natural cadence. MinCharsPerSecond/MaxCharsPerSecond define the target character throughput per second for streaming deltas, with per-turn jitter to mimic human-like typing speed.
-
-## Remarks
-Isolates persona data and streaming tempo from core messaging, enabling centralized tuning without touching runtime logic. The SectionName binding helps keep configuration discovery consistent and supports future per-project personality variants without code changes. Together these fields provide a simple, low-risk knob-set for operators to tailor voice and pacing per deployment.
-
-## Notes
-- MinThinkingDelayMs should be <= MaxThinkingDelayMs to avoid invalid timing.
-- Units: delays are in milliseconds; throughput is chars per second; ensure unit consistency across the system.
+PersonalityOptions is a configuration section that defines the assistant's persona and its streaming behavior. It exposes a display name (Name) to be injected into the system prompt and the few-shot block, and timing controls that shape how the assistant’s streaming deltas are presented. The class is identified as the 'Personality' section via SectionName and implements [`IConfigSection<PersonalityOptions>`](IConfigSection.cs.md) to integrate with the configuration system. Together, these settings let you tailor who the assistant sounds like and how quickly it responds, without changing the response-generation logic itself. The streaming controls include an initial thinking delay (MinThinkingDelayMs/MaxThinkingDelayMs) and a per-turn typing pace (MinCharsPerSecond/MaxCharsPerSecond), enabling a natural, human-like delivery of text.

@@ -19,14 +19,15 @@ interface MenuState
 ```
 
 
-MenuState captures the positional data for a contextual popover in the sidebar: the menu's identifier and its absolute screen coordinates (top and right). Use this interface when you need to pass around placement data separately from rendering logic, rather than computing or duplicating coordinates in multiple places.
+MenuState defines the placement contract for a contextual menu anchored in the Sidebar. It carries an identifier and two numeric coordinates (top and right) that describe where the menu should appear; use MenuState when rendering or repositioning menus rather than scattering raw coordinates or mutating DOM state directly.
 
 ## Remarks
-MenuState acts as a lightweight value object that couples a specific menu instance with its placement information. It enables the Sidebar to coordinate showing a menu for the active item while keeping the popover rendering concerns isolated from the trigger logic. By presenting a stable contract for identity and position, it simplifies sharing this data across components.
+MenuState is a lightweight data contract that decouples positioning from rendering. It enables the Sidebar to manage multiple menus by id and pass precise placement information to a Menu component or popover without coupling to DOM APIs. This separation supports easier testing and re-use of positioning logic across different menus.
 
-## Notes
-- The numeric top and right values represent CSS pixel coordinates; when applying to a style object, numeric values are interpreted as pixels in React.
-- The id field identifies which menu this state refers to; ensure it remains stable for the lifetime of the menu so updates don't accidentally swap state between menus.
+## Example
+```typescript
+const menuState: MenuState = { id: 'user-menu', top: 120, right: 16 };
+```
 
 ---
 
@@ -39,18 +40,14 @@ export function Sidebar()
 ```
 
 
-Renders a collapsible left sidebar that displays conversations for the currently selected project and exposes quick navigation to the active conversation via the URL. It coordinates routing, server data, and user interactions so you can browse per-project threads without prop-drilling state across components.
-
-It fetches conversations scoped to the active project, sorts them by last update, and supports inline title editing, keyboard shortcuts, and a contextual action menu. The component also preserves collapsed/expanded state in localStorage and listens for global input events to enhance accessibility and UX when the panel is open.
+Renders and controls the application's left-hand sidebar, coordinating data fetching, user interactions, and routing for conversations within the currently selected project. It derives the active conversation from the URL to avoid prop drilling, fetches project-scoped conversations via ConversationsService, and manages UI concerns such as collapsing the sidebar, editing conversation titles, and showing a per-row action menu. It refreshes its list in response to internal mutation signals and preserves user preferences in localStorage, while gracefully handling errors and integrating with the authentication layer for user context.
 
 ## Remarks
-This component acts as the local orchestrator for the per-project conversation list and incidental UI concerns (collapse state, focus management, and a mutation-driven refresh). It relies on the router-provided conversationId as the truth source for the active item, and on ConversationsService for data retrieval; changes to the active project or a local refresh trigger re-fetches automatically, keeping the UI in sync with project context.
+The Sidebar serves as the UI boundary that ties routing, data loading, and per-conversation actions together. It encapsulates project-scoped logic so the surrounding layout remains agnostic to whether the user is viewing a single project’s diagnostics or the global conversation list. The localRefresh tick is the sanctioned hook mutations can trigger to refetch the list without going through a global refresh signal.
 
 ## Notes
-- Cancellation safety: fetch-side cancellation avoids setting state on unmounted components.
-- Initialization nuance: when activeProjectId is null during boot, the API is called with undefined to fetch a broad or server-default set; once the project picker resolves, results are scoped to the selected project.
-- Escape handling: the global Escape key binding is attached only while the panel is open to close it gracefully.
-- Outside-click handling: the external-click/menu logic uses a specific anchor and container references to avoid closing when interacting with the action menu (elements marked with conv-action).
+- Mutations in the list (create/edit/delete) should bump localRefresh to trigger a re-fetch; otherwise the list might not reflect changes immediately.
+- The outside-click and Escape handling depend on the menu’s DOM shape (menuRef and elements with the conv-action class); ensure action triggers carry the expected class to cooperate with the close-on-outside-click logic.
 
 ---
 
@@ -65,26 +62,13 @@ function loadSidebarCollapsed(): boolean
 **Returns:** `boolean`
 
 
-Determines whether the app’s left sidebar should start collapsed by reading a persisted user preference from localStorage. It fetches the value under SIDEBAR_STORAGE_KEY and returns true when the key is missing or when the stored value is '1'; otherwise it returns false. If localStorage access throws (e.g., in restricted environments or during SSR), it falls back to true to preserve a compact UI consistent with the EchoHub-style burger pattern.
+Determines the initial collapsed state of the sidebar by reading a flag from localStorage using SIDEBAR_STORAGE_KEY. It returns true when nothing is stored or when the stored value is '1' (collapsed); any other non-null value yields false (expanded). If localStorage access fails, it safely falls back to collapsed.
 
 ## Remarks
-
-Centralizes the persistence of the sidebar's collapsed state, decoupling rendering from storage details. It provides a single, testable source of truth for the initial UI chrome state and keeps the EchoHub-style burger behavior consistent across sessions.
-
-## Example
-
-```typescript
-// Most common usage
-const isCollapsed = loadSidebarCollapsed();
-
-// Typical React initialization
-const [collapsed, setCollapsed] = useState<boolean>(loadSidebarCollapsed());
-```
+Centralizes the logic for deriving the sidebar state, so components don't have to read localStorage directly. The default-to-collapsed behavior ensures a predictable and safe initial UI, matching the EchoHub burger pattern. Because it relies on SIDEBAR_STORAGE_KEY, the value's meaning is tightly coupled to how the app persists the state across reloads. This abstraction also makes future changes to the persistence strategy easier to adopt in one place.
 
 ## Notes
-
-- The literal string '1' means collapsed; any other value (e.g. '0', 'true', 'false') means expanded.
-- If SIDEBAR_STORAGE_KEY is not defined or localStorage is unavailable, the function will default to true (collapsed). Ensure the storage key is defined in the correct scope to avoid runtime errors.
-
+- LocalStorage access can throw (e.g., in private browsing or certain security contexts); the function guards against this by returning the collapsed default. 
+- The value '1' maps to collapsed; any other non-null value is interpreted as expanded, so ensure write paths use '1' to indicate collapsed.
 
 ---

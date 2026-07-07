@@ -8,7 +8,13 @@ internal sealed class ToolCallStreamSplitter
 ```
 
 
-ToolCallStreamSplitter is an internal helper that separates a live text delta stream from a buffered tail that starts at the first <tool_call> marker. It is used by GabrielToolBridge to feed each incoming text delta through Process and emit only the live text until a complete <tool_call> marker is observed; once the marker is seen, all subsequent characters are buffered in BufferedText for end-of-turn parsing. This preserves the typing feel of streaming text while guaranteeing that no partial marker is emitted as live text. The candidate buffer is constrained to the length of the marker (11 characters), and the decision to emit or buffer is made as soon as a full marker is detected or the prefix diverges.
+ToolCallStreamSplitter is an internal sealed helper that splits a single text stream into live-deliverable deltas and a buffered tail starting at the first <tool_call> marker. It preserves a typewriter-like streaming experience by never emitting a partial marker; instead, it buffers the portion after the open tag for the parser to consume as complete blocks. The splitter maintains a small candidate buffer used to detect the marker prefix and, upon seeing the full marker, latches into buffer mode and appends the marker and subsequent text to BufferedText for end-of-turn parsing. The candidate buffer is bounded to the marker length (11 characters) to minimize false emissions. The Process method returns only the portion of the input delta that can be emitted immediately, while subsequent data accumulate in the internal buffers. End-of-stream handling is performed by Flush: if no marker has been completed, it returns any trailing characters that never grew into a marker; if a marker has begun, Flush yields nothing until the parser consumes the buffered tail.
 
 ## Remarks
-This abstraction decouples streaming output from the marker-based parser, ensuring downstream parsing always starts from a complete <tool_call> boundary. It solves the problem of potentially emitting a partial marker mid-stream and provides a predictable hand-off point where the rest of the turn's content is consumed by the parser via BufferedText.
+ToolCallStreamSplitter isolates the boundary between raw text and tool-call content. By latching into buffer mode when <tool_call> is detected, downstream parsing can operate on well-formed <tool_call>...</tool_call> blocks without risking emission of incomplete markers. This design supports a smooth typewriter-like feel while ensuring the parser only sees complete tool-call blocks.
+
+## Notes
+- Marker detection is exact and case-sensitive: the marker string is literally '<tool_call>'.
+- The splitter assumes delta chunks arrive in order; out-of-order delivery could disrupt marker detection.
+- If the stream ends before a full marker is formed, Flush returns trailing characters as normal text.
+- The candidate buffer is limited to the marker length to bound latency before switching to buffered mode.

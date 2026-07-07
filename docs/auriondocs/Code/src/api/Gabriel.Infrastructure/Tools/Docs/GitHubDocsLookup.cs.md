@@ -8,14 +8,12 @@ public sealed class GitHubDocsLookup : IDocsLookup
 ```
 
 
-GitHubDocsLookup is an IDocsLookup implementation that sources documentation entries from a GitHub repository. It exposes two transport paths: a listing path that enumerates the repository tree to discover Markdown docs, and a read path that fetches individual documents directly from GitHub Raw. Listings are cached for up to ListCacheMinutes to respect unauthenticated rate limits; reads pass through live content, which may reflect edits made in the repository during development. Path traversal is hardened: any '..' segment or absolute-prefixed path is rejected before the request is sent.
+GitHubDocsLookup implements IDocsLookup by serving documentation stored in a GitHub repository. It offers two transport paths: ListAsync, which enumerates Markdown docs by querying the repository tree, and ReadAsync, which fetches raw Markdown content from GitHub's raw endpoint. The implementation caches the list for a configurable window to reduce unauthenticated API usage and hardens path traversal to reject any unsafe paths before requesting data.
 
 ## Remarks
-
-GitHubDocsLookup decouples the source of docs from consumers by implementing IDocsLookup, allowing swapping the backend without changing callers. The two-phase approach separates cataloging (ListAsync) from content retrieval (ReadAsync), enabling a stable UI to present available docs while ensuring current content is fetched on demand. Caching and a semaphore ensure thread-safe, rate-limit-friendly operation under concurrent load.
+Conceptually, it decouples docs from the rest of the system and provides a single, testable path to locate and retrieve documentation assets. It uses an HttpClientFactory to perform HTTP calls, and an options object to determine ownership, repository, branch, and the path under which docs live. A semaphore guarantees only one refresh of the listing happens at a time, preventing thundering herds. The path validation comment in the source highlights a deliberate boundary: only files under the configured DocsPath with a .md extension are considered, mitigating accidental exposure of non-document assets.
 
 ## Notes
-
-- Configure HttpClientFactory with two named clients: GitHubDocsApi for the trees API and GitHubDocsRaw for raw file retrieval; these can be tuned independently.
-- The implementation explicitly rejects traversal-unsafe paths to prevent directory traversal attacks.
-- On failure to the Trees API, a HttpRequestException is thrown after logging the response body; callers should handle this as an operational error.
+- The ListAsync cache is time-bounded by ListCacheMinutes; if the cache expires or is empty, the listing will re-fetch from GitHub.
+- Non-success responses from the Trees API trigger a warning log and throw HttpRequestException, so callers should handle errors gracefully.
+- ReadAsync uses an absolute URL to raw.githubusercontent.com, which overrides any BaseAddress on the configured HttpClient; this ensures the request targets the intended raw docs location regardless of client defaults.

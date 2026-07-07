@@ -18,14 +18,15 @@ public static class FrameLayers
 ```
 
 
-FrameLayers is a small static helper that partitions a linear sequence of frames into four fixed layers of sixteen frames each. It exposes FramesPerLayer and LayerCount, and provides Of(frameIndex) to determine the Layer for a given global frame index, and Range(layer) to compute the inclusive start and end frame indices for a specific Layer.
+FrameLayers is a small, static helper that partitions a flat sequence of frames into fixed layers. It defines two constants—FramesPerLayer (16) and LayerCount (4)—and provides Of to map a frame index to its corresponding FrameLayer, as well as Range to obtain the inclusive start and end indices for a given layer. This utility is useful whenever you need to operate on frames in fixed-size chunks rather than treating every index independently.
 
 ## Remarks
-FrameLayers centralizes the notion of frame layering, removing magic numbers from clients and ensuring consistent layer-based calculations across the codebase. It serves as a clean boundary between raw frame indices and layer-based processing, making it easy to perform per-layer iterates or to compute per-layer bounds without duplicating arithmetic.
+FrameLayers codifies the segmentation strategy used across the engine, ensuring consistent interpretation of frame indices. Centralizing the layer size and the mapping logic prevents scattered magic numbers and makes the relationship between a frame index and its layer explicit. The Of method yields a FrameLayer value by dividing the index by FramesPerLayer, so callers should ensure the input is within the valid total range; otherwise the resulting FrameLayer may reference an undefined or out-of-range value. Range provides the inclusive Start/End bounds for a layer, which is convenient for loops that process all frames within that layer.
 
 ## Notes
-- No input validation; negative or out-of-range frameIndex values can yield undefined FrameLayer values when casting, and Range may return invalid bounds for such inputs.
-- If the total number of frames changes, update FramesPerLayer and LayerCount accordingly, or else Range results may refer to non-existent frames.
+- Input validation: Of does not perform bounds checks; callers must ensure 0 <= frameIndex < LayerCount * FramesPerLayer.
+- Inclusive range: Range returns (start, end) with end = start + FramesPerLayer - 1; loops should use <= End or adapt to the inclusive range.
+- Maintenance: If FramesPerLayer or LayerCount is changed, adjust dependent code accordingly; keeping these in one place reduces drift.
 
 ---
 
@@ -44,19 +45,19 @@ public enum FrameLayer
 ```
 
 
-FrameLayer is an enum that partitions the 64-frame timeline into four conceptual layers: DnaCore for immutable identity, StableTraits for long-term preferences, Context for medium-term accumulated reactions, and LiveState for the current emotional state recalculated each turn. The layer corresponding to a given frame index is computed as (index / 16) cast to FrameLayer. This abstraction lets callers write layer-aware logic without referencing exact frame ranges, enabling clearer separation of concerns and efficient, layer-specific processing.
+FrameLayer is an enum that categorizes the 64-frame timeline into four conceptual layers: DnaCore (immutable identity), StableTraits (long-term preferences), Context (medium-term reactions), and LiveState (current state). The layer for a given frame index is computed as (index / 16) cast to FrameLayer, enabling layer-aware logic without hard-coding index ranges.
 
 ## Remarks
-FrameLayer serves as a lightweight categorization that underpins state management in the system. It clarifies responsibilities across components by ensuring operations target the correct abstraction (e.g., avoiding mutation of DnaCore during normal updates, isolating long-term drift from immediate state). It also supports optimizations by allowing batch work per layer.
+This abstraction captures how different aspects of an entity evolve on different timescales. By mapping a frame to its layer, systems can decide how aggressively to update, cache, or serialize data, and can keep responsibilities separated (identity vs. traits vs. context vs. live state). It also provides a simple, readable way to reason about behavior that should only apply to specific portions of the 64-frame window.
 
 ## Example
 ```csharp
-int frameIndex = 33;
-FrameLayer layer = (FrameLayer)(frameIndex / 16); // Context
+int frameIndex = 23;
+FrameLayer layer = (FrameLayer)(frameIndex / 16); // StableTraits
 ```
 
 ## Notes
-- Out-of-range safety: valid frame indices are 0..63. Values outside map to an enum value outside the defined set; callers should clamp/validate before casting.
-
+- Casting an arbitrary int to FrameLayer assumes the index is within 0..63; validate your input before casting.
+- The numeric values align with the four layers: DnaCore=0, StableTraits=1, Context=2, LiveState=3.
 
 ---

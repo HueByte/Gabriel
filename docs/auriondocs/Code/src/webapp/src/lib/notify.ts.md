@@ -29,15 +29,15 @@ export function formatError(e: unknown, fallback = 'Something went wrong.'): str
 **Returns:** `string`
 
 
-Formats a given error into a user-friendly string. It accepts any value as the first argument and a fallback message as the second; it returns a string representation suitable for display in the UI or logs. The function applies specialized formatting for ApiError by preferring body.detail, then body.title, and finally the error message; for standard Error instances it returns the error's message; and for any other input it falls back to the provided fallback.
+formatError converts different error shapes into a human-friendly message. It first tries to extract a detailed message from an ApiError's body (detail or title), then falls back to the Error's message, and finally returns the supplied fallback for non-errors.
 
 ## Remarks
-Acts as a small normalization layer for error handling. By centralizing the logic of how ApiError shapes are surfaced, it prevents leaking internal error structures and keeps error presentation consistent across the app. It relies on ApiError having a body with optional detail and title fields, and gracefully degrades to the error message or a fallback when those fields are absent.
+Centralizes error-to-string conversion used by UI code paths when displaying errors from API calls. The ApiError branch avoids exposing raw exception data and surfaces user-friendly details when available, while preserving the original message as a fallback. This function helps keep error messaging consistent across the web UI and reduces repetitive boilerplate in catch blocks.
 
 ## Notes
-- Non-Error inputs that are not ApiError will not yield their own message; the function falls back to the provided default in those cases.
-- The default fallback message is configurable via the second parameter; supply a localized string if needed.
-- When ApiError.body.detail or body.title are present, formatError uses those values in preference to e.message.
+- If e is an ApiError, the function looks for body.detail, then body.title, and returns the first present; if neither exists, it returns e.message.
+- If e is a plain Error, the function returns e.message.
+- For any other input, it returns the provided fallback string (default: 'Something went wrong.').
 
 ---
 
@@ -57,10 +57,14 @@ export const notifyError = (e: unknown, fallback?: string) => toast.error(format
 | `fallback` | `string` | — |
 
 
-notifyError is a concise wrapper that accepts an error value (unknown) and an optional fallback string, formats the error with formatError(e, fallback), and displays it via toast.error. Developers would reach for it when they need to surface a runtime error to users as a standardized toast notification, optionally providing a fallback message if the error lacks a user-friendly description. By funneling errors through a single path (formatError -> toast.error), it provides a consistent error presentation and reduces duplication across the codebase.
+notifyError is a small utility that formats any error value and displays it as an error toast. It accepts an unknown error and an optional fallback string, delegates the message creation to formatError, and then shows the result via toast.error.
 
 ## Remarks
-It acts as a centralized UX layer for error notifications: all error toasts pass through this function, enabling consistent styling and making it easier to adjust how errors are formatted and shown in one place.
+By centralizing error formatting and presentation, notifyError reduces duplication and enforces a consistent user experience for errors across the UI. It decouples the business logic from presentation details, so changes to formatting or the toast library can be applied in one place. This wrapper also makes testing easier by providing a single, predictable path from error input to user notification.
+
+## Notes
+- If formatError returns an empty string for some inputs, the toast might render an empty message; provide a fallback or ensure formatError always yields meaningful text.
+- This function is a UI-level concern and relies on toast and formatError being available in scope; ensure they are properly imported in the consuming module.
 
 ---
 
@@ -79,14 +83,19 @@ export const notifyInfo = (msg: string) => toast.info(msg)
 | `msg` | `string` | — |
 
 
-notifyInfo is a small wrapper around the toast.info call that displays an informational toast with the provided message. Use it when you want to surface a non-critical, user-facing info notification in a consistent way without sprinkling toast.info calls all over the codebase.
+notifyInfo is a small helper that shows an informational toast with the provided message. It delegates to toast.info, providing a single entry point for info-level notifications so you can swap the underlying library or adjust defaults in one place without touching individual call sites.
 
 ## Remarks
-Centralizes informational notifications behind a stable API, making it easier to swap the underlying notification library or apply consistent defaults later (such as autoClose duration or position). It communicates intent clearly at the call site, differentiating info toasts from success or error toasts. This can simplify testing by allowing a mock or stub for info toasts and reduces boilerplate in call sites.
+It abstracts the toast.info call to centralize how informational messages are presented, promoting a consistent user experience. If you later replace the toast library or want to adjust presentation details (such as duration or position), you only need to modify this function.
+
+## Example
+```typescript
+notifyInfo("Data saved successfully");
+```
 
 ## Notes
-- Ensure a toast container is mounted in the app; otherwise calls to notifyInfo will not render anything.
-- If you plan to change defaults (e.g., duration, position) across all info toasts, prefer updating this wrapper rather than individual call sites.
+- Make sure a ToastContainer (or equivalent) is mounted in your app; otherwise the toast won't render.
+- The function returns the result of toast.info(msg); you can capture and use it to dismiss or update the toast if needed, otherwise ignore it.
 
 ---
 
@@ -105,18 +114,12 @@ export const notifySuccess = (msg: string) => toast.success(msg)
 | `msg` | `string` | — |
 
 
-notifySuccess is a small, dedicated wrapper around toast.success that displays a success message to the user. Use it when you want a consistent, semantic way to show success feedback instead of calling toast.success(msg) at every call site.
+NotifySuccess is a tiny wrapper around the toast library's success notification. It takes a message string and delegates to toast.success(msg) to display a standardized success toast to the user. Use this helper at call sites to keep success notifications consistent and to centralize any future changes to how success toasts are shown.
 
 ## Remarks
-This wrapper centralizes success notification concerns, enabling future changes to the underlying notification mechanism without touching call sites. By providing a stable API surface, it helps maintain UX consistency and simplifies testing since you can mock or stub this single function. It also makes it easier to apply global defaults (such as auto-close duration or position) from a single place if you later refactor the library usage. The wrapper exists to decouple business logic from presentation details and to provide a single point of change for success-toasts.
-
-## Example
-```typescript
-notifySuccess('Data saved successfully');
-```
+This abstraction centralizes usage of success toasts, making it easier to swap the toast implementation or apply consistent styling, duration, or behavior across the app. It also clarifies intent at call sites by naming the action as a success notification rather than directly calling the underlying toast API.
 
 ## Notes
-- Ensure the toast container (or equivalent) is rendered in the app; otherwise, the toast will not appear.
-- This function forwards the message to the underlying library unchanged. For localization or message normalization, consider translating before calling this wrapper or wrapping it with your i18n layer.
+- The wrapper currently forwards only the message and does not expose options for configuring duration, position, or styling. If you need richer control, extend the wrapper or call the underlying API directly.
 
 ---

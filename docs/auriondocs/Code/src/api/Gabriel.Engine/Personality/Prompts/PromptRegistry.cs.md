@@ -8,18 +8,14 @@ public sealed class PromptRegistry : IPromptRegistry
 ```
 
 
-PromptRegistry is a sealed class that implements IPromptRegistry and acts as the centralized lookup for prompt fragments. It constructs a read-only dictionary mapping each PromptKey to its corresponding Fragments.* string, establishing a single source of truth used when assembling prompts. Use Get with a key to retrieve the fragment; if the key isn't registered, a KeyNotFoundException is thrown with guidance to wire the missing key in the constructor.
+PromptRegistry is the central lookup that maps a PromptKey to its corresponding prompt fragment string. Built once in the constructor as a read-only dictionary, it exposes Get(string key) to retrieve the fragment for a given key, and throws a clear KeyNotFoundException when a key isn’t registered.
 
 ## Remarks
-By decoupling keys from literal text, the registry makes it easy to evolve prompts without scattering strings across call sites. It enforces a strict one-to-one mapping between a PromptKey and a Fragment, ensuring consistent prompt assembly across personas and modes. The three edits described in the inline comments—adding a Fragments.* constant, adding a PromptKey.*, and wiring the mapping—are the intended extension pattern.
 
-## Example
-```csharp
-var registry = new PromptRegistry();
-string fragment = registry.Get(PromptKey.PersonaMemory);
-```
+By decoupling keys from fragment values, the registry provides a stable abstraction for selecting prompt content across personas and modes without scattering literal fragments throughout the codebase. The wiring is designed to be updated in lockstep: add a Fragments.* constant, a PromptKey.* constant, and an entry in the dictionary; the comments in the source remind developers of this coordination. After construction, the mapping is immutable, making concurrent reads safe and predictable.
 
 ## Notes
-- Access is via exact keys; missing entries throw KeyNotFoundException with guidance to register it.
-- The dictionary uses StringComparer.Ordinal, so keys are case-sensitive.
-- To add a new prompt, follow the three-step process described in the code comments (add a Fragments.* constant, add a PromptKey.* constant, and wire the mapping in the constructor).
+
+- Unknown key yields a KeyNotFoundException with guidance on registration.
+- Adding new mappings requires coordinated edits to Fragments.*, PromptKey.* and the dictionary in PromptRegistry (as described by the code comments).
+- The registry uses StringComparer.Ordinal, so keys are matched case-sensitively; ensure consistent definitions in PromptKey.

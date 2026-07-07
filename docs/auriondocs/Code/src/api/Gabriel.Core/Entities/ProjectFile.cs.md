@@ -8,20 +8,12 @@ public class ProjectFile
 ```
 
 
-ProjectFile represents metadata about a file uploaded to a project; the bytes themselves reside on disk. It captures Id, ProjectId, Name, RelativePath, SizeBytes, ContentType, and UploadedAt, and is created through the factory method to enforce invariants.
+Represents metadata for a file uploaded to a project; the actual bytes live on disk at a project-scoped path, while this object stores only the descriptive metadata. Use ProjectFile.Create to construct a valid instance, which enforces required inputs (ProjectId non-empty, Name non-empty, RelativePath non-empty, SizeBytes non-negative) and normalizes values (Name trimmed, RelativePath uses forward slashes) and applies a default ContentType when needed.
 
 ## Remarks
-ProjectFile serves as a stable, immutable record of a file's metadata within a project. It decouples the storage of the actual file contents from the metadata, enabling reliable tracking, auditing, and path resolution under the project root. The factory method enforces essential invariants (non-empty project identifier, name, and relative path; non-negative size) and normalizes inputs (RelativePath uses forward slashes, Name is trimmed). Because properties have private setters, the instance becomes effectively immutable after creation, which helps preserve consistency across the system when metadata is persisted alongside the physical file.
-
-## Example
-```csharp
-// Most common usage: create a metadata entry for an uploaded file
-var projectId = Guid.NewGuid();
-var file = ProjectFile.Create(projectId, "report.pdf", "docs/reports/2026/report.pdf", 204800, "application/pdf");
-```
+ProjectFile is a small, immutable-like value object that records what you need to know about a file without holding onto its bytes. Id is generated automatically at instantiation and UploadedAt defaults to UTC now; the constructor is private to require creation via Create, which preserves invariants. By separating metadata from the on-disk content, this type supports efficient listing, auditing, and retrieval of file information, while coordinating with the storage layer that manages the actual bytes.
 
 ## Notes
-- This class holds metadata only; the actual file bytes are not stored here. To access the content, read from the disk location derived from RelativePath within the project root.
-- The Create method validates inputs (e.g., ProjectId cannot be empty, Name/RelativePath cannot be whitespace, SizeBytes must be non-negative) to uphold invariants at the domain boundary.
-- RelativePath normalization replaces backslashes with forward slashes to ensure consistent storage and lookup.
-- Id is generated automatically when the instance is created; callers cannot supply or modify it, reinforcing immutability of the metadata object.
+- Create validates inputs and will throw ArgumentException when ProjectId is Guid.Empty, Name or RelativePath are blank, or SizeBytes is negative.
+- RelativePath normalization converts backslashes to forward slashes to ensure consistent storage across platforms.
+- ContentType defaults to application/octet-stream when not provided.

@@ -14,11 +14,12 @@ public record UpdateConversationRequest(string Title)
 | `Title` | `string` | — |
 
 
-Represents the payload sent to update a conversation's title in the Gabriel API. This immutable, single-field record wraps the new title value as a value object suitable for serialization in the request body. Create a new instance with the desired title and pass it to the update operation when renaming a conversation.
+Represents the payload for updating a conversation's Title. This record is a simple, immutable data carrier used by the API to convey the new Title for a conversation. When performing an update, instantiate UpdateConversationRequest with the desired Title and pass it to the update operation, rather than constructing ad-hoc payloads.
 
 ## Remarks
-Because it's a record, it provides value-based equality and immutability, which makes it safe to reuse and compare as a request payload. It encapsulates the update of a conversation's title into a focused contract, decoupled from other conversation properties, which simplifies API surface and validation.
+Using a record provides immutability and value-based equality, making UpdateConversationRequest a safe carrier of the new Title across boundaries. This abstraction centralizes the update contract so future fields can be added without breaking existing call sites, and it pairs well with serialization layers on API boundaries.
 
-## Notes
-- The Title parameter is required; the positional constructor enforces providing a non-null string for the new title.
-- The record is immutable; to change the title, instantiate a new UpdateConversationRequest rather than mutating an existing instance.
+## Example
+```csharp
+var request = new UpdateConversationRequest("New Title");
+```

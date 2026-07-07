@@ -8,12 +8,14 @@ public sealed class ReadProjectFileTool : ITool
 ```
 
 
-Fetches the text contents of a file from the current project associated with this conversation. It accepts either the file's GUID (as shown by list_project_files) or its filename (case-insensitive). Only text-like files (code, Markdown, JSON, plain text, etc.) are readable; binary formats are refused to avoid dumping non-text data into the chat. The output is bounded by a default maximum of about 20,000 characters and can be increased up to 80,000 characters via the max_bytes parameter; when provided, max_bytes is clamped to the range [1024, 80000]. If a filename is supplied, the tool resolves it to a GUID by listing the project’s files and matching by name. If resolution fails or the file cannot be read, the tool returns a descriptive error string. 
+ReadProjectFileTool reads the textual contents of a file from the current project's scope in this conversation. It accepts either the file's GUID (from list_project_files) or a filename (case-insensitive). It only reads text-like files (code, Markdown, JSON, plain text, etc.) and refuses binary content to avoid dumping binary data into the chat; the output is capped by default at ~20,000 characters, with an option to raise this up to 80,000 via max_bytes.
 
 ## Remarks
-This abstraction centralizes access to project files for conversational tooling, encapsulating filename-to-GUID resolution and text extraction while enforcing safe, predictable boundaries. It relies on the current conversation being attached to a project, and on the project’s file service to perform the read, which helps keep file access consistent across tools.
+By centralizing the file-reading logic behind a single ITool, ReadProjectFileTool encapsulates the common concerns of project-scoped I/O: validation of the project context, resolution of the target file (by GUID or by filename), and user-friendly error reporting instead of exceptions. When a filename is provided, the tool performs an extra lookup (list_project_files) to resolve it to a GUID, trading a small extra cost for improved resilience when only the filename is on hand. This tool relies on the project context to enforce scope and on the underlying IProjectFileService to perform the actual read, keeping responsibilities clean and testable.
 
 ## Notes
-- If multiple files share the same name (case-insensitive), the first match found is used, which may be surprising in edge cases with duplicates.
-- The tool communicates failures via error strings rather than exceptions; callers should handle these as runtime errors in the dialogue flow.
-- A valid project context is required; calls without an attached project will return an explicit error.
+- The conversation must be attached to a project; otherwise the tool returns an error.
+- Reading a binary file yields a specific error to prevent dumping non-text bytes.
+- If you pass a filename, expect an additional lookup step to resolve it to the file's GUID.
+- max_bytes defaults to 20000 and is clamped to the range [1024, 80000].
+- If the read operation fails, the error includes the underlying exception message for troubleshooting.

@@ -8,25 +8,11 @@ public interface IConversationRepository
 ```
 
 
-IConversationRepository provides tenant-scoped data access for Conversation aggregates, exposing read, list, and write operations to create, update, and delete conversations and their messages. It enforces ownership boundaries by requiring user context on reads, and it centralizes persistence concerns behind a repository boundary rather than exposing raw EF calls.
+IConversationRepository defines a tenant-aware persistence contract for conversations and their messages. Reads are scoped to the owner and exposed via GetByIdAsync and GetByIdWithMessagesAsync, while ListAsync enumerates a user’s conversations with an optional project filter. Writes do not take a userId parameter because ownership lives on the Conversation entity itself, and EF tracks changes on that entity after it has been loaded in a user-scoped read. This interface isolates persistence concerns from domain logic and provides explicit methods for adding, updating, and removing conversations and their messages.
 
 ## Remarks
-By centralizing data access, this interface enforces the ownership model at the boundary between domain logic and persistence. The separate GetByIdAsync and GetByIdWithMessagesAsync methods make it explicit whether message history is loaded with the conversation. AddAsync persists new Conversation entities, while AddMessage supports inserting a Message tied to an existing Conversation. RemoveMessages provides explicit deletion semantics to ensure the EF change tracker marks removals reliably across provider configurations.
-
-## Example
-```csharp
-// Example: load a conversation with its messages for the current user
-var convo = await repo.GetByIdWithMessagesAsync(convoId, userId, ct);
-
-// Example: list conversations for a user (optionally filtered by project)
-var list = await repo.ListAsync(userId, projectId, ct);
-
-// Example: create and persist a new conversation (ownership modeled on the entity itself)
-var newConvo = new Conversation { /* initialize properties, including ownership */ };
-await repo.AddAsync(newConvo, ct);
-```
+This abstraction centralizes tenant isolation rules and the lifecycle of messages attached to conversations. It coordinates with EF’s change-tracking and enforces that deletions are performed explicitly through RemoveMessages to avoid fragile orphan-removal semantics across EF configurations.
 
 ## Notes
-- Reads are tenant-scoped; always supply userId to prevent cross-tenant data exposure.
-- Update/Remove typically require the entity to have been loaded via a user-scoped read to ensure ownership is respected.
-- RemoveMessages expects the exact set of messages to delete; use carefully to avoid unintended deletions.
+- Be mindful that AddAsync does not take a userId parameter; ensure the Conversation entity’s UserId is set to the owning user before calling AddAsync.
+- RemoveMessages requires an explicit collection of Message instances to delete; relying on orphan-removal from navigation properties can be fragile across EF versions/configurations.

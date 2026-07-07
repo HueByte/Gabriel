@@ -8,31 +8,17 @@ public sealed class HttpUrlFetcher : IUrlFetcher
 ```
 
 
-Fetches a remote URL into a cleaned, size-bounded plain-text result while protecting the host from SSRF-style requests. Use this implementation of IUrlFetcher when you need a safe, agent-friendly fetcher that (1) refuses non-http(s) schemes and hosts that resolve to loopback/link-local/private ranges, (2) bounds the number of bytes read from the wire and the number of characters returned, and (3) converts HTML into readable text by removing page chrome (scripts, styles, nav/header/footer), stripping tags, decoding entities, and collapsing whitespace. Truncation is explicit (the returned UrlFetchResult.Truncated flag will be set and the content will include a "…[truncated]" marker).
+Fetches an HTTP(S) URL and returns a cleaned, text-first representation suitable for feeding into downstream models. Use this when you need a web fetcher that defends against SSRF, bounds response size, converts HTML to readable text (stripping scripts/styles/navigation/footer and collapsing whitespace), and reports truncation instead of silently dropping content.
 
 ## Remarks
-This class is a defensive wrapper around HttpClient intended for use by agents or services that feed web content into language models or other consumers that require compact, readable text. It implements IUrlFetcher and relies on an IHttpClientFactory; the named client constant HttpClientName ("WebFetch") is used when creating the HttpClient instance, so configure that client in DI if you need custom timeouts, handlers, or proxy settings. The fetcher validates host reachability (to block requests that resolve to local or private addresses), enforces a maximum byte read from the network and a maximum number of characters returned, and rejects non-text Content-Types.
-
-## Example
-```csharp
-// Register the named client (example in ASP.NET Core DI)
-services.AddHttpClient(HttpUrlFetcher.HttpClientName)
-        .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
-
-// Resolve and use (pseudo-code)
-var fetcher = new HttpUrlFetcher(httpFactory, logger);
-var result = await fetcher.FetchAsync("https://example.com/article", CancellationToken.None);
-if (result.Truncated)
-{
-    Console.WriteLine("Content was truncated; only the first portion was returned.");
-}
-Console.WriteLine($"Final URL: {result.FinalUrl}");
-Console.WriteLine(result.Content);
-```
+This implementation wraps IHttpClientFactory (it expects a named client with the constant name "WebFetch") and is intentionally conservative: it only allows http/https schemes, validates hosts to avoid loopback/link-local/RFC1918 addresses (to reduce SSRF risk), refuses non-text Content-Types, and bounds both the bytes read from the wire and the characters returned. HTML content is passed through an HTML-cleaning routine (removes chrome-like blocks, strips tags, decodes entities, collapses whitespace) so callers receive the readable body rather than full page markup.
 
 ## Notes
-- The method throws ArgumentException for non-absolute URLs or for schemes other than http/https.
-- Non-success HTTP status codes cause an HttpRequestException, and non-text Content-Types cause an InvalidOperationException.
-- Truncation can occur for two reasons: the fetch reached the MaxBytesToRead limit while reading the response stream, or the cleaned text exceeded MaxContentChars. The UrlFetchResult.Truncated flag is set if either occurred; ContentLength is the length of the cleaned (possibly truncated) string.
-- Character decoding uses the response Content-Type charset when present; on decoding errors it falls back to UTF-8.
-- Because a named HttpClient is used (HttpUrlFetcher.HttpClientName), consumers should register/configure that named client if they need specific handlers, proxy configuration, or timeouts.
+- Input validation: throws ArgumentException if the URL is not an absolute URI or if the scheme is not http/https.
+- Network/result errors: non-success HTTP status codes surface as HttpRequestException; non-text Content-Type values cause an InvalidOperationException.
+- Size limits: reads at most 1_500_000 bytes from the network (MaxBytesToRead) and truncates the returned text to 12_000 characters (MaxContentChars). Truncation is indicated in the UrlFetchResult.Truncated flag; character truncation appends "\n…[truncated]" to the content.
+- Encoding: uses the response Content-Type charset when available; if decoding fails the code falls back to UTF-8.
+- FinalUrl: the returned FinalUrl prefers response.RequestMessage?.RequestUri if available (followed redirects are reflected there), otherwise the original URI is used.
+- Configuration: the class calls _httpFactory.CreateClient(HttpClientName) — the caller must register a named HttpClient with the name "WebFetch" if custom HTTP settings (timeouts, handlers, DNS policies) are required.
+- Cancellation: the provided CancellationToken is passed through network and host-validation operations; callers should supply one to allow timely shutdown.
+

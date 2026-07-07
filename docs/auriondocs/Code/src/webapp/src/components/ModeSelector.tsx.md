@@ -18,15 +18,14 @@ interface ModeSelectorProps
 ```
 
 
-ModeSelectorProps defines the props expected by the ModeSelector component to manage a per-conversation mode setting. It includes a conversationId that scopes the setting, a value that is either GabrielMode or null (null indicates the default, treated as Chatty), an onChanged callback that is invoked with the next mode value when the user makes a selection (GabrielMode or null), and an optional disabled flag to render the control non-interactive. The initial value is sourced from ConversationResponse.mode on load.
+ModeSelectorProps defines the properties for the ModeSelector control in the web UI. It binds the selector to a specific conversation, exposes the current mode (GabrielMode or null for default), provides a callback to request changes, and supports disabling the control.
 
 ## Remarks
-ModeSelectorProps embodies a controlled component pattern: the parent owns the mode in state and passes it via value while updates flow back through onChanged. Using null to denote the default mode provides a clean reset path without introducing another sentinel value. By tying the value to a specific conversation through conversationId and initializing from ConversationResponse.mode, this component can be reused across chats while preserving the contextual mode.
+This interface enables the ModeSelector to be a controlled, stateless UI component. By passing the current value and an onChanged callback, the parent maintains authority over mode selection and can synchronize it with server data (e.g., via ConversationResponse on load). The conversationId ties the selection to a particular conversation context, allowing different conversations to have independent mode states while reusing the same component.
 
 ## Notes
-- Pass null to onChanged to reset to the default mode.
-- Ensure your consumer maps null to the default GabrielMode when storing state.
-- When disabled is true, avoid rendering interactive controls; onChanged should not be used to indicate intent.
+- Null value indicates the default mode (treated as Chatty); callers should handle null both for the value and for the next value in onChanged.
+
 
 ---
 
@@ -39,29 +38,30 @@ export function ModeSelector(
 ```
 
 
-ModeSelector is a React functional component that renders a control for selecting a mode associated with a particular conversation. It is designed to be controlled by its parent: the currently selected mode is supplied via value, and any user changes are reported back through onChanged. The conversationId prop ties the control to a specific conversation context, while disabled toggles interactivity.
+ModeSelector is a React functional component that renders a control for selecting the mode associated with a specific conversation. It takes a conversationId to scope the control to a particular conversation, a value representing the currently selected mode, an onChanged callback invoked with the new mode when the user makes a selection, and a disabled flag that renders the control in a non-interactive state when true.
 
 ## Remarks
-By encapsulating the mode-selection UI, ModeSelector promotes reuse across the app and keeps higher-level components focused on data flow rather than presentation. It defines a stable interface for mode values and their change semantics, making it easy to swap the underlying presentation (e.g., a dropdown, segmented control) without altering its callers. The prop contract implies that the parent owns the authoritative mode state and persists changes.
+By encapsulating mode presentation behind ModeSelector, the UI remains consistent across the app and any changes to how modes are displayed or validated can be localized here. It acts as a specialized presentation component that communicates user-initiated changes back to its parent via onChanged, while keeping the parent free from implementation details of the underlying control.
 
 ## Example
 ```typescript
-// Example usage of ModeSelector
-function ConversationToolbar({ conversation }) {
-  const [mode, setMode] = React.useState(conversation.mode);
+// Typical usage within a React component
+function ExampleUsage() {
+  const [mode, setMode] = useState<string>("default");
   return (
     <ModeSelector
-      conversationId={conversation.id}
+      conversationId="conv-42"
       value={mode}
-      onChanged={newMode => setMode(newMode)}
-      disabled={conversation.isArchived}
+      onChanged={setMode}
+      disabled={false}
     />
   );
 }
 ```
 
 ## Notes
-- The parent component owns the mode value; this control reflects that state via the value prop and reports changes through onChanged.
-- If the available mode options change, ensure the parent updates the value prop accordingly to keep the UI in sync.
+- Ensure the consumer provides valid mode values to avoid runtime errors.
+- If ModeSelector is disabled, onChanged should not be called.
+
 
 ---

@@ -17,11 +17,18 @@ public record SequenceCatalogResponse(
 | `Palettes` | `IReadOnlyList<string>` | — |
 
 
-SequenceCatalogResponse is a simple data transfer contract that exposes the authoritative lists of selectable avatar skin options. It provides two separate read-only collections: one for available pattern identifiers and one for available palette identifiers. Clients fetch this object to render the skin-picker UI and present valid options to users, while PATCH requests carry the chosen pattern and palette back to the server for validation and persistence on the entity. By using distinct string arrays rather than enums, the catalog can grow over time without forcing client regeneration, preserving backward compatibility as new identifiers are added.
+SequenceCatalogResponse represents the server-provided catalogs of selectable avatar appearance identifiers: one list of skin pattern identifiers and one list of palette identifiers. It is consumed by clients to render available options and by the server to validate and persist a user's chosen combination via PATCH endpoints; using separate string arrays rather than enums keeps the catalogs extensible without forcing client updates.
 
 ## Remarks
-The separation into two string lists decouples the client from a fixed, compile-time enum, enabling dynamic catalog updates driven by the server. This design ensures that validation and storage of a user’s selection occur against a single, authoritative source of truth and minimizes client-side coupling to server-side catalog evolution.
+This abstraction decouples the client UI from the actual catalog values, allowing the server to evolve the available patterns and palettes independently of clients. The two independent lists reflect orthogonal concerns—one for patterns, one for palettes—so UI scaffolding can present them separately. As a record, SequenceCatalogResponse provides immutable, value-based equality which helps with caching, comparison, and testing, while the server can rely on a stable shape for (de)serialization. Validation on the server side ensures that only identifiers from these catalogs are persisted on the entity, preserving data integrity.
+
+## Example
+```csharp
+var catalog = new SequenceCatalogResponse(
+    new[] { "Checker", "Striped", "Plain" },
+    new[] { "Ink", "Sunset" });
+```
 
 ## Notes
-- Return lists should be non-null (preferably empty) to simplify client handling and avoid null checks.
-- The client must treat these lists as the authoritative source for valid identifiers when showcasing options and validating PATCH payloads; changes to the catalog are reflected only when this symbol is refreshed from the API.
+- The properties are `IReadOnlyList<string>`, promoting immutability after construction.
+- Pass non-null lists; null values may lead to runtime exceptions. Represent empty catalogs with empty arrays/lists when appropriate.

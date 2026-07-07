@@ -8,26 +8,14 @@ public interface IChatProvider
 ```
 
 
-IChatProvider defines a streaming contract for chat providers that can yield incremental events to the agent loop. Implementations expose StreamAsync, which returns an async stream (IAsyncEnumerable) of ChatProviderEvent objects as history, tools, and a per-call modelName are processed. This enables incremental UI updates and responsive ReAct-style flows, since text deltas, tool results, and finish signals can be observed as they arrive. The provider is stateless with respect to the chosen model; the caller resolves the user’s PreferredModel (or the config default) to a concrete model name and passes it in per call.
+IChatProvider defines a streaming abstraction for LLM backends; implementors yield a sequence of ChatProviderEvent as the conversation unfolds, enabling incremental UI updates and ReAct-style tool integration. Model selection is performed per-call by passing a modelName, while the provider remains stateless with respect to the chosen model.
 
 ## Remarks
-By abstracting away the concrete provider from the agent orchestration, this interface enables easy swapping, testing, and mock implementations while keeping model selection at the call site. It also centralizes streaming semantics (how deltas and results are surfaced) so the rest of the system can react uniformly to provider events regardless of provider.
 
-## Example
-```csharp
-// Example: consuming streamed events from a provider
-IChatProvider provider = GetProvider("Mock");
-IReadOnlyList<ChatProviderMessage> history = GetHistory();
-IReadOnlyList<ToolDescriptor> tools = GetTools();
-string modelName = "gpt-4";
-
-await foreach (ChatProviderEvent ev in provider.StreamAsync(history, tools, modelName))
-{
-    // Handle ev (e.g., delta text, tool invocation, or completion)
-}
-```
+This interface separates the concerns of transport and orchestration: the provider handles streaming events from a given model, while the surrounding system supplies the conversation history and available tools, then reacts to events as they arrive. The Name property serves as a stable identifier for registry and user preferences, and Models exposes the catalog of models the provider can serve so the UI can present options. By keeping the provider stateless regarding model choice, per-call decisions can be made by the caller (e.g., based on user preferences or config) without requiring the provider to manage per-model state.
 
 ## Notes
-- Honor CancellationToken; implementers should stop streaming when ct is canceled.
-- Ensure modelName corresponds to a model in provider.Models; mismatches should be handled gracefully.
-- Providers with an empty Models collection should still be implemented gracefully; the UI should not present such providers in the model picker.
+
+- Use await foreach to consume the `IAsyncEnumerable<ChatProviderEvent>` to keep the UI responsive; respect CancellationToken to cancel streaming when the user navigates away or the operation is aborted.
+- Validate modelName against provider.Models before passing it in; mismatch may lead to errors or degraded behavior, depending on the provider implementation.
+- Remember that IChatProvider is stateless with respect to model selection, so each StreamAsync call is independent with respect to the chosen model; keep any cross-call state in the surrounding orchestration layer if needed.

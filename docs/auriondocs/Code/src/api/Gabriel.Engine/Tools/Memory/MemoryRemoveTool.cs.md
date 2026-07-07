@@ -8,23 +8,12 @@ public sealed class MemoryRemoveTool : ITool
 ```
 
 
-MemoryRemoveTool deletes a saved memory entry by its kebab-case name. When a user asks to forget something or when a saved memory is found to be stale, use this tool to remove it. It supports two scopes: user (memories that apply across every project) and project (memories saved for the current project). For project-scoped deletions, the tool reads the current conversation's project context and then delegates the removal to the memory store. The call returns a friendly message indicating whether a memory was removed or none was found.
+Deletes a previously saved memory entry by its kebab-case name, scoped to either user-wide memories or the current project. It is the inverse of memory_save: use it when a user asks to forget something or when a saved memory turns out to be stale or incorrect. The lookup is by a (scope, name) pair, where the name is the kebab-case slug reported by memory_list results.
 
 ## Remarks
-MemoryRemoveTool encapsulates the deletion of memories behind a simple, scope-aware interface. By decoupling the memory store (IMemoryService) from how the command is invoked (ITool), it enables forgetting to be driven by higher-level user intents while preserving project scoping rules via the execution context. This separation also ensures error conditions (such as attempting project-scoped removal when no project is attached) are surfaced as clear, actionable messages rather than exceptions.
-
-## Example
-```csharp
-// Remove a user-scoped memory named "my-memory"
-var json = "{\"scope\":\"user\",\"name\":\"my-memory\"}";
-var result = await memoryRemoveTool.ExecuteAsync(json, CancellationToken.None);
-
-// Remove a project-scoped memory named "weekly-standup" (requires an attached project in context)
-var json2 = "{\"scope\":\"project\",\"name\":\"weekly-standup\"}";
-var result2 = await memoryRemoveTool.ExecuteAsync(json2, cancellationToken);
-```
+MemoryRemoveTool encapsulates the deletion operation behind the ITool contract, relying on IMemoryService to perform the removal and on IToolExecutionContext to determine the applicable project scope. This abstraction centralizes memory lifecycle management behind a single operation that can be invoked from user-facing commands. The human-friendly returned string provides a clear signal to the user about whether the entry was removed or not found.
 
 ## Notes
-- The command takes two JSON properties: scope ("user" or "project") and name (the kebab-case slug of the entry to remove).
-- If scope is "project" but the current conversation isn’t attached to a project, the tool returns an error message instead of performing deletion.
-- A non-empty name is required; empty or whitespace-only values yield an error response.
+- Returns a user-friendly message indicating removal or absence of a matching memory.
+- If scope = "project" but there is no attached project, an error is produced.
+- The name must be non-empty; otherwise, an error is returned.

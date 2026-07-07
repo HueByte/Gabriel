@@ -8,23 +8,11 @@ export function ProtectedRoute()
 ```
 
 
-ProtectedRoute is a route-guard component for React Router that ensures only authenticated users can access its nested routes. While the authentication state is determining the current user, it renders a loading indicator; if the user is not authenticated, it redirects to the login page while preserving the original destination; otherwise it renders the nested routes via Outlet.
+ProtectedRoute is a small React component that guards nested routes by consulting the authentication state. It reads the current user from the authentication context via useAuth and the current location via useLocation to enable post-login redirects. When the authentication state is still loading (user is undefined), it renders a lightweight loading indicator. If the user is explicitly unauthenticated (user is null), it redirects to the login page with replace and passes the original location in state so the user can be returned after login. When a valid user is present, it renders an Outlet to render the guarded child routes. Use ProtectedRoute to wrap routes that require authentication, instead of sprinkling inline guards across pages.
 
 ## Remarks
-ProtectedRoute centralizes authentication checks for a group of routes, so individual pages don't need to implement their own redirects. It relies on a three-state pattern from useAuth: undefined (loading), null (not authenticated), and a user object (authenticated), and it uses React Router v6's Navigate and Outlet to perform redirect and render children. Use it by wrapping a set of protected routes in the Route tree to apply the guard at the group level.
-
-## Example
-```typescript
-// Example usage with React Router v6
-<Routes>
-  <Route element={<ProtectedRoute />}>
-    <Route path="/dashboard" element={<Dashboard />} />
-    <Route path="/settings" element={<Settings />} />
-  </Route>
-  <Route path="/login" element={<Login />} />
-</Routes>
-```
+ProtectedRoute centralizes the authentication gating for a subtree of routes, decoupling page components from routing concerns. It ensures a consistent UX for unauthenticated access by redirecting to login and preserving the destination in state. The useLocation-based state payload enables a smooth return flow after successful login, while the replace navigation avoids polluting the browser history with intermediate login steps.
 
 ## Notes
-- The loading state depends on useAuth returning undefined during the auth check; if you always know the user synchronously, the loading branch may render only briefly or not at all.
-- The redirect to /login preserves the original location in state.from so the app can navigate back after login.
+- The loading UI uses a CSS class named auth-loading; adjust styling to fit your app's theme.
+- The component relies on three distinct authentication states: undefined (loading), null (not authenticated), and a user object (authenticated); if the auth hook returns a different value, behavior should be validated.

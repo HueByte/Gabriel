@@ -8,12 +8,28 @@ public class JwtOptions : IConfigSection<JwtOptions>
 ```
 
 
-JwtOptions is the configuration section that groups all JWT-related settings used to issue and validate tokens; it centralizes issuer, audience, signing key, and token lifetimes. The IsConfigured property signals whether a valid 32+ character SigningKey has been provided, guiding startup logic to enable or skip JWT-based authentication.
+JwtOptions is a configuration container for JWT-based authentication. It groups issuer, audience, signing key, and token lifetimes used when issuing and validating HS256-signed tokens. Implemented as [`IConfigSection<JwtOptions>`](IConfigSection.cs.md), it is designed to be bound from a configuration source (the Jwt section) and then consumed by your JWT token generator/validator. The IsConfigured property guards against using the signing key unless it is present and long enough (at least 32 characters).
 
 ## Remarks
-JwtOptions centralizes JWT policy in a single, strongly-typed object, simplifying how the rest of the system reads token settings. By exposing a simple IsConfigured flag, it helps startup logic decide whether JWT-based authentication should be enabled. The defaults provide baseline values for issuer, audience, and token lifetimes, while the signing key constraint ensures a minimum security level for HS256.
+JwtOptions centralizes JWT configuration in one place, reducing scattered configuration and magic values. It leverages the IsConfigured flag to provide a quick readiness check before initializing token generation/validation. By modeling the options as a configuration section, it aligns with your app’s configuration binding strategies, making rotation or updates to lifetimes straightforward.
+
+## Example
+```csharp
+var options = new JwtOptions
+{
+    Issuer = "gabriel",
+    Audience = "gabriel",
+    SigningKey = "0123456789abcdef0123456789abcdef", // 32 chars
+    AccessTokenMinutes = 15,
+    RefreshTokenDays = 30
+};
+
+if (options.IsConfigured)
+{
+    // Use options with your JWT signing/validation logic
+}
+```
 
 ## Notes
-- SigningKey must be loaded from a secure secret store (e.g., Infisical JWT__SIGNINGKEY) or user-secrets (Jwt:SigningKey); otherwise IsConfigured will be false.
-- Avoid exposing the SigningKey in logs or error messages; rely on IsConfigured to indicate readiness instead of printing the key.
-- If you rotate the signing key, update the configuration and re-check IsConfigured to ensure the change is picked up at startup.
+- SigningKey must be at least 32 characters; IsConfigured will be false otherwise.
+- Store SigningKey securely (environment variables, user secrets) and avoid hard-coding in source.

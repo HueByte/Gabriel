@@ -11,12 +11,12 @@ public class ProjectFilesController : ControllerBase
 ```
 
 
-ProjectFilesController exposes a RESTful API surface for managing files associated with a specific project. It provides endpoints to list all files for a project, download an individual file, upload a new file via multipart/form-data (single file), and delete a file. The controller delegates storage and retrieval to IProjectFileService and is secured with authorization.
+ProjectFilesController exposes a RESTful API surface to list, download, upload, and delete files tied to a specific project. It delegates the actual storage operations to IProjectFileService and maps results to ProjectFileResponse, returning appropriate HTTP statuses and streaming content for downloads.
 
 ## Remarks
-The controller concentrates HTTP concerns (routing, model binding, response codes) and defers business logic to the service, keeping concerns separated. It streams file downloads via FileStreamResult and uses CreatedAtAction to supply a link to the uploaded file, emphasizing a discoverable workflow for clients. IFormFile binding is automatic under ApiController, so no FromForm attribute is required, which keeps runtime binding and OpenAPI generation in sync.
+ProjectFilesController serves as the API boundary between HTTP clients and the underlying file-domain logic. It is secured with ApiController and Authorize, and its routes are scoped under the project to ensure all file actions occur within the correct project context. Downloads use FileStreamResult to stream content and set the download name from metadata; uploads perform a single-file multipart upload with a pragmatic size limit and return a CreatedAtAction pointing to the downloadable endpoint. The IFormFile parameter for Upload is bound automatically by the framework due to ApiController, so avoid adding an explicit FromForm attribute as Swashbuckle/OpenAPI generation expects; this preserves both runtime binding and OpenAPI contract.
 
 ## Notes
-- The Upload action enforces a 50 MB limit via RequestSizeLimit; adjust as needed for larger files or different environments.
-- The FileStreamResult ensures the underlying stream is disposed after the response. The code uses await using to dispose the input stream promptly; do not wrap the stream disposal manually.
-- Ensure IProjectFileService is registered in the DI container and implements the expected operations (ListAsync, OpenAsync, UploadAsync, DeleteAsync) for this controller to function correctly.
+- Using Upload binds a non-empty IFormFile named `file` via multipart/form-data; the endpoint will respond with 400 Bad Request if the file is missing or empty and 201 Created for successful uploads.
+- The POST Upload endpoint applies a 50 MB request-size cap as a defensive boundary against oversized payloads.
+- For downloads, the underlying content stream is disposed by FileStreamResult after the response is written; do not dispose it manually in the controller.

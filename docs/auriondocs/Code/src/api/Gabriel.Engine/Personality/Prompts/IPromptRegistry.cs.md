@@ -8,11 +8,22 @@ public interface IPromptRegistry
 ```
 
 
-Provides read-only access to named prompt fragments that feed the system prompt. By exposing Get(string key), the interface decouples the storage of those fragments from the consumers that compose the system prompt. Today fragments live as const strings in Fragments.* partials, but the shape is intentionally storage-agnostic to accommodate embedded resources or external markdown files if needed later. Fragments may contain placeholders (e.g. `{name}`); the responsibility for substituting those tokens lies with the caller, keeping the registry itself parameter-free and side-effect-free.
+IPromptRegistry provides read-only access to named prompt fragments and decouples prompt storage from consumers. Use Get to fetch a template by key at runtime, rather than embedding strings or coupling to a specific Fragments implementation.
 
 ## Remarks
-Architecturally, IPromptRegistry defines a clean boundary between what prompts exist and how they are retrieved. It enables swapping storage strategies without touching prompt-using code, facilitating testing with mock registries and future extensions to resource types (embedded, file-based, or remote). By treating prompt fragments as opaque strings retrieved by key, it avoids leaking storage details into consumers.
+
+By layering prompt access behind this minimal interface, the system can swap storage strategies (in-code constants, embedded resources, or external sources) without changing caller code. The interface also makes explicit that the registry supplies templates that may contain placeholders (e.g. `{name}`), leaving the substitution step to the caller. This separation helps keep concerns tidy and improves testability by allowing mock implementations.
+
+## Example
+
+```csharp
+// Example usage: retrieve a template and substitute tokens
+IPromptRegistry registry = someRegistryInstance; // implementation provided at runtime
+string template = registry.Get("PersonaFewShot");
+string result = template.Replace("{name}", "Ada");
+```
 
 ## Notes
-- Unknown-key behavior is not defined by the interface; implementations may throw, return an empty string, or provide a default. Callers should guard against missing keys and handle empty results gracefully.
-- This interface is intentionally read-only; to update prompts, swap the registry implementation or underlying storage rather than performing mutations at the consumer level.
+
+- The contract doesn't define behavior for missing keys; handle null/empty results accordingly.
+- Placeholders like `{name}` are not substituted automatically; you must perform replacement.

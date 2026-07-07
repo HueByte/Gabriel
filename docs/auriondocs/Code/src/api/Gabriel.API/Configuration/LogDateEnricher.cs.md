@@ -18,15 +18,17 @@ public sealed class LogDateEnricher : ILogEventEnricher
 ```
 
 
-Adds a LogDate property to every log event. The value is derived from the event's timestamp in local time and formatted as MM-dd-yyyy using invariant culture, then attached as a string property named `LogDate`. This enables downstream sinks (such as Serilog.Sinks.Map) to route each event to a file named after the date, since Serilog.Sinks.File is limited to its built-in yyyyMMdd rolling format.
+Adds a LogDate property to every Serilog log event by formatting the event's timestamp as MM-dd-yyyy and attaching it to the event so downstream sinks or routing rules can target a date-based file name. This enables routing through Serilog.Sinks.Map to place each event into a file named for the day, bypassing Serilog.Sinks.File's built-in yyyyMMdd rolling pattern.
 
 ## Remarks
-This enricher centralizes the date extraction logic and exposes a single LogDate property per event, enabling date-based routing across sinks without embedding date logic in each sink configuration. It uses AddOrUpdateProperty to assign the date, overwriting any existing LogDate for the event, which keeps the value consistent with the current event; the class is sealed to avoid inheritance-related changes to its behavior.
+
+Stateless enrichment: LogDateEnricher has no internal state and is safe to reuse across threads. It centralizes the date-formatting concern so any sink or routing that consumes the LogDate property can operate independently of how the date was computed. Using LocalDateTime ensures the date reflects the log event's local time; if you require a different time zone, adjust the timestamp source or format accordingly. The property name "LogDate" is conventional for downstream routing, so consider potential collisions with other enrichers that might emit the same property.
 
 ## Notes
-- The LogDate is derived from the event's LocalDateTime, so it reflects the host's time zone; for cross-location consistency, consider using UTC or a standardized time zone.
-- The property name is hard-coded as `LogDate`; changing it would require modifying the enricher and recompiling.
-- The enricher performs no shared-state mutation and is thread-safe with respect to Serilog's event pipeline.
+
+- Potential collision: If a log event already has a property named "LogDate", AddOrUpdateProperty will overwrite it. Ensure this name is not used by other enrichers or sinks in your pipeline.
+- Performance: The operation is lightweight (one string formatting per event) and incurs negligible overhead in typical logging rates.
+- Time zone behavior: The enricher uses LocalDateTime from the event timestamp; for a different temporal interpretation, adjust the source of the date or the format as needed.
 
 ---
 
@@ -39,14 +41,16 @@ public static class LogDateEnricherExtensions
 ```
 
 
-Extends Serilog's enrichment configuration with a named helper that wires the LogDateEnricher into the enrichment pipeline. WithLogDate() is surfaced as Enrich.WithLogDate() so it can be referenced by name from appsettings.Serilog.Enrich, enabling configuration-driven enrichment without hard-coding the enricher type. It delegates to enrich.`With<LogDateEnricher>`() and returns the fluent LoggerConfiguration to allow further configuration via the standard Serilog chaining.
+Provides a strongly-typed extension method, WithLogDate, on Serilog's LoggerEnrichmentConfiguration that wires the LogDateEnricher into the logging pipeline. This allows you to enable the log-date enrichment by name (e.g., in appsettings Serilog.Enrich) while preserving fluent chaining by returning a LoggerConfiguration.
 
 ## Remarks
-This extension encapsulates the concept of applying a log date field without leaking the concrete logic into consumer code. It provides a stable, discoverable entry point for enabling log-date enrichment from both code and configuration, and it participates in Serilog's established pattern of Enrich extensions, pairing the enrichment type with a name that can be used in settings.
+
+This method acts as a small façade that binds the concrete enricher type (LogDateEnricher) to Serilog's enrichment pipeline under a friendly name. By using WithLogDate rather than referencing LogDateEnricher directly, you gain a stable public API surface that can survive internal refactors. It relies on Serilog's generic Enrichment `With<T>` mechanism to instantiate the enrichment when configured, keeping configuration concerns decoupled from implementation details.
 
 ## Notes
-- Relies on a parameterless constructor or a resolvable factory for LogDateEnricher; otherwise registration may fail at runtime.
-- Calling WithLogDate() multiple times may register duplicate enrichers; prefer a single invocation per logger configuration.
-- If your configuration uses appsettings to enable enrichment, ensure the Serilog.Enrich path matches the recognized name (WithLogDate).
+
+- This is a thin wrapper around Serilog's Enrichment `With<T>` and does not modify enrichment behavior by itself; it simply exposes a named surface for the LogDateEnricher.
+- If you configure enrichments via appsettings, reference the name "WithLogDate" (as surfaced by this extension) in Serilog.Enrich to enable the date-enrichment without code changes.
+
 
 ---

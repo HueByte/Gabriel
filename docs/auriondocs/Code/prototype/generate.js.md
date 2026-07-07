@@ -18,22 +18,22 @@ function generate()
 ```
 
 
-Generates an animation by selecting a palette and a pattern, initializing the pattern with SIZE, and then sampling a value for every pixel in a SIZE-by-SIZE grid across FRAMES frames. It adds a small random noise term and applies an ambient floor to keep quiescent pixels above the gradient’s low color, then clamps every value to the 0–1 range. The function returns an object containing the frames and metadata describing the pattern, its parameters, and the noise/ambient settings.
+Generates a complete animation sequence by selecting a procedural pattern based on the command-line argument, initializes it for a SIZE-by-SIZE grid, and renders a series of frames. Each frame samples the pattern across the grid over time, adds subtle random noise, and blends in an ambient floor so the quiescent color sits on the gradient rather than at zero, finally clamping values to the [0, 1] range. The function returns both the frames and a meta descriptor (size, frame count, pattern id, params, noise amplitude, ambient, and palette) suitable for a playback pipeline that renders at 20 frames per second.
 
 ## Remarks
-Acts as the high-level generator that bridges pattern logic and the rendering pipeline. Patterns expose a sample function (t, x, y, params, time) to compute per-pixel intensity, while generate handles frame sequencing, time stepping, and normalization. This separation lets you swap patterns or palettes without touching rendering code.
+This function centralizes synthetic animation generation by tying pattern selection, per-pixel sampling, and post-processing (noise and ambient shading) into a cohesive data package. It delegates pattern-specific behavior to the pattern object via init and sample while handling frame timing and output structure, enabling downstream renderers to reproduce visuals without re-running the generation logic. Because the CLI argument selects the pattern, it is most commonly used in CLI-driven workflows where patterns are interchangable and metadata must accompany the frames for playback.
 
 ## Example
 ```javascript
-// Example: generate frames for the selected pattern and inspect metadata
-const result = generate();
-console.log(`Generated ${result.frames.length} frames (size ${result.meta.size}) using pattern ${result.meta.pattern}`);
+// Example: generate a dataset and inspect its metadata and frame count
+const data = generate();
+console.log(`Pattern: ${data.meta.pattern}, frames: ${data.frames.length}`);
 ```
 
 ## Notes
-- The per-pixel value is augmented with random noise via Math.random, so outputs are non-deterministic between runs unless the RNG is seeded.
-- The ambient floor and noise amplitude are chosen at invocation time; changing SIZE, FRAMES, or the pattern can lead to different frame characteristics.
-- This function relies on external helpers (pickPalette, pickPattern, rand) and constants (SIZE, FRAMES) defined elsewhere; ensure those are available in the environment where generate runs.
+- Outputs are non-deterministic across runs because Math.random() is used for noise; for reproducible results, replace Math.random with a seeded RNG.
+- The function relies on global constants SIZE and FRAMES and on CLI-driven pattern helpers (pickPattern, pickPalette). Ensure these exist in the runtime environment or the module's scope.
+- Ambient and noise ranges are hard-coded; tweaking them will directly affect the visual texture and baseline shading of all frames across the generated sequence.
 
 ---
 
@@ -53,19 +53,22 @@ function rand(min, max)
 | `max` | — | — |
 
 
-Generates a uniform random floating-point number in the inclusive-exclusive range [min, max) by scaling Math.random(). Call rand(min, max) when you need a quick, in-range value without pulling in a heavier RNG library or extra dependencies. If min equals max, the function returns that exact value.
+Generates a uniformly distributed floating-point number in the range [min, max) (or (max, min] if min > max) by scaling Math.random() to the provided interval. This tiny utility is handy whenever you need a quick, dependency-free random value within a numeric range, such as simulations, UI randomness, or sampling tasks.
 
 ## Remarks
-This tiny helper centralizes the common pattern of obtaining a random value within bounds. It relies on Math.random(), so its randomness is suitable for basic simulations and UI behavior but not for cryptographic purposes. The function does not validate inputs; callers should ensure min <= max (or be prepared for results outside that expectation). The lower bound is inclusive while the upper bound is exclusive.
+This function encapsulates the common formula for mapping a [0,1) random value to an arbitrary interval, making boundary behavior explicit at the call site and reducing duplicated math across the codebase. It also improves readability and reduces the risk of off-by-one mistakes by centralizing the range logic.
 
 ## Example
 ```javascript
-const x = rand(5, 10); // e.g., 7.6423
+// Common usage: random float in [min, max)
+const r = rand(2, 5);
+
+// Use for integers if needed:
+const intR = Math.floor(rand(2, 5)); // yields 2, 3, or 4
 ```
 
 ## Notes
-- If min or max are not numbers, the result may be NaN.
-- If max < min, the range is effectively reversed; pass in min <= max for predictable results.
-- Not suitable for cryptographic randomness; use Web Crypto API for security-sensitive needs.
+- Not suitable for cryptographic purposes; Math.random is not a cryptographically secure RNG.
+- If min > max, the interval is reversed (the result will lie in (max, min]). Consider normalizing inputs with a swap if you require min <= max.
 
 ---

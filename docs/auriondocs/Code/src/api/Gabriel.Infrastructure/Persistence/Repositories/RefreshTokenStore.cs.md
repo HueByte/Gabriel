@@ -8,28 +8,21 @@ public class RefreshTokenStore : IRefreshTokenStore
 ```
 
 
-RefreshTokenStore is a data-access class that implements IRefreshTokenStore and encapsulates EF Core operations for RefreshToken entities using AppDbContext. It exposes the minimal set of operations needed by the domain: locate a token by its hash, add a new token, and revoke all non-revoked tokens for a specific user. Use this store when you need to interact with refresh tokens from the persistence layer (instead of talking to DbContext directly), providing a single place for token-related queries and updates.
+RefreshTokenStore is a concrete EF Core-backed implementation of IRefreshTokenStore that persists and manages refresh tokens via AppDbContext. It exposes methods to locate a token by its hash, add new tokens, and revoke all active tokens for a specific user in a single, efficient operation. Use this class when you need durable, database-backed token lifecycle management rather than ad-hoc in-memory handling.
 
 ## Remarks
-
-By centralizing token persistence behind this repository, you gain testability and a clearer boundary between domain logic and data access. The RevokeAllForUserAsync method uses EF Core's bulk update (ExecuteUpdateAsync) to mark all active tokens for a user as revoked in a single database operation, avoiding loading tokens into memory. The timestamp uses UTC to avoid mixed timezones.
+This class centralizes token persistence behind IRefreshTokenStore, isolating domain logic from EF Core specifics. RevokeAllForUserAsync performs a bulk update using EF Core's ExecuteUpdateAsync, avoiding loading tokens into the change tracker and reducing memory pressure for revocation. The timestamp RevokedAt is set using DateTimeOffset.UtcNow to provide a consistent, timezone-agnostic record of when a token was revoked. Note that AddAsync marks an entity for insertion; the caller must call SaveChangesAsync to persist new tokens.
 
 ## Example
-
 ```csharp
-// Revoke all refresh tokens for a user after a logout or credential change
-await refreshTokenStore.RevokeAllForUserAsync(userId, cancellationToken);
-```
-
-```csharp
-// Example: adding a new refresh token (persistence requires SaveChanges on the DbContext)
-var token = new RefreshToken { UserId = userId, TokenHash = hash };
-await refreshTokenStore.AddAsync(token, cancellationToken);
-await context.SaveChangesAsync(cancellationToken);
+// Retrieve a token by its hash, then revoke all tokens for that user
+var token = await refreshTokenStore.FindByHashAsync(tokenHash, ct);
+if (token != null)
+{
+    await refreshTokenStore.RevokeAllForUserAsync(token.UserId, ct);
+}
 ```
 
 ## Notes
-
-- AddAsync does not persist until SaveChangesAsync is called on the DbContext.
-- RevokeAllForUserAsync uses a bulk update; no per-token change-tracker events are raised.
-- This method affects only tokens with RevokedAt == null for the specified user.
+- AddAsync adds the token to the DbContext; persistence occurs when SaveChangesAsync is called by the caller.
+- RevokeAllForUserAsync relies on EF Core 7+'s ExecuteUpdateAsync to perform a bulk update; ensure your project targets a compatible EF Core version.

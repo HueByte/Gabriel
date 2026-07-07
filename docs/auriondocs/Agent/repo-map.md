@@ -5,109 +5,95 @@
 > dependencies, and open the linked per-file docs for behaviour — instead of
 > scanning the source tree.
 
-Commit `` · 470 symbols · 250 files · 1159 dependency edges
+Commit `8238aa07ea35c8d5fd13b396c665ac09fe180f90` · 470 symbols · 250 files · 960 dependency edges
 
 ## Subsystems
 
 *Structural clusters detected from the dependency graph — groups of symbols more densely wired to each other than to the rest of the codebase.*
 
-### src/api/Gabriel.Engine · GabrielToolBridge
+### src/webapp/src/components
 
-30 symbols across 20 files. Key symbols (by connectivity):
+52 symbols across 16 files. Key symbols (by connectivity):
 
-- [`GabrielToolBridge`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) (class) — `src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs`
-- [`IChatProvider`](../Code/src/api/Gabriel.Engine/Providers/IChatProvider.cs.md) (interface) — `src/api/Gabriel.Engine/Providers/IChatProvider.cs`
-- [`GrokChatProvider`](../Code/src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs.md) (class) — `src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs`
-- [`AgentContext`](../Code/src/api/Gabriel.Engine/Services/AgentContext.cs.md) (record) — `src/api/Gabriel.Engine/Services/AgentContext.cs`
-- [`ApplicationUser`](../Code/src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs.md) (class) — `src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs`
-- [`MockChatProvider`](../Code/src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs.md) (class) — `src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs`
-- [`LLMModel`](../Code/src/api/Gabriel.Core/Configuration/LLMModel.cs.md) (class) — `src/api/Gabriel.Core/Configuration/LLMModel.cs`
-- [`MessageRole`](../Code/src/api/Gabriel.Core/Entities/MessageRole.cs.md) (enum) — `src/api/Gabriel.Core/Entities/MessageRole.cs`
-- *…and 22 more (see symbol-graph.json)*
+- [`MermaidModule`](../Code/src/webapp/src/components/Mermaid.tsx.md) (type) — `src/webapp/src/components/Mermaid.tsx`
+- [`loadMermaid`](../Code/src/webapp/src/components/Mermaid.tsx.md) (function) — `src/webapp/src/components/Mermaid.tsx`
+- [`PulsePlane`](../Code/src/webapp/src/components/Avatar.tsx.md) (function) — `src/webapp/src/components/Avatar.tsx`
+- [`createPulse`](../Code/src/webapp/src/components/Avatar.tsx.md) (function) — `src/webapp/src/components/Avatar.tsx`
+- [`advance`](../Code/src/webapp/src/components/Chat.tsx.md) (function) — `src/webapp/src/components/Chat.tsx`
+- [`lastIndexWhere`](../Code/src/webapp/src/components/Chat.tsx.md) (function) — `src/webapp/src/components/Chat.tsx`
+- [`onKeyDown`](../Code/src/webapp/src/components/Chat.tsx.md) (function) — `src/webapp/src/components/Chat.tsx`
+- [`onSubmit`](../Code/src/webapp/src/components/Chat.tsx.md) (function) — `src/webapp/src/components/Chat.tsx`
+- *…and 44 more (see symbol-graph.json)*
 
 ### src/api/Gabriel.Engine · AgentService
 
-26 symbols across 14 files. Key symbols (by connectivity):
+30 symbols across 21 files. Key symbols (by connectivity):
 
 - [`AgentService`](../Code/src/api/Gabriel.Engine/Services/AgentService.cs.md) (class) — `src/api/Gabriel.Engine/Services/AgentService.cs`
-- [`ConversationsController`](../Code/src/api/Gabriel.API/Controllers/ConversationsController.cs.md) (class) — `src/api/Gabriel.API/Controllers/ConversationsController.cs`
-- [`AgentEvent`](../Code/src/api/Gabriel.Engine/Services/AgentEvent.cs.md) (record) — `src/api/Gabriel.Engine/Services/AgentEvent.cs`
-- [`AgentEvent`](../Code/src/webapp/src/api/streamChat.ts.md) (type) — `src/webapp/src/api/streamChat.ts`
-- [`IAgentService`](../Code/src/api/Gabriel.Engine/Services/IAgentService.cs.md) (interface) — `src/api/Gabriel.Engine/Services/IAgentService.cs`
-- [`ContextMetrics`](../Code/src/api/Gabriel.Engine/Services/ContextMetrics.cs.md) (record) — `src/api/Gabriel.Engine/Services/ContextMetrics.cs`
-- [`AgentError`](../Code/src/api/Gabriel.Engine/Services/AgentEvent.cs.md) (record) — `src/api/Gabriel.Engine/Services/AgentEvent.cs`
-- [`ContextMetricsResponse`](../Code/src/api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.cs.md) (record) — `src/api/Gabriel.API/Contracts/Conversations/ContextMetricsResponse.cs`
-- *…and 18 more (see symbol-graph.json)*
+- [`GabrielToolBridge`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) (class) — `src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs`
+- [`IChatProvider`](../Code/src/api/Gabriel.Engine/Providers/IChatProvider.cs.md) (interface) — `src/api/Gabriel.Engine/Providers/IChatProvider.cs`
+- [`AgentContext`](../Code/src/api/Gabriel.Engine/Services/AgentContext.cs.md) (record) — `src/api/Gabriel.Engine/Services/AgentContext.cs`
+- [`GrokChatProvider`](../Code/src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs.md) (class) — `src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs`
+- [`ApplicationUser`](../Code/src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs.md) (class) — `src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs`
+- [`MockChatProvider`](../Code/src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs.md) (class) — `src/api/Gabriel.Infrastructure/Providers/MockChatProvider.cs`
+- [`LLMModel`](../Code/src/api/Gabriel.Core/Configuration/LLMModel.cs.md) (class) — `src/api/Gabriel.Core/Configuration/LLMModel.cs`
+- *…and 22 more (see symbol-graph.json)*
 
 ### src/api/Gabriel.Engine · DependencyInjection
 
-26 symbols across 25 files. Key symbols (by connectivity):
+28 symbols across 27 files. Key symbols (by connectivity):
 
 - [`DependencyInjection`](../Code/src/api/Gabriel.Engine/DependencyInjection.cs.md) (class) — `src/api/Gabriel.Engine/DependencyInjection.cs`
 - [`Message`](../Code/src/api/Gabriel.Core/Entities/Message.cs.md) (class) — `src/api/Gabriel.Core/Entities/Message.cs`
 - [`ITool`](../Code/src/api/Gabriel.Engine/Tools/ITool.cs.md) (interface) — `src/api/Gabriel.Engine/Tools/ITool.cs`
 - [`IToolExecutionContext`](../Code/src/api/Gabriel.Engine/Tools/IToolExecutionContext.cs.md) (interface) — `src/api/Gabriel.Engine/Tools/IToolExecutionContext.cs`
+- [`ProjectFile`](../Code/src/api/Gabriel.Core/Entities/ProjectFile.cs.md) (class) — `src/api/Gabriel.Core/Entities/ProjectFile.cs`
 - [`MemorySaveTool`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.cs.md) (class) — `src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.cs`
 - [`ListProjectFilesTool`](../Code/src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.cs.md) (class) — `src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.cs`
 - [`IProjectFileService`](../Code/src/api/Gabriel.Core/Services/IProjectFileService.cs.md) (interface) — `src/api/Gabriel.Core/Services/IProjectFileService.cs`
-- [`MemoryListTool`](../Code/src/api/Gabriel.Engine/Tools/Memory/MemoryListTool.cs.md) (class) — `src/api/Gabriel.Engine/Tools/Memory/MemoryListTool.cs`
-- *…and 18 more (see symbol-graph.json)*
+- *…and 20 more (see symbol-graph.json)*
 
-### src/webapp/src/pulse · ContractMappings
+### src/webapp/src/api
 
-26 symbols across 14 files. Key symbols (by connectivity):
+19 symbols across 7 files. Key symbols (by connectivity):
 
-- [`ContractMappings`](../Code/src/api/Gabriel.API/Mapping/ContractMappings.cs.md) (class) — `src/api/Gabriel.API/Mapping/ContractMappings.cs`
-- [`Palette`](../Code/src/api/Gabriel.Engine/Sequence/Palette.cs.md) (record) — `src/api/Gabriel.Engine/Sequence/Palette.cs`
-- [`Palette`](../Code/src/webapp/src/pulse/palettes.ts.md) (interface) — `src/webapp/src/pulse/palettes.ts`
-- [`ProjectsController`](../Code/src/api/Gabriel.API/Controllers/ProjectsController.cs.md) (class) — `src/api/Gabriel.API/Controllers/ProjectsController.cs`
-- [`Pattern`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
-- [`GabrielSequenceResponse`](../Code/src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.cs.md) (record) — `src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.cs`
-- [`buildState`](../Code/src/webapp/src/components/ThinkingPulse.tsx.md) (function) — `src/webapp/src/components/ThinkingPulse.tsx`
-- [`rand`](../Code/prototype/generate.js.md) (function) — `prototype/generate.js`
-- *…and 18 more (see symbol-graph.json)*
+- [`GabrielSequence`](../Code/src/webapp/src/api/sequence.ts.md) (interface) — `src/webapp/src/api/sequence.ts`
+- [`GabrielSequenceMetadata`](../Code/src/webapp/src/api/sequence.ts.md) (interface) — `src/webapp/src/api/sequence.ts`
+- [`installAuthInterceptor`](../Code/src/webapp/src/api/authInterceptor.ts.md) (function) — `src/webapp/src/api/authInterceptor.ts`
+- [`refreshSession`](../Code/src/webapp/src/api/authRefresh.ts.md) (function) — `src/webapp/src/api/authRefresh.ts`
+- [`signalSessionExpired`](../Code/src/webapp/src/api/authRefresh.ts.md) (function) — `src/webapp/src/api/authRefresh.ts`
+- [`GabrielMode`](../Code/src/webapp/src/api/conversationMode.ts.md) (type) — `src/webapp/src/api/conversationMode.ts`
+- [`setConversationMode`](../Code/src/webapp/src/api/conversationMode.ts.md) (function) — `src/webapp/src/api/conversationMode.ts`
+- [`withRefresh`](../Code/src/webapp/src/api/conversationMode.ts.md) (function) — `src/webapp/src/api/conversationMode.ts`
+- *…and 11 more (see symbol-graph.json)*
 
-### src/api/Gabriel.Core · Project
+### src/api/Gabriel.Engine · Project
 
-25 symbols across 25 files. Key symbols (by connectivity):
+17 symbols across 17 files. Key symbols (by connectivity):
 
 - [`Project`](../Code/src/api/Gabriel.Core/Entities/Project.cs.md) (class) — `src/api/Gabriel.Core/Entities/Project.cs`
 - [`Conversation`](../Code/src/api/Gabriel.Core/Entities/Conversation.cs.md) (class) — `src/api/Gabriel.Core/Entities/Conversation.cs`
-- [`AppDbContext`](../Code/src/api/Gabriel.Infrastructure/Persistence/AppDbContext.cs.md) (class) — `src/api/Gabriel.Infrastructure/Persistence/AppDbContext.cs`
-- [`Core`](../Code/src/webapp/src/components/CompactingOverlay.tsx.md) (function) — `src/webapp/src/components/CompactingOverlay.tsx`
-- [`ICurrentUser`](../Code/src/api/Gabriel.Core/Identity/ICurrentUser.cs.md) (interface) — `src/api/Gabriel.Core/Identity/ICurrentUser.cs`
-- [`ChatService`](../Code/src/api/Gabriel.Core/Services/ChatService.cs.md) (class) — `src/api/Gabriel.Core/Services/ChatService.cs`
-- [`GabrielSequenceService`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs.md) (class) — `src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs`
-- [`DiskProjectFileService`](../Code/src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.cs.md) (class) — `src/api/Gabriel.Infrastructure/Projects/DiskProjectFileService.cs`
-- *…and 17 more (see symbol-graph.json)*
-
-### src/api/Gabriel.Engine · GabrielMode
-
-21 symbols across 18 files. Key symbols (by connectivity):
-
-- [`GabrielMode`](../Code/src/api/Gabriel.Core/Entities/GabrielMode.cs.md) (enum) — `src/api/Gabriel.Core/Entities/GabrielMode.cs`
-- [`GabrielSystemPromptBuilder`](../Code/src/api/Gabriel.Engine/Personality/GabrielSystemPromptBuilder.cs.md) (class) — `src/api/Gabriel.Engine/Personality/GabrielSystemPromptBuilder.cs`
-- [`ISystemPromptBuilder`](../Code/src/api/Gabriel.Engine/Personality/ISystemPromptBuilder.cs.md) (interface) — `src/api/Gabriel.Engine/Personality/ISystemPromptBuilder.cs`
-- [`Fragments`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Persona.cs.md) (class) — `src/api/Gabriel.Engine/Personality/Prompts/Fragments.Persona.cs`
-- [`Fragments`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.cs.md) (class) — `src/api/Gabriel.Engine/Personality/Prompts/Fragments.Formatting.cs`
-- [`PromptKey`](../Code/src/api/Gabriel.Engine/Personality/Prompts/PromptKey.cs.md) (class) — `src/api/Gabriel.Engine/Personality/Prompts/PromptKey.cs`
-- [`PromptRegistry`](../Code/src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.cs.md) (class) — `src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.cs`
-- [`Fragments`](../Code/src/api/Gabriel.Engine/Personality/Prompts/Fragments.Modes.cs.md) (class) — `src/api/Gabriel.Engine/Personality/Prompts/Fragments.Modes.cs`
-- *…and 13 more (see symbol-graph.json)*
-
-### src/webapp/src/pulse · GabrielSequenceGenerator
-
-18 symbols across 11 files. Key symbols (by connectivity):
-
 - [`GabrielSequenceGenerator`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.cs.md) (class) — `src/api/Gabriel.Engine/Sequence/GabrielSequenceGenerator.cs`
-- [`Patterns`](../Code/src/api/Gabriel.Engine/Sequence/Patterns.cs.md) (class) — `src/api/Gabriel.Engine/Sequence/Patterns.cs`
+- [`Core`](../Code/src/webapp/src/components/CompactingOverlay.tsx.md) (function) — `src/webapp/src/components/CompactingOverlay.tsx`
 - [`SequenceCatalog`](../Code/src/api/Gabriel.Engine/Sequence/SequenceCatalog.cs.md) (class) — `src/api/Gabriel.Engine/Sequence/SequenceCatalog.cs`
-- [`PaletteTemplates`](../Code/src/api/Gabriel.Engine/Sequence/PaletteTemplates.cs.md) (class) — `src/api/Gabriel.Engine/Sequence/PaletteTemplates.cs`
-- [`ShimmerParams`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
-- [`pick`](../Code/prototype/patterns.js.md) (function) — `prototype/patterns.js`
-- [`SequenceController`](../Code/src/api/Gabriel.API/Controllers/SequenceController.cs.md) (class) — `src/api/Gabriel.API/Controllers/SequenceController.cs`
-- [`PatternKind`](../Code/src/api/Gabriel.Engine/Sequence/PatternKind.cs.md) (enum) — `src/api/Gabriel.Engine/Sequence/PatternKind.cs`
-- *…and 10 more (see symbol-graph.json)*
+- [`GabrielSequenceService`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs.md) (class) — `src/api/Gabriel.Engine/Sequence/GabrielSequenceService.cs`
+- [`IGabrielSequenceGenerator`](../Code/src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs.md) (interface) — `src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs`
+- [`IConversationRepository`](../Code/src/api/Gabriel.Core/Repositories/IConversationRepository.cs.md) (interface) — `src/api/Gabriel.Core/Repositories/IConversationRepository.cs`
+- *…and 9 more (see symbol-graph.json)*
+
+### src/webapp/src/components · ContractMappings
+
+15 symbols across 9 files. Key symbols (by connectivity):
+
+- [`ContractMappings`](../Code/src/api/Gabriel.API/Mapping/ContractMappings.cs.md) (class) — `src/api/Gabriel.API/Mapping/ContractMappings.cs`
+- [`ConversationResponse`](../Code/src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.cs.md) (record) — `src/api/Gabriel.API/Contracts/Conversations/ConversationResponse.cs`
+- [`ChatEntry`](../Code/src/webapp/src/components/Chat.tsx.md) (type) — `src/webapp/src/components/Chat.tsx`
+- [`GabrielSequenceResponse`](../Code/src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.cs.md) (record) — `src/api/Gabriel.API/Contracts/Sequence/GabrielSequenceResponse.cs`
+- [`RgbColor`](../Code/src/api/Gabriel.Engine/Sequence/RgbColor.cs.md) (record) — `src/api/Gabriel.Engine/Sequence/RgbColor.cs`
+- [`historyToEntries`](../Code/src/webapp/src/components/Chat.tsx.md) (function) — `src/webapp/src/components/Chat.tsx`
+- [`MessageToolCall`](../Code/src/api/Gabriel.API/Contracts/Messages/MessageResponse.cs.md) (record) — `src/api/Gabriel.API/Contracts/Messages/MessageResponse.cs`
+- [`applyAgentEvent`](../Code/src/webapp/src/components/Chat.tsx.md) (function) — `src/webapp/src/components/Chat.tsx`
+- *…and 7 more (see symbol-graph.json)*
 
 ### src/api/Gabriel.Infrastructure · DependencyInjection
 
@@ -116,40 +102,54 @@ Commit `` · 470 symbols · 250 files · 1159 dependency edges
 - [`DependencyInjection`](../Code/src/api/Gabriel.Infrastructure/DependencyInjection.cs.md) (class) — `src/api/Gabriel.Infrastructure/DependencyInjection.cs`
 - [`IWebSearch`](../Code/src/api/Gabriel.Engine/Tools/Web/IWebSearch.cs.md) (interface) — `src/api/Gabriel.Engine/Tools/Web/IWebSearch.cs`
 - [`WebSearchResult`](../Code/src/api/Gabriel.Engine/Tools/Web/IWebSearch.cs.md) (record) — `src/api/Gabriel.Engine/Tools/Web/IWebSearch.cs`
-- [`BraveWebSearch`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs.md) (class) — `src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs`
 - [`WebSearchTool`](../Code/src/api/Gabriel.Engine/Tools/Web/WebSearchTool.cs.md) (class) — `src/api/Gabriel.Engine/Tools/Web/WebSearchTool.cs`
-- [`DuckDuckGoWebSearch`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs.md) (class) — `src/api/Gabriel.Infrastructure/Tools/Web/DuckDuckGoWebSearch.cs`
 - [`InstrumentedWebSearch`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.cs.md) (class) — `src/api/Gabriel.Infrastructure/Tools/Web/InstrumentedWebSearch.cs`
+- [`BraveWebSearch`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs.md) (class) — `src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs`
 - [`TavilyWebSearch`](../Code/src/api/Gabriel.Infrastructure/Tools/Web/TavilyWebSearch.cs.md) (class) — `src/api/Gabriel.Infrastructure/Tools/Web/TavilyWebSearch.cs`
+- [`BraveSearchOptions`](../Code/src/api/Gabriel.Core/Configuration/BraveSearchOptions.cs.md) (class) — `src/api/Gabriel.Core/Configuration/BraveSearchOptions.cs`
 - *…and 4 more (see symbol-graph.json)*
 
-### src/api/Gabriel.API · ModelsController
+### src/webapp/src/pulse
 
-11 symbols across 5 files. Key symbols (by connectivity):
+12 symbols across 3 files. Key symbols (by connectivity):
 
-- [`ModelsController`](../Code/src/api/Gabriel.API/Controllers/ModelsController.cs.md) (class) — `src/api/Gabriel.API/Controllers/ModelsController.cs`
-- [`ModelsResponse`](../Code/src/api/Gabriel.API/Contracts/Models/ModelDto.cs.md) (record) — `src/api/Gabriel.API/Contracts/Models/ModelDto.cs`
-- [`ModelsResponse`](../Code/src/webapp/src/api/models.ts.md) (interface) — `src/webapp/src/api/models.ts`
-- [`AgentOptions`](../Code/src/api/Gabriel.Core/Configuration/AgentOptions.cs.md) (class) — `src/api/Gabriel.Core/Configuration/AgentOptions.cs`
-- [`ModelDto`](../Code/src/api/Gabriel.API/Contracts/Models/ModelDto.cs.md) (record) — `src/api/Gabriel.API/Contracts/Models/ModelDto.cs`
-- [`ModelDto`](../Code/src/webapp/src/api/models.ts.md) (interface) — `src/webapp/src/api/models.ts`
-- [`SelectedModelDto`](../Code/src/api/Gabriel.API/Contracts/Models/ModelDto.cs.md) (record) — `src/api/Gabriel.API/Contracts/Models/ModelDto.cs`
-- [`SelectedModelDto`](../Code/src/webapp/src/api/models.ts.md) (interface) — `src/webapp/src/api/models.ts`
+- [`paletteForSeed`](../Code/src/webapp/src/pulse/palettes.ts.md) (function) — `src/webapp/src/pulse/palettes.ts`
+- [`paletteGradientCss`](../Code/src/webapp/src/pulse/palettes.ts.md) (function) — `src/webapp/src/pulse/palettes.ts`
+- [`pickPalette`](../Code/src/webapp/src/pulse/palettes.ts.md) (function) — `src/webapp/src/pulse/palettes.ts`
+- [`FlowParams`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
+- [`NoiseParams`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
+- [`fbm`](../Code/src/webapp/src/pulse/patterns.ts.md) (function) — `src/webapp/src/pulse/patterns.ts`
+- [`hash2`](../Code/src/webapp/src/pulse/patterns.ts.md) (function) — `src/webapp/src/pulse/patterns.ts`
+- [`smooth`](../Code/src/webapp/src/pulse/patterns.ts.md) (function) — `src/webapp/src/pulse/patterns.ts`
+- *…and 4 more (see symbol-graph.json)*
+
+### src/webapp/src/lib
+
+11 symbols across 2 files. Key symbols (by connectivity):
+
+- [`formatError`](../Code/src/webapp/src/lib/notify.ts.md) (function) — `src/webapp/src/lib/notify.ts`
+- [`notifyError`](../Code/src/webapp/src/lib/notify.ts.md) (function) — `src/webapp/src/lib/notify.ts`
+- [`notifyInfo`](../Code/src/webapp/src/lib/notify.ts.md) (function) — `src/webapp/src/lib/notify.ts`
+- [`notifySuccess`](../Code/src/webapp/src/lib/notify.ts.md) (function) — `src/webapp/src/lib/notify.ts`
+- [`readBool`](../Code/src/webapp/src/lib/userPrefs.ts.md) (function) — `src/webapp/src/lib/userPrefs.ts`
+- [`readLegacyHideReactDetails`](../Code/src/webapp/src/lib/userPrefs.ts.md) (function) — `src/webapp/src/lib/userPrefs.ts`
+- [`useBoolPref`](../Code/src/webapp/src/lib/userPrefs.ts.md) (function) — `src/webapp/src/lib/userPrefs.ts`
+- [`useHideThinking`](../Code/src/webapp/src/lib/userPrefs.ts.md) (function) — `src/webapp/src/lib/userPrefs.ts`
 - *…and 3 more (see symbol-graph.json)*
 
-### src/api/Gabriel.Engine · GabrielSequence
+### src/api/Gabriel.Core · MemoryEntry
 
-11 symbols across 7 files. Key symbols (by connectivity):
+10 symbols across 9 files. Key symbols (by connectivity):
 
-- [`GabrielSequence`](../Code/src/api/Gabriel.Engine/Sequence/GabrielSequence.cs.md) (record) — `src/api/Gabriel.Engine/Sequence/GabrielSequence.cs`
-- [`IGabrielSequenceGenerator`](../Code/src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs.md) (interface) — `src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs`
-- [`GabrielSequence`](../Code/src/webapp/src/api/sequence.ts.md) (interface) — `src/webapp/src/api/sequence.ts`
-- [`IGabrielSequenceService`](../Code/src/api/Gabriel.Engine/Sequence/IGabrielSequenceService.cs.md) (interface) — `src/api/Gabriel.Engine/Sequence/IGabrielSequenceService.cs`
-- [`generate`](../Code/prototype/generate.js.md) (function) — `prototype/generate.js`
-- [`FrameLayers`](../Code/src/api/Gabriel.Engine/Sequence/FrameLayer.cs.md) (class) — `src/api/Gabriel.Engine/Sequence/FrameLayer.cs`
-- [`fetchGabrielSequence`](../Code/src/webapp/src/api/sequence.ts.md) (function) — `src/webapp/src/api/sequence.ts`
-- [`GabrielSequenceViewProps`](../Code/src/webapp/src/components/GabrielSequenceView.tsx.md) (interface) — `src/webapp/src/components/GabrielSequenceView.tsx`
-- *…and 3 more (see symbol-graph.json)*
+- [`MemoryEntry`](../Code/src/api/Gabriel.Core/Entities/MemoryEntry.cs.md) (class) — `src/api/Gabriel.Core/Entities/MemoryEntry.cs`
+- [`IMemoryService`](../Code/src/api/Gabriel.Core/Services/IMemoryService.cs.md) (interface) — `src/api/Gabriel.Core/Services/IMemoryService.cs`
+- [`MemoryService`](../Code/src/api/Gabriel.Core/Services/MemoryService.cs.md) (class) — `src/api/Gabriel.Core/Services/MemoryService.cs`
+- [`MemoryEntryType`](../Code/src/api/Gabriel.Core/Entities/MemoryEntryType.cs.md) (enum) — `src/api/Gabriel.Core/Entities/MemoryEntryType.cs`
+- [`IMemoryRepository`](../Code/src/api/Gabriel.Core/Repositories/IMemoryRepository.cs.md) (interface) — `src/api/Gabriel.Core/Repositories/IMemoryRepository.cs`
+- [`MemoryEntrySpec`](../Code/src/api/Gabriel.Core/Services/IMemoryService.cs.md) (record) — `src/api/Gabriel.Core/Services/IMemoryService.cs`
+- [`MemoriesController`](../Code/src/api/Gabriel.API/Controllers/MemoriesController.cs.md) (class) — `src/api/Gabriel.API/Controllers/MemoriesController.cs`
+- [`MemoryRepository`](../Code/src/api/Gabriel.Infrastructure/Persistence/Repositories/MemoryRepository.cs.md) (class) — `src/api/Gabriel.Infrastructure/Persistence/Repositories/MemoryRepository.cs`
+- *…and 2 more (see symbol-graph.json)*
 
 ### src/api/Gabriel.Engine · DomainException
 
@@ -165,21 +165,21 @@ Commit `` · 470 symbols · 250 files · 1159 dependency edges
 - [`PathRootMode`](../Code/src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs.md) (enum) — `src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs`
 - *…and 2 more (see symbol-graph.json)*
 
-### src/webapp/src/api · MemoriesController
+### src/webapp/src/pulse · Patterns
 
-9 symbols across 4 files. Key symbols (by connectivity):
+10 symbols across 5 files. Key symbols (by connectivity):
 
-- [`MemoriesController`](../Code/src/api/Gabriel.API/Controllers/MemoriesController.cs.md) (class) — `src/api/Gabriel.API/Controllers/MemoriesController.cs`
-- [`MemoryDto`](../Code/src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs.md) (record) — `src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs`
-- [`MemoryDto`](../Code/src/webapp/src/api/memories.ts.md) (interface) — `src/webapp/src/api/memories.ts`
-- [`saveMemory`](../Code/src/webapp/src/api/memories.ts.md) (function) — `src/webapp/src/api/memories.ts`
-- [`SaveMemoryRequest`](../Code/src/webapp/src/api/memories.ts.md) (interface) — `src/webapp/src/api/memories.ts`
-- [`listMemories`](../Code/src/webapp/src/api/memories.ts.md) (function) — `src/webapp/src/api/memories.ts`
-- [`SaveMemoryRequest`](../Code/src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs.md) (record) — `src/api/Gabriel.API/Contracts/Memories/MemoryDto.cs`
-- [`MemoryType`](../Code/src/webapp/src/api/memories.ts.md) (type) — `src/webapp/src/api/memories.ts`
-- *…and 1 more (see symbol-graph.json)*
+- [`Patterns`](../Code/src/api/Gabriel.Engine/Sequence/Patterns.cs.md) (class) — `src/api/Gabriel.Engine/Sequence/Patterns.cs`
+- [`SequenceController`](../Code/src/api/Gabriel.API/Controllers/SequenceController.cs.md) (class) — `src/api/Gabriel.API/Controllers/SequenceController.cs`
+- [`ShimmerParams`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
+- [`SequenceCatalogResponse`](../Code/src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.cs.md) (record) — `src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.cs`
+- [`PlasmaParams`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
+- [`PulseParams`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
+- [`SpiralParams`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
+- [`WavesParams`](../Code/src/webapp/src/pulse/patterns.ts.md) (interface) — `src/webapp/src/pulse/patterns.ts`
+- *…and 2 more (see symbol-graph.json)*
 
-*…and 123 smaller subsystems (see symbol-graph.json).*
+*…and 56 smaller subsystems (see symbol-graph.json).*
 
 ## Most connected symbols
 
@@ -187,15 +187,15 @@ The load-bearing symbols — changes here have the widest blast radius.
 
 | Symbol | Kind | Used by | Uses | File |
 |---|---|---|---|---|
-| [`AgentService`](../Code/src/api/Gabriel.Engine/Services/AgentService.cs.md) | class | 14 | 50 | `src/api/Gabriel.Engine/Services/AgentService.cs` |
-| [`DependencyInjection`](../Code/src/api/Gabriel.Engine/DependencyInjection.cs.md) | class | 3 | 53 | `src/api/Gabriel.Engine/DependencyInjection.cs` |
+| [`AgentService`](../Code/src/api/Gabriel.Engine/Services/AgentService.cs.md) | class | 14 | 48 | `src/api/Gabriel.Engine/Services/AgentService.cs` |
+| [`DependencyInjection`](../Code/src/api/Gabriel.Engine/DependencyInjection.cs.md) | class | 0 | 53 | `src/api/Gabriel.Engine/DependencyInjection.cs` |
 | [`Message`](../Code/src/api/Gabriel.Core/Entities/Message.cs.md) | class | 46 | 2 | `src/api/Gabriel.Core/Entities/Message.cs` |
-| [`DependencyInjection`](../Code/src/api/Gabriel.Infrastructure/DependencyInjection.cs.md) | class | 3 | 44 | `src/api/Gabriel.Infrastructure/DependencyInjection.cs` |
+| [`DependencyInjection`](../Code/src/api/Gabriel.Infrastructure/DependencyInjection.cs.md) | class | 0 | 44 | `src/api/Gabriel.Infrastructure/DependencyInjection.cs` |
 | [`Project`](../Code/src/api/Gabriel.Core/Entities/Project.cs.md) | class | 36 | 4 | `src/api/Gabriel.Core/Entities/Project.cs` |
-| [`ConversationsController`](../Code/src/api/Gabriel.API/Controllers/ConversationsController.cs.md) | class | 2 | 30 | `src/api/Gabriel.API/Controllers/ConversationsController.cs` |
-| [`Conversation`](../Code/src/api/Gabriel.Core/Entities/Conversation.cs.md) | class | 23 | 9 | `src/api/Gabriel.Core/Entities/Conversation.cs` |
+| [`Conversation`](../Code/src/api/Gabriel.Core/Entities/Conversation.cs.md) | class | 23 | 7 | `src/api/Gabriel.Core/Entities/Conversation.cs` |
 | [`ITool`](../Code/src/api/Gabriel.Engine/Tools/ITool.cs.md) | interface | 27 | 1 | `src/api/Gabriel.Engine/Tools/ITool.cs` |
 | [`GabrielToolBridge`](../Code/src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | class | 6 | 21 | `src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs` |
-| [`AgentEvent`](../Code/src/api/Gabriel.Engine/Services/AgentEvent.cs.md) | record | 14 | 11 | `src/api/Gabriel.Engine/Services/AgentEvent.cs` |
+| [`ConversationsController`](../Code/src/api/Gabriel.API/Controllers/ConversationsController.cs.md) | class | 2 | 24 | `src/api/Gabriel.API/Controllers/ConversationsController.cs` |
+| [`ConversationState`](../Code/src/api/Gabriel.Core/Personality/ConversationState.cs.md) | record | 16 | 5 | `src/api/Gabriel.Core/Personality/ConversationState.cs` |
 
 *Regenerated on every full documentation run; see [Agent/README.md](README.md) for how to use this pack.*

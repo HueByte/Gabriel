@@ -15,11 +15,11 @@ public record RegisterRequest(string Email, string Password)
 | `Password` | `string` | — |
 
 
-RegisterRequest is a simple data transfer object that defines the payload for a user registration operation. It contains two pieces of information: Email and Password. As a C# record, it provides value-based equality and immutable semantics, making it a reliable API contract that can be deconstructed or passed through the stack without risk of mutation.
+RegisterRequest is a lightweight, immutable data carrier used to transport a user’s registration credentials—Email and Password—from the client to the server. As a C# record with positional parameters, it benefits from value-based equality, concise construction, and easy deconstruction for downstream validation and serialization.
 
 ## Remarks
-Acts as a boundary between the API surface and the authentication/domain layer, decoupling external input from domain models. By keeping input in a dedicated record, the system can evolve the API contract (e.g., add fields or change validation) without touching domain entities. The record's built-in deconstruction supports concise handlers and mapping to service calls.
+By representing the registration payload as a dedicated symbol, this type defines a stable API contract for the authentication flow. Its immutability and value-based equality simplify equality comparisons, pattern matching, and passing instances through layers without concern for accidental mutation. The positional parameters (Email, Password) make the required fields explicit and map naturally to common API field names during serialization.
 
 ## Notes
-- Do not log the Password; treat it as sensitive information.
-- Validation is not included here; implement validation elsewhere (e.g., data annotations, middleware, or service layer) to keep concerns separated.
+- Passwords are sensitive; avoid logging them or exposing them in UI debug traces. Consider redaction or custom serialization when writing to logs.
+- This is a plain data transfer object; validation and business rules belong elsewhere (e.g., a service or validator) to keep concerns separated.

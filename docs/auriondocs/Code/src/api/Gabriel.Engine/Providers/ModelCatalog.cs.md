@@ -8,23 +8,12 @@ public sealed class ModelCatalog : IModelCatalog
 ```
 
 
-ModelCatalog is a concrete, sealed implementation of IModelCatalog that builds a catalog of all available chat models by enumerating every registered IChatProvider.Models during construction. Because providers are registered as singletons, the catalog is built once and reused for subsequent resolutions, avoiding repeated traversal of provider lists. It exposes the full set of models via AvailableModels and resolves a ModelSelection through an optional pair of preferred provider and model; if no valid match is found, it falls back to a precomputed default model.
+ModelCatalog is a sealed implementation of IModelCatalog that builds a catalog of available chat models by enumerating each IChatProvider's Models during construction. With singleton providers, the potentially expensive walk happens only once, and subsequent Resolve calls reuse the cached list to select a model quickly.
 
 ## Remarks
-
-Centralizes model discovery and selection, decoupling clients from provider-specific details and ensuring a sane, deterministic default path if configuration is incomplete. The default is determined at construction time (the first active model, or the first available if none are active) and reused for all resolves, which promotes a stable startup experience even in misconfigured environments. The catalog is built once and kept immutable thereafter, providing fast lookups without re-walking providers on every call.
-
-## Example
-```csharp
-// Most common usage: explicitly select a provider/model
-var catalog = new ModelCatalog(providers);
-var selection = catalog.Resolve("OpenAI", "GPT-4");
-
-// Or rely on the precomputed default when preferences are omitted or unavailable
-var defaultSelection = catalog.Resolve(null, null);
-```
+By collecting AvailableModel entries up front, it centralizes model availability and selection logic, decoupling consumers from provider-specific configuration. It also establishes a robust startup path: the first active model found during construction becomes the bootstrap default; if none are active, the first registered model is used. If no models are registered at all, the constructor throws to fail fast and surface misconfiguration instead of failing later at runtime.
 
 ## Notes
-- Provider name comparisons are case-insensitive, while model name comparisons are exact (case-sensitive).
-- If no models are registered across all providers, the constructor throws InvalidOperationException with guidance to register a Mock or configure at least one provider.
-- AvailableModels is a read-only list and does not change after construction; Resolve uses a cached _default when no valid match is found.
+- Resolve matches a provider name case-insensitively and a model name exactly (ordinal). If a match is found, a corresponding ModelSelection is returned; otherwise the precomputed default is returned.
+- If a stale preference (a provider/model pair no longer present) is supplied, ModelCatalog silently falls back to the default rather than throwing, preserving user experience when configurations change.
+- The default selection is derived from the first active model if available, otherwise the first available model; if neither exists, an InvalidOperationException is thrown with guidance to register a Mock provider or configure at least one provider.

@@ -8,28 +8,12 @@ public sealed class ListDirTool : ITool
 ```
 
 
-List the contents of a directory under the agent's configured root with an "ls -la" style, table-formatted output. Use this tool when you need a sandbox-aware, caps-enforced directory listing (host-root vs. conversation project sandbox) rather than calling Directory APIs directly; it enforces the configured root, sorts directories first then alphabetically, and truncates output to a safe maximum.
+List the contents of a directory scoped to the configured host root or the active project sandbox. Returns a table-style, human-readable listing (type, size, modified, name), sorted with directories first and then alphabetically; supports a shallow recursive walk with entries indented by depth. Use this tool when you need a compact, agent-friendly directory listing rooted at the agent's HostRoot (default) or the conversation's project sandbox (mode="project") instead of invoking raw shell commands or inspecting individual files with file_info.
 
 ## Remarks
-ListDirTool is a small, safe wrapper around filesystem enumeration that integrates with the agent's path resolution and options. It resolves paths via IAgentPathResolver (so absolute or relative paths are validated against the active root), applies AgentToolsOptions defaults and a hard cap for max entries, and returns a human-readable table (type, size, modified, name). ExecuteAsync returns error strings for common failure cases (argument parsing, path resolution, not-a-directory), making it suitable for use in tool-driven agent flows where textual results are expected.
-
-## Example
-```csharp
-// Example: list the project sandbox recursively, including hidden entries
-var argsJson = """
-{
-  "path": "src",
-  "mode": "project",
-  "recursive": true,
-  "max_entries": 100,
-  "include_hidden": true
-}
-""";
-var result = await listDirTool.ExecuteAsync(argsJson, CancellationToken.None);
-Console.WriteLine(result);
-```
+This tool centralizes safe, normalized directory enumeration for the agent: it delegates path resolution to IAgentPathResolver so callers can supply relative or absolute paths that are canonicalized under the configured root, and it uses AgentToolsOptions to apply sensible defaults and a hard cap on the number of entries. Errors from invalid arguments or unresolved paths are surfaced as plain text (prefixed with "Error:") rather than thrown. The listing enforces a max_entries limit (and respects the agent-wide hard cap) to avoid producing excessively large outputs.
 
 ## Notes
-- include_hidden defaults to false; dotfiles (Unix) and Windows Hidden-attribute files are omitted unless you set include_hidden to true.
-- The effective max_entries is clamped by the tool's configured hard cap (AgentToolsOptions.MaxListEntries); requesting a larger value will be reduced to that cap.
-- If the resolved path exists but is a file, ExecuteAsync returns an error message directing you to use file_info instead rather than throwing an exception.
+- Absolute paths must canonicalize under the configured root; otherwise ResolveAsync will fail and the tool returns an error message.
+- If the resolved path points to a file the tool returns: "Error: '{display}' is a file, not a directory. Use file_info to inspect files." Use file_info for single-file inspection.
+- The returned listing is truncated when the count reaches max_entries; AgentToolsOptions.MaxListEntries enforces an upper hard cap on what callers may request.

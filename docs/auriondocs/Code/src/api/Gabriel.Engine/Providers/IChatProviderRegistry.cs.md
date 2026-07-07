@@ -18,18 +18,19 @@ public interface IChatProviderRegistry
 ```
 
 
-Maps a provider name to the concrete IChatProvider instance. Providers are registered as singletons, and this registry is the mechanism the system uses to select the appropriate chat provider at request time by name (for example, the provider named 'grok') instead of wiring a fixed dependency into the consumer.
+Represents a registry that maps provider names to concrete IChatProvider instances and exposes the set of available providers. It enables runtime selection of a chat provider by name rather than wiring a specific implementation. Providers are registered as singleton IChatProvider instances; at request time the registry lets agents pick the provider named 'grok' (or any available provider) without changing call sites.
 
 ## Remarks
-Decoupling the consumer from concrete providers makes the system extensible: new providers can be added and registered without changing AgentService code. AvailableProviders exposes the set of known provider names, enabling runtime discovery and configuration UIs. The IChatProviderRegistry acts as the boundary between composition and per-request behavior, supporting flexible routing of chat requests to the chosen provider.
+By abstracting the lookup behind Resolve and listing options via AvailableProviders, this symbol acts as an IoC-like boundary for chat backends. It reduces coupling between clients and concrete providers and makes it straightforward to add, swap, or mock providers in tests.
 
 ## Example
 ```csharp
-// Example: resolve a provider by name at request time
+// Resolve a provider by name and obtain its IChatProvider instance
 IChatProvider provider = registry.Resolve("grok");
-// Use the provider to handle a chat operation...
 ```
 
+## Notes
+- The contract does not specify error handling for unknown provider names; callers should validate against AvailableProviders before calling Resolve or be prepared to handle an exception or null depending on the implementation.
 
 ---
 
@@ -42,25 +43,14 @@ public sealed class ChatProviderRegistry : IChatProviderRegistry
 ```
 
 
-ChatProviderRegistry serves as a centralized, case-insensitive lookup for IChatProvider instances. Built from a collection of providers, it creates an internal dictionary keyed by each provider’s Name, enabling Resolve to fetch a provider by its name string (regardless of letter case). If no match exists, Resolve throws InvalidOperationException with a message that lists the available provider names to guide corrective configuration. The registry also exposes AvailableProviders so callers can inspect which providers are currently registered.
+ChatProviderRegistry is a small registry that indexes IChatProvider implementations by their Name and resolves a provider by name. It builds an in-memory, case-insensitive map from the provided IChatProvider instances, enabling consumers to select a provider by a string key rather than by a concrete type. If the requested name is not registered, it throws a descriptive InvalidOperationException listing available providers.
 
 ## Remarks
-
-By centralizing provider resolution, this type decouples consumer code from concrete implementations and from the DI wiring used to compose them. It enforces a single source of truth for provider names and surfaces a clear, actionable error when a requested provider is missing. The internal mapping is built once at construction and remains immutable, ensuring predictable behavior at runtime.
-
-## Example
-
-```csharp
-// Example usage of the registry
-var providers = new IChatProvider[] { new OpenAiChatProvider(), new EchoChatProvider() };
-var registry = new ChatProviderRegistry(providers);
-
-IChatProvider provider = registry.Resolve("OpenAI"); // resolution is case-insensitive
-```
+It decouples consumers from concrete chat provider implementations by enabling runtime provider selection via a simple string key. Resolution is a fast dictionary lookup, and AvailableProviders can be used to surface supported options to users or configuration. The registry relies on provider.Name values being stable and unique (case-insensitive) to avoid conflicts.
 
 ## Notes
-
-- Duplicate provider names (case-insensitive) will throw during construction due to ToDictionary enforcing unique keys.
-- The set of AvailableProviders is fixed after construction; there is no runtime API to add or remove providers.
+- If two providers share the same Name (case-insensitive), the registry construction will throw due to key collisions.
+- The registry is effectively read-only after construction; to reflect changes, supply a new collection to the constructor.
+- AvailableProviders exposes the set of registered names for discovery and UI display.
 
 ---

@@ -11,27 +11,12 @@ public class MemoriesController : ControllerBase
 ```
 
 
-MemoriesController exposes a RESTful API surface for managing memory entries through IMemoryService. It supports listing memories (with an optional scope filter), retrieving a single memory by ID, upserting memories via a single idempotent POST, and deleting memories by ID. The controller validates input, converts domain entities to MemoryDto objects, and returns conventional HTTP responses.
+MemoriesController exposes a CRUD-style API surface over IMemoryService for managing memory entries used by the settings UI. It provides endpoints to list memories (with project-scoped or merged views), fetch a memory by id, upsert memories via a single POST path, and delete memories. The controller maps domain MemoryEntry objects to MemoryDto for transport and enforces validation on incoming SaveMemoryRequest (non-null body, a valid MemoryEntryType, and non-empty Name, Description, and Body).
 
 ## Remarks
-As the HTTP façade over the memory domain, this controller centralizes memory-management concerns for both the settings UI and agent integrations. All write-paths funnel through the same Save endpoint, enabling consistent idempotent upserts keyed by UserId, ProjectId, and Name, while reads are shaped by the scope parameter to produce user-only, project-scoped, or merged views.
-
-## Example
-```csharp
-// Common usage: upsert a memory (idempotent)
-var req = new SaveMemoryRequest
-{
-    ProjectId = projectId,
-    Type = "user",
-    Name = "Onboarding notes",
-    Description = "Guidance for onboarding users",
-    Body = "Remember to collect feedback from new users and update the process."
-};
-
-// POST to /memories
-var response = await httpClient.PostAsJsonAsync("memories", req);
-```
+This controller decouples the HTTP surface from the domain and persistence logic, centralizing request validation, routing, and DTO mapping while delegating storage and business rules to IMemoryService. The List endpoint supports a scope parameter that enables per-project views or a merged "all" view that mirrors what the agent sees, providing a consistent memory view for both UI and automation. The Save endpoint is designed to be idempotent: repeated upserts with the same identity update metadata rather than creating duplicates, aligning with the agent's memory_save workflow.
 
 ## Notes
-- Upsert validation: Name, Description, and Body must be non-empty; Type must be one of: user, feedback, project, reference; otherwise returns 400 with a specific error.
-- Delete endpoint returns NoContent on success, NotFound if the ID does not exist; List supports scope filtering with an 'all' option to merge user-scope and project entries.
+- Type parsing is case-insensitive and restricted to the values: user, feedback, project, reference. If parsing fails, the endpoint returns 400 with a helpful error.
+- Name, Description, and Body must be non-empty; otherwise the endpoint returns 400 Bad Request.
+- Delete returns 204 No Content on success and 404 NotFound if the memory does not exist.

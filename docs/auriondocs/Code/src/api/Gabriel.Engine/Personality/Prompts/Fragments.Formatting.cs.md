@@ -8,11 +8,11 @@ public static partial class Fragments
 ```
 
 
-Defines a reusable formatting guide that describes what the chat surface renders and when to apply specific formatting features. It documents the webapp's supported tools — GitHub-flavored Markdown augmented with Mermaid diagrams, KaTeX math, and code highlighting — and clarifies when to use each. This content lives in a static string constant within Fragments so the model and UI can access a single source of truth about rendering capabilities, independent from persona or behavior logic.
+Fragments acts as a central, static container for the chat surface’s formatting guidance. Its PersonaFormatting constant codifies when and how the UI may render specialized formatting — Mermaid diagrams, LaTeX math, and code blocks — and tells consumers, including the model, when to reach for these features or to omit them.
 
 ## Remarks
-By isolating this guidance in Fragments.PersonaFormatting, the app decouples the knowledge of renderers from the conversational behavior. It acts as a medium concern that the chat surface ships with, enabling consistent guidance across renderers and reducing duplication in prompts or UI text.
+This symbol isolates medium-level formatting policy from behavioural logic, ensuring consistent prompts and rendering behavior across prompts. It anchors the model’s expectations about what the UI can render, and clarifies when such rendering should be avoided to preserve readability.
 
 ## Notes
-- Keep the guidance in sync with the webapp's actual rendering capabilities; mismatch can mislead users and the model.
-- As a static constant, changes require a rebuild/deploy to propagate; plan changes accordingly.
+- The content is documentation for the UI renderers; changes to supported formats should be synchronized with the web app.
+- The class is declared partial and static; expect extensions elsewhere and treat PersonaFormatting as the canonical source of guidance for formatting in prompts.

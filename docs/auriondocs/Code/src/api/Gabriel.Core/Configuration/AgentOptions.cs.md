@@ -8,14 +8,12 @@ public class AgentOptions : IConfigSection<AgentOptions>
 ```
 
 
-AgentOptions is a configuration container used by the agent runtime to tune how it operates during conversations. It exposes three tunable properties that govern (1) how many tool-call iterations the agent is allowed per user turn, (2) when to perform a rolling summary of the conversation history, and (3) how many of the most recent messages should be kept verbatim through that summarization. This type participates in the [`IConfigSection<AgentOptions>`](IConfigSection.cs.md) pattern and is bound under the SectionName "Agent", enabling configuration sources to wire these knobs into the agent's execution.
+AgentOptions defines a typed configuration surface for tuning an agent's runtime behavior. It is intended to be bound from configuration to adjust tool usage (MaxIterations), summarization timing (CompactThreshold), and continuity preservation (CompactKeepLast) without code changes.
 
 ## Remarks
-
-By isolating these knobs, the policy governing tool usage and context management is decoupled from the agent’s core decision logic. Operators can adjust cost, latency, and continuity without code changes, and the compacting behavior leverages ContextWindowTokens to balance historical context with summarization overhead. The CompactKeepLast setting ensures a slice of recent history remains intact through a compact pass, preserving mid-conversation coherence even as older content is summarized.
+This abstraction relies on the [`IConfigSection<T>`](IConfigSection.cs.md) pattern to centralize tuning in a single, strongly-typed section and on a static SectionName to anchor configuration binding to an "Agent" section. The defaults provide sensible behavior out of the box, while the properties map directly to runtime controls that influence performance, cost, and user-perceived continuity. Tying CompactThreshold to the provider's ContextWindowTokens ensures summarization behavior remains aligned with the model's actual context capacity, making the configuration robust to provider changes. Together with its dependencies, AgentOptions serves as a cohesive tuning surface that keeps operational parameters separate from implementation details.
 
 ## Notes
-
-- There is no explicit runtime validation in this type; ensure configured values are sane (e.g., non-negative, 0 <= CompactThreshold <= 1) at the configuration boundary to avoid undefined behavior.
-- If your configuration system supports dynamic reload, review whether changes to AgentOptions apply immediately or only after application restart, depending on the hosting environment.
-- Increasing MaxIterations can raise latency and cost due to longer tool-search loops; tune this value to balance responsiveness with thoroughness.
+- Changing MaxIterations affects how aggressively the agent pursues tool-usage within a single turn; setting it too low may truncate tasks, while too high can increase cost or risk runaway loops.
+- CompactThreshold is evaluated against the model's ContextWindowTokens; if the provider's window changes, re-tuning may be necessary to maintain desired summarization cadence.
+- CompactKeepLast controls how many of the most recent messages are preserved verbatim during compaction; increasing this helps mid-conversation continuity but may limit summarization efficiency.

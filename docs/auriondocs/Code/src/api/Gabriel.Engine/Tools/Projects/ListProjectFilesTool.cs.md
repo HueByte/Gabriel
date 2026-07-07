@@ -8,22 +8,12 @@ public sealed class ListProjectFilesTool : ITool
 ```
 
 
-Lists every file uploaded to the current conversation's project and returns a readable catalog that includes each file's name, id, size, content type, and upload timestamp. Use this to discover what material is available before reading a specific file with read_project_file.
+ListProjectFilesTool lists all files uploaded to the current conversation's project and returns a compact, human-friendly report containing each file's name, id, size, content type, and upload timestamp. Use it when you need to discover what materials exist in a project before selecting a file_id to pass to read_project_file.
 
 ## Remarks
-By encapsulating the retrieval and formatting behind a tool, this symbol cleanly separates data access from presentation. The output always includes the file IDs so callers can supply file_id to read_project_file, enabling an ergonomic, stepwise workflow in chat-driven interactions. The implementation also guards against missing project context and surfaces errors as user-friendly messages rather than throwing exceptions, which keeps conversations flowing.
-
-## Example
-```csharp
-// Example output
-Project has 2 file(s):
-- README.md  [id: 123e4567-e89b-12d3-a456-426614174000, 12.3 KiB, text/markdown, uploaded 2024-08-10 12:00:00Z]
-- data.csv   [id: a1b2c3d4-e5f6-7890-1234-56789abcdef0, 2.5 MiB, text/csv, uploaded 2024-08-11 09:30:00Z]
-
-Pass the bracketed `id:` value as `file_id` to read_project_file.
-```
+This symbol serves as a discovery primitive: it centralizes the retrieval of project assets and formats them for quick human consumption. By keeping the listing logic in one place, it decouples the decision of which file to read from the act of enumerating available files. It also ensures the file identifier is always present in the output, addressing a prior pattern where only names were shown and downstream actions required a GUID. The produced text relies on the current project context (via the execution context) and on the project-file service to fetch metadata.
 
 ## Notes
-- Requires the conversation to be attached to a project; otherwise the tool returns a user-facing error string.
-- Output is informational text, not structured data; callers should treat lines as display content and extract the id for subsequent reads if needed.
-- The sizes use human-friendly units (KiB, MiB) and timestamps are presented in UTC format.
+- Requires the tool to be attached to a project; if the execution context has no ProjectId, it returns an error message.
+- The output includes the bracketed id value (id) for each file, which is the value you must pass as file_id to read_project_file.
+- Output is a human-readable string; if you need to parse ids programmatically, prefer consuming the id fields from the raw data source or implement a parser for the produced text.

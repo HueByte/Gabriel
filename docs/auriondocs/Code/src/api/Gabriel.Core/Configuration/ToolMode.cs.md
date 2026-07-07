@@ -16,23 +16,12 @@ public enum ToolMode
 ```
 
 
-ToolMode defines how a model's tool calls are transported and processed at runtime, enabling per-model configuration to support mixed-tool catalogs. Choose Native for standard structured tool_calls, Emulated when the provider returns plain text with embedded tool_call markers, or None to disable tool functionality.
+ToolMode indicates how a model backend handles tool invocation during a chat session. It is configured per-model so a provider can service a mixed catalog (for example, a hosted model with native function calling alongside a local model that requires emulation). The agent service and provider resolution code branch on this value to select the correct transport without the agent loop needing to know the underlying difference.
 
 ## Remarks
-This abstraction decouples the agent loop from transport details, allowing per-model tool handling to vary by deployment. It enables mixed catalogs by choosing a transport tailored to each model or provider capability, while preserving a uniform internal event flow. In short, ToolMode centralizes how tool calls are delivered and consumed.
-
-## Example
-```csharp
-// Typical configuration examples
-var native = new LLMModelConfig { ToolMode = ToolMode.Native };
-
-// Emulated marker-based tool calls
-var emulated = new LLMModelConfig { ToolMode = ToolMode.Emulated };
-
-// Tools disabled for a model
-var none = new LLMModelConfig { ToolMode = ToolMode.None };
-```
+ToolMode isolates transport concerns from the rest of the tool invocation path. It lets the hosting environment accommodate providers that natively emit OpenAI/xAI-style tool_calls, those that embed tool calls as plain text and require a bridge to synthesize the events, and those that expose no tool capability at all. This separation enables a mixed-catalog deployment where the same agent loop can operate with different backends without special-casing each capability.
 
 ## Notes
-- In Emulated mode, ensure GabrielToolBridge is present to translate inline <tool_call> markers into the internal event format; otherwise tool invocations will be ignored.
-- If ToolMode is changed at runtime or after a session has started, downstream state may become inconsistent; configure per-model ahead of time.
+- Native mode requires that the provider streams ToolCallReadyEvent for each parsed call; the agent loop expects to receive them in a uniform channel as parsed tool calls.
+- Emulated mode injects tools via a system-prompt block; the model emits <tool_call>{...}</tool_call> markers inline, and GabrielToolBridge reconstructs the native event shape so the agent loop remains uniform.
+- None disables tool capability; UI and configuration should reflect this so tool-dependent features (memory saves, project file reads, web search) won't be attempted in the conversation.

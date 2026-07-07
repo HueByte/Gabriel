@@ -8,23 +8,11 @@ public static partial class Fragments
 ```
 
 
-Fragments is a utility container that collects prompt fragments used to shape a model's conversational persona. It exposes a single public constant, PersonaFewShot, which holds a multi-line, runtime-substitution-friendly prompt block. The template demonstrates both chat-mode and task-mode exchanges and is designed to calibrate behaviors such as register-mirroring and length-conscious responses. The {name} placeholder is substituted at runtime, just as the static block is substituted, enabling per-prompt persona customization in the prompting pipeline.
+Fragments is a static helper that stores pre-built prompt fragments used to calibrate the model's persona during chat interactions. The PersonaFewShot constant contains a large, multi-line exemplar that demonstrates register-mirroring, length-aware responses, and back-and-forth dynamics, with {name} substituted at runtime to tailor the template for the current context.
 
 ## Remarks
-
-Centralizing these few-shot exemplars provides a single source of truth for style calibration across chat and task prompts. The static, immutable nature of the template ensures consistent behavior at startup, while the partial class designation signals extensibility—additional fragments can be added in other files to extend or tailor prompts without changing existing code paths.
-
-## Example
-
-```csharp
-// Example usage: bind a persona name into the few-shot template
-string persona = "Alex";
-string promptTemplate = Fragments.PersonaFewShot.Replace("{name}", persona);
-// `promptTemplate` can be prepended or integrated into the final prompt payload
-```
+Centralizing these prompts in a single static class provides a single source of truth for persona scaffolding, reducing duplication across call sites and clarifying intent: these strings are prompts, not UI copy. The code uses a C# 11 raw string literal (triple-quoted) to host long, multi-line content without escaping, and {name} is a placeholder that your runtime layer replaces when building actual prompts, mirroring how the static block behaves. This organization makes it straightforward to extend or swap persona fragments without touching individual prompt builders.
 
 ## Notes
-
-- Always replace the {name} placeholder before using the template in a prompt to avoid leaking the placeholder to end users.
-- The PersonaFewShot value is defined as a C# 11 raw string literal (triple-quoted); ensure your project targets a compatible language version.
-- The embedded examples cover both chat-mode and task-mode scenarios; adapt tone, length, and content to your app's policy and UX guidelines.
+- {name} is a runtime placeholder in the template; avoid treating it as an interpolated string during compilation or pre-processing.
+- This uses a C# 11 raw string literal to embed multi-line content; ensure your compiler supports raw string literals.

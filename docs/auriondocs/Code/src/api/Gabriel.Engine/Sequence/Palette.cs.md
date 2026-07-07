@@ -18,12 +18,25 @@ public sealed record Palette(IReadOnlyList<RgbColor> Colors)
 | `Colors` | `IReadOnlyList<RgbColor>` | — |
 
 
-Palette represents a compact, read-only palette of colors used by a Gabriel Sequence to encode per-layer variation while preserving a coherent visual identity. It wraps a single read-only list of RgbColor values and exposes convenient access via a Count property and an indexer, so callers can sample colors without mutating the underlying collection. Palette[0] is the canonical base color; higher indices are brighter or more saturated variations. As layers render, they shift toward different regions of the palette to give the sequence's DNA or Live State a distinctive visual signature.
+Palette is a fixed, narrow color set designed to feed a Gabriel Sequence's visual identity. It wraps a read-only list of RgbColor values where palette[0] is the canonical base color and higher indices expose brighter or more saturated variations; layers shift across the palette to give DNA / Live State a distinctive signature while keeping the overall appearance coherent.
 
 ## Remarks
-By encapsulating the color data behind Palette, the rendering code can rely on a small, stable palette contract across sequences. It isolates color semantics from layout or logic, enabling easy replacement of the color set to achieve new aesthetics without touching rendering code. Palette acts as a contract: consumers access colors by index and can rely on a fixed base at index 0 to anchor the visual identity.
+Palette decouples color data from rendering logic and provides a bounded vocabulary for layer coloring. By exposing Count and an indexer, it enables simple, index-based access to per-layer colors without embedding rendering decisions in callers. The Palette type being a sealed record signals value-like semantics, while still delegating storage to the provided Colors collection.
+
+## Example
+```csharp
+using System.Collections.Generic;
+
+var baseColor = RgbColor.FromHsv(0.0, 1.0, 1.0);
+var variant1 = RgbColor.FromHsv(0.05, 1.0, 0.95);
+var variant2 = RgbColor.FromHsv(0.1, 0.9, 0.9);
+
+var palette = new Palette(new List<RgbColor> { baseColor, variant1, variant2 });
+
+RgbColor baseEntry = palette[0];
+int count = palette.Count;
+```
 
 ## Notes
-- Colors must be non-null; the constructor does not guard against null values.
-- The expected palette size in the domain is typically 8–32 entries; this constraint is not enforced at compile time.
-- Palette equality is determined by the Colors property; two Palettes with identical contents in separate list instances may not compare equal, since equality includes the Colors reference.
+- Accessing an index outside the available range (0..Count-1) will throw an exception from the underlying Colors collection.
+- Palette does not defensively copy the provided Colors collection; if that collection is mutable and modified after construction, callers may observe those changes. If true immutability is required, pass an immutable collection or clone the data before constructing the Palette.

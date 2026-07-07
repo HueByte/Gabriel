@@ -8,14 +8,13 @@ public class ProjectFileConfiguration : IEntityTypeConfiguration<ProjectFile>
 ```
 
 
-This EF Core configuration class wires the ProjectFile entity to the database by mapping it to the ProjectFiles table, applying required constraints, and establishing indexes that support common access patterns. It declares Id as the primary key and marks ProjectId, Name, RelativePath, SizeBytes, ContentType, and UploadedAt as required, while constraining string lengths for Name (256), RelativePath (512), and ContentType (128).
-
-Two composite indexes are defined: a non-unique index on (ProjectId, UploadedAt) to optimize listing a project's files in order of upload time, and a unique index on (ProjectId, RelativePath) to prevent duplicates of the same file name within a single project and to support stable behavior when files are renamed in the UI. The inclusion of the Unique index aligns with the documented rule that same-name within a project is rejected by the service layer, while the RelativePath uniqueness ensures cross-rename scenarios remain deterministic.
+Configures the EF Core mapping for the ProjectFile entity. It maps to the ProjectFiles table, enforces a primary key on Id, and applies required-field constraints and length limits to model properties such as ProjectId, Name, RelativePath, SizeBytes, ContentType, and UploadedAt. It also defines two indices: a non-unique index on (ProjectId, UploadedAt) to support per-project file listings ordered by upload time, and a unique index on (ProjectId, RelativePath) to prevent naming collisions within the same project. This configuration, together with service-layer validation, ensures data integrity for project-scoped files and supports reliable rename handling by keeping per-project paths unique.
 
 ## Remarks
-This class centralizes the persistence-facing configuration for ProjectFile, keeping DbContext lean and reflecting domain invariants at the database level. By encapsulating the mapping and constraints here, the design promotes separation of concerns: domain logic lives in services, while the EF Core model layer enforces structural rules and performance characteristics at rest. The two indexes express the primary read patterns: fast per-project access by upload time, and strict per-project name uniqueness to prevent conflicting entries.
+
+By separating EF Core configuration from the entity and domain logic, this class centralizes persistence concerns and makes schema decisions explicit in one place. It clarifies which constraints exist at the database level and how they align with the higher-level domain rules for file naming within a project.
 
 ## Notes
-- The unique composite index on (ProjectId, RelativePath) enforces per-project RelativePath uniqueness; attempts to insert or rename to a duplicate path within the same project will fail at the database level.
-- The non-unique composite index on (ProjectId, UploadedAt) is intended to optimize queries that list a project's files sorted by upload time; ensure query paths leverage this pattern to benefit from the index.
-- If the ProjectFile shape changes (properties or names), this configuration must be updated accordingly to preserve constraints and indexes.
+
+- The per-project uniqueness is enforced at the database level via the (ProjectId, RelativePath) unique index; ensure the service layer complements this with user-friendly checks when creating or renaming files.
+- The (ProjectId, UploadedAt) index is for query performance and is not a uniqueness constraint; when querying, explicitly order by UploadedAt to rely on the intended ordering.

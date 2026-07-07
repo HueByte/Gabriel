@@ -15,11 +15,17 @@ public record LoginRequest(string Email, string Password)
 | `Password` | `string` | — |
 
 
-LoginRequest is an immutable data transfer object that carries the user's credentials for an authentication request. As a positional record with Email and Password, it provides a concise, value-based representation of the login payload sent to Gabriel.API's authentication endpoints.
+LoginRequest is a lightweight, immutable data carrier that carries user credentials to an authentication endpoint. It bundles an Email and a Password into a single payload, providing a consistent contract for login operations instead of passing separate values around.
+
+As a C# record, it benefits from value-based equality and straightforward construction, making it a natural transport contract for login calls.
 
 ## Remarks
-LoginRequest defines the contract for the login operation: it gathers the input required to authenticate a user and keeps it as a simple, transport-agnostic data carrier. Its record nature enables value-based equality and convenient deconstruction, which helps when composing tests or extracting fields in client code before making the API call.
+LoginRequest serves as the canonical contract for login operations; it isolates the credentials payload and enables consistent validation, serialization, and auditing of login requests. Because it is a record, it provides value-based equality and immutability by default, which helps avoid unintended mutation and simplifies tests and comparisons. It pairs naturally with model-binding and serialization frameworks in typical API projects.
+
+## Example
+```csharp
+var request = new LoginRequest("user@example.com", "P@ssw0rd!");
+```
 
 ## Notes
-- Treat Password as sensitive; redact it in logs and diagnostics.
-- Ensure transport security (e.g., TLS) when sending this payload to the authentication service.
+- Treat Password as sensitive data; avoid logging or exposing it in error messages. Mask or omit the value in logs and UI wherever feasible.

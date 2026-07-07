@@ -8,26 +8,11 @@ public interface IAgentService
 ```
 
 
-IAgentService is an asynchronous orchestration surface used to drive the ReAct-style interaction loop for a single conversation turn. It exposes a streaming RunAsync flow that yields AgentEvent values as the agent reasoner progresses, a RegenerateAsync operation to produce alternate assistant replies, and a GetContextMetricsAsync call to snapshot the current context window for UI rendering.
+IAgentService is the per-conversation agent orchestration contract. Use RunAsync to kick off a single-turn ReAct loop and stream AgentEvent updates (including error events), RegenerateAsync to produce an alternative assistant reply for a given message, and GetContextMetricsAsync to snapshot the context-window state for progress indication.
 
 ## Remarks
-By separating orchestration from API concerns and delivering events as they occur, this interface enables responsive user interfaces and robust streaming behavior. RunAsync performs pre-flight validation (for example empty input or a missing conversation) and may throw synchronously so the API layer can return the appropriate status before SSE headers are sent; in-stream failures are surfaced as AgentError events. RegenerateAsync marks the existing variant inactive and produces a new variant within the same VariantGroupId, allowing the UI to present a chooser between alternatives. GetContextMetricsAsync returns a ContextMetrics snapshot that UI components can use to render progress indicators and decide when to fetch additional context.
-
-## Example
-```csharp
-// Streaming a single user turn
-await foreach (var e in agentService.RunAsync(conversationId, userInput, ct))
-{
-    RenderEvent(e);
-}
-```
-
-```csharp
-// Retrieve current context metrics for UI progress
-var metrics = await agentService.GetContextMetricsAsync(conversationId, ct);
-```
+IAgentService abstracts the lifecycle of agent interactions for a single conversation, encapsulating streaming events, reply regeneration, and context visibility. It hides the ReAct loop orchestration behind a clean, asynchronous API surface that API layers and clients can rely on. RunAsync provides a real-time stream of AgentEvent observations that UI components can render, while RegenerateAsync creates a new variant for the same conversational context without mutating the original, enabling exploration of alternatives. GetContextMetricsAsync surfaces metrics that help the UI decide when to display progress indicators or adjust how much history to fetch.
 
 ## Notes
-- RunAsync pre-flight validation is synchronous to allow the API layer to respond with the correct HTTP status before streaming begins.
-- In-stream failures are delivered as AgentError events rather than exceptions.
-- RegenerateAsync requires a valid, active assistant message and shares its VariantGroupId with other variants to facilitate user selection.
+- Pre-flight validation exceptions are thrown synchronously so API layers can map to appropriate HTTP status codes before streaming begins.
+- RegenerateAsync enforces that the target message exists, belongs to the assistant, and is active; invalid states throw synchronously.

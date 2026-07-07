@@ -15,7 +15,10 @@ public record MeResponse(Guid Id, string Email)
 | `Email` | `string` | — |
 
 
-MeResponse represents the authenticated user's identity returned by the API: a minimal, immutable payload containing the user's Id and Email. Reach for it when you need to surface just enough identity information in responses (for example, a /me endpoint) while keeping the domain model private.
+MeResponse is a small, immutable data carrier that represents a user's identity in authentication-related API surfaces. As a C# record, it provides value-based equality and concise construction, exposing two fields: Id (Guid) and Email (string). It is typically used as a minimal, serializable contract when returning information about the currently authenticated user, without pulling in the entire user profile.
 
 ## Remarks
-MeResponse serves as a stable, minimal surface for the authenticated identity. By using a record, it benefits from value-based equality and a concise, immutable shape that maps cleanly to JSON. It helps decouple the API contract from the domain model and provides a predictable payload for clients.
+MeResponse serves as a boundary between the authentication subsystem and API surfaces. It uses a record to guarantee value semantics and straightforward equality, and to enable compact construction with two identity fields. As a DTO, it is designed for serialization, exposing Id and Email for consumption by clients without exposing additional internal state.
+
+## Notes
+- Email is personally identifiable information; ensure proper handling, access control, and redaction in logs and telemetry.

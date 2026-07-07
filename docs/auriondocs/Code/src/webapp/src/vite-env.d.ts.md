@@ -4,18 +4,10 @@
 > **Kind:** file
 
 
-This file is a TypeScript declaration that brings in the Vite client type definitions. By referencing vite/client, it exposes Vite's ambient globals (notably import.meta.env) to the TypeScript compiler, enabling proper type checking and editor support across the project without adding runtime code.
+This file pulls in the Vite client type definitions into the global TypeScript scope, allowing the compiler to understand Vite-specific globals without importing runtime code. It’s a standard part of Vite projects to provide typed access to environment variables and HMR-related APIs via import.meta and related Vite runtime features across all modules.
 
 ## Remarks
-Because it is a compile-time reference, it has no runtime effect; it simply informs the type system about Vite-specific globals. It centralizes environment typing so all modules can rely on consistent import.meta.env shapes and Vite client APIs. This improves editor IntelliSense and helps catch misnamed environment variables at compile time.
-
-## Example
-```typescript
-// Access a Vite environment variable with proper typing
-console.log(import.meta.env.VITE_API_BASE_URL);
-```
+Vite-env.d.ts serves as a central source of ambient typings for the client environment. By referencing vite/client, it ensures consistent IntelliSense for import.meta.env and Vite's runtime shims across the codebase. This decouples type information from implementation details, so modules can read environment values and HMR signals without importing Vite-specific types individually.
 
 ## Notes
-- Ensure the file is included in your tsconfig.json so the types are visible to the TypeScript compiler.
-- It provides only typings; there is no runtime import or side effect.
-- Upgrading Vite may require reloading your editor/tsserver to pick up updated client types.
+- Only environment variables prefixed with VITE_ are exposed to the client at build time and appear under import.meta.env; reading other variables will yield undefined at runtime.

@@ -39,23 +39,14 @@ public sealed record GabrielSequence(
 | `Metadata` | `SequenceMetadata` | — |
 
 
-GabrielSequence is an immutable record that encapsulates the data composing a canonical Gabriel animation sequence: a version, a shared Palette, a 64-frame collection, and associated metadata. It is the in-memory, render-ready representation used by the emotion engine; rendered bytes are not persisted. Sequences are generated on-demand from a seed and the ConversationState by IGabrielSequenceGenerator, with both inputs available on the Conversation entity. Frames can be accessed either by a flat index (0..63) via the single-parameter indexer, or by a (FrameLayer, frameInLayer) pair via the two-parameter indexer, which maps into the underlying Frames list using the layer offset (FrameLayers.FramesPerLayer).
+GabrielSequence is an immutable, on-demand representation of the canonical Gabriel animation sequence. It packages 64 palette-indexed frames (16×16), a shared Palette, and associated metadata into a single, versioned object without persisting rendered pixels. Sequences are produced on demand from a seed and ConversationState by IGabrielSequenceGenerator — inputs that already live on the Conversation entity — making GabrielSequence a lightweight, queryable view into the final frames and metadata. Frames can be accessed either by a simple 0-based index via sequence[index] or by specifying a layer and position within that layer via sequence[layer, frameInLayer].
 
 ## Remarks
-GabrielSequence exists to separate the persistence model from the rendered output, enabling reproducible on-demand rendering while preserving a simple, immutable representation. The explicit FrameCount and SchemaVersion document expectations for downstream components and serializers, and the two indexers provide convenient access patterns: a straightforward, linear read by index for sequence-wide operations, and a layer-aware read for scenarios that align with the frame-layer organization of the source media. This separation also makes equality comparisons meaningful for caching or deduplication since the sequence’s content is the combination of Version, Palette, Frames, and Metadata.
-
-## Example
-```csharp
-GabrielSequence seq = GetGabrielSequence(seed, convState);
-Frame first = seq[0];
-FrameLayer layer = default; // choose appropriate layer depending on usage
-Frame firstInLayer = seq[layer, 0];
-```
+GabrielSequence serves as the boundary between sequence generation and consumption. By keeping the actual pixel data out of persistence, it enables efficient recomputation and sharing of identical sequences across conversations. The Version and SchemaVersion fields help readers understand compatibility with the generator and storage format; the dual indexers map 2D frame layout into the underlying linear Frames collection, leveraging FrameLayers.FramesPerLayer to compute offsets.
 
 ## Notes
-- Rendered bytes are not persisted; regenerating frames requires access to the seed and ConversationState used by the generator.
-- Access by layer assumes a consistent organization of frames per layer (FrameLayers.FramesPerLayer); changing that constant would affect indexing.
-- GabrielSequence is a record, so it is immutable; to reflect changes you would construct a new instance with updated data.
+- The second indexer relies on FrameLayers.FramesPerLayer matching the layout of Frames; inconsistency can lead to out-of-bounds access.
+- Ensure Frames.Length == FrameCount; otherwise indexers may throw.
 
 ---
 
@@ -82,18 +73,23 @@ public sealed record SequenceMetadata(
 | `StateSummary` | `string?` | — |
 
 
-SequenceMetadata is a compact, immutable record that captures the metadata produced alongside a generated sequence. It records the Seed used to drive generation, the precise GeneratedAt timestamp, and an optional human-readable StateSummary describing the live state that influenced the result. Use this type when you need reproducibility, debugging context, or to provide contextual notes for the observation pass during AI-assisted analysis.
+SequenceMetadata is an immutable data carrier that encapsulates provenance information for a generated sequence. It stores the seed used to drive deterministic generation, the exact moment of generation, and an optional human-readable snapshot of the live state that influenced the result. This metadata enables reproducibility, debugging, and AI-assisted observation by providing context without altering the generated data.
 
 ## Remarks
+This record exists to separate concerns between the generated sequence and its provenance, enabling logs, replay, and diagnostics across the generation pipeline. The value-based equality and immutability of a record make it a natural wrapper for provenance, allowing it to be compared, serialized, and passed through APIs without mutation. It fits alongside the sequence data without imposing behavior on generation, serving as a lightweight context carrier for diagnostics and reproducibility.
 
-By encapsulating seed, time, and an optional state summary, SequenceMetadata serves as a stable contract between the generation logic and tooling that inspects or replays sequences. As a value-based record, it participates in equality checks naturally and can be serialized alongside outputs. The presence of Seed and GeneratedAt enables deterministic replay and traceability across components in Gabriel.Engine’s sequence pipeline, while StateSummary offers debugging breadcrumbs without encoding the entire live state.
-
-It can be attached to generated outputs to preserve provenance across storage or transport.
+## Example
+```csharp
+var metadata = new SequenceMetadata(
+    Seed: 42L,
+    GeneratedAt: DateTimeOffset.UtcNow,
+    StateSummary: "calm, steady rhythm; 4 turns in"
+);
+```
 
 ## Notes
-
-- StateSummary may be null — guard against null before using it.
-- Seed and GeneratedAt are provenance data; preserve them when passing results through layers.
-- SequenceMetadata is immutable (record); to "modify" values you must construct a new instance.
+- StateSummary is optional; pass null if no human-readable context is available or desired.
+- Seed represents deterministic input for generation; different seeds yield different results and support replay or auditing of outcomes.
+- GeneratedAt should reflect the precise time of generation to enable accurate ordering and traceability in logs and analyses.
 
 ---

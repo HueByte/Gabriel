@@ -18,31 +18,14 @@ public interface IJwtTokenService
 ```
 
 
-IJwtTokenService defines the contract for issuing and revoking JWT-based tokens used in the authentication workflow. It issues short-lived access tokens and long-lived, rotatable refresh tokens; access tokens are stateless and validated by signature, while refresh tokens are stored server-side to support revocation and theft detection. Typical usage: after a user authenticates, IssueAsync returns a TokenPair; use RefreshAsync to rotate tokens when needed; RevokeAsync to sign out from a single device; RevokeAllForUserAsync for sign-out-everywhere scenarios.
+IJwtTokenService defines a contract for issuing short-lived JWT access tokens paired with rotatable refresh tokens and for managing their lifecycle across a user’s devices. Implementations issue a TokenPair after authentication, refresh tokens on demand, and support revocation of single tokens or all tokens for a user, enabling sign-out everywhere and recovery from credential compromise.
 
 ## Remarks
-This abstraction separates token lifecycle concerns from business logic, enabling consistent security behavior across clients and services. It centralizes refresh-token rotation and theft handling; a reused or compromised token triggers a revoke-all for the user, limiting potential damage.
-
-## Example
-```csharp
-// Common usage pattern
-var tokens = await _jwtTokenService.IssueAsync(user.Id, user.Email, ct);
-
-// Later, refresh on token rotation
-var newTokens = await _jwtTokenService.RefreshAsync(tokens.RefreshToken, ct);
-
-// Sign out from a single device
-await _jwtTokenService.RevokeAsync(tokens.RefreshToken, ct);
-
-// Sign out everywhere after credential compromise
-await _jwtTokenService.RevokeAllForUserAsync(user.Id, ct);
-```
+This abstraction centralizes token lifecycle concerns (issuance, rotation, and revocation) behind a single interface, enabling consistent security policies and easier testing. By separating stateless access tokens from stateful refresh tokens, it allows scalable token validation while retaining the ability to revoke tokens when necessary (e.g., on sign-out or credential compromise).
 
 ## Notes
-- Refresh tokens are rotated on each successful RefreshAsync call; reuse or theft of a refresh token is detected and triggers a revoke-all for the user.
-- RevokeAsync invalidates a single refresh token (e.g., sign-out on one device); use RevokeAllForUserAsync to terminate all sessions for a user.
-- TokenPair is the payload returned by issuance/refresh operations and should be treated as sensitive material; store and transmit it securely.
-
+- Refresh token rotation means a reused token can indicate theft; revocation of all active tokens for the user may be triggered in response.
+- Treat refresh tokens as secrets: protect them at rest and in transit; do not expose them to insecure frontends or logs.
 
 ---
 
@@ -68,26 +51,14 @@ public record TokenPair(
 | `RefreshExpiresAt` | `DateTimeOffset` | — |
 
 
-TokenPair is an immutable value object that groups an access token and its expiry alongside a refresh token and its expiry, allowing callers to transport both tokens and their lifetimes as a single unit. Use TokenPair when a token response provides both an access and a refresh token together, so you can pass around a single, strongly-typed value instead of separate strings and expiry dates.
+TokenPair is a compact, immutable value object that holds an access token, its expiration time, a refresh token, and its expiration time. It is intended to be produced by identity/token services when issuing tokens and carried as a single unit through the authentication workflow. By representing both tokens and their lifetimes together, TokenPair reduces the risk of mismatched tokens and expiry data during transport or storage. As a C# record, it provides value-based equality and built-in immutability; when the access token is rotated, you can create a new TokenPair using a with-expression, updating only the fields you need while preserving the rest.
 
 ## Remarks
-- TokenPair uses C# record semantics to provide value-based equality; two pairs with identical fields compare equal and can be deconstructed in a pattern-based style.
-- Being a record, it is effectively immutable: create a new TokenPair to reflect updated tokens or expiries rather than mutating an existing instance.
-- It encapsulates related authentication data (tokens and their expiries) to reduce surface area and improve type-safety in authentication and token-refresh workflows.
-
-## Example
-```csharp
-var tokenPair = new TokenPair(
-    AccessToken: accessToken,
-    AccessExpiresAt: DateTimeOffset.UtcNow.AddMinutes(15),
-    RefreshToken: refreshToken,
-    RefreshExpiresAt: DateTimeOffset.UtcNow.AddDays(7)
-);
-```
+TokenPair serves as the single container for token information in the authentication pipeline. It encapsulates the two tokens and their lifetimes as a unified contract, reducing boilerplate for callers that need to pass token data around. Its immutable, value-based nature makes it safe to share across boundaries and to use in dictionaries or caches as a key or value.
 
 ## Notes
-- Do not log or serialize tokens to logs or user-facing responses; treat them as sensitive data.
-- Prefer UTC-based timestamps (DateTimeOffset with UTC) to avoid timezone-related bugs when comparing expiries.
-- If you need to change any token or expiry, construct a new TokenPair instance; the existing one remains unchanged.
+- TokenPair is a value object; equality is by value across all four properties.
+- It is immutable; to create a modified version use the with-expression.
+- Treat tokens as sensitive data; avoid logging the actual token strings; use redaction in logs and UIs.
 
 ---

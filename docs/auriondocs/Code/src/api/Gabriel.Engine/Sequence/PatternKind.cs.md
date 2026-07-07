@@ -15,13 +15,12 @@ public enum PatternKind
 ```
 
 
-PatternKind is an enumeration that lists the five primitive visual patterns the generator can render: Plasma, Waves, Spiral, Pulse, and Shimmer. Each member corresponds to a distinct animation grammar defined in Patterns.cs, enabling the rendering engine to switch between discrete pattern strategies at runtime. A seed determines which pattern is chosen by default when no explicit override is set on the owning Project or Conversation, while explicit overrides let a user pin a specific look without re-rolling for it.
+PatternKind enumerates the five visual primitives that the generator can render. It serves as a type-safe selector used by the rendering pipeline to pick one of the predefined animation grammars defined in Patterns.cs. The seed logic selects a pattern when no override is set on the owning Project or Conversation, while explicit overrides let users pin a specific look without rerolling for it.
 
 ## Remarks
 
-PatternKind serves as a clean abstraction that decouples the rendering policies from the rest of the system. By centralizing the allowed visual primitives, the code that configures defaults or user overrides can reference a single type rather than multiple ad-hoc constants. It also makes it straightforward to extend visuals by adding new kinds in Patterns.cs and PatternKind, with minimal ripple effects across callers.
+PatternKind decouples the choice of visual style from the concrete rendering implementation. It enables consumers to switch between Plasma, Waves, Spiral, Pulse, and Shimmer without referencing the underlying generation logic, which lives in Patterns.cs. By centralizing defaulting and overrides, it provides predictable visuals across components while still allowing project-specific customization.
 
 ## Notes
 
-- If you extend PatternKind with new values, ensure the dispatch logic covers the new cases to avoid unexpected fallbacks.
-- When changing the seed/default mapping, update the corresponding documentation and tests to reflect the new default visual.
+- Adding or renaming values in PatternKind must be kept in sync with the corresponding initialization and evaluation methods in Patterns.cs to avoid runtime mismatches.

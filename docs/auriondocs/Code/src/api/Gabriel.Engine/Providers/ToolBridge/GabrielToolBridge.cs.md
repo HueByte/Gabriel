@@ -4,8 +4,8 @@
 
 ## Contents
 
-- [GabrielToolBridge_overview](#gabrieltoolbridge_overview)
 - [GabrielToolBridge](#gabrieltoolbridge)
+- [GabrielToolBridge](#gabrieltoolbridge-1)
 - [Models](#models)
 - [Name](#name)
 - [AppendFixupMessage](#appendfixupmessage)
@@ -19,7 +19,7 @@
 
 ---
 
-## GabrielToolBridge_overview
+## GabrielToolBridge
 > **File:** `src/api/Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs`  
 > **Kind:** class
 
@@ -28,29 +28,16 @@ public sealed class GabrielToolBridge : IChatProvider
 ```
 
 
-Bridges a tool-incapable chat provider so it presents the same IChatProvider surface as a native tool-calling provider. Use this when you need the agent loop, UI and downstream logic to receive the usual tool-call events from a model that cannot execute or natively signal tool calls (for example, a local Ollama model or a small commercial model without function-calling). The bridge translates between the model's plain-text output and the agent's ToolCall events without changing where or how tools are executed.
+Bridges a non-tool-calling ("tool-incapable") chat provider to the IChatProvider surface expected by the agent runtime. Use this when you need to treat a local or constrained LLM (one that cannot perform native function/tool calls) as if it produced the same event shape as a provider that supports tool calls so the agent loop and UI can remain unchanged.
 
 ## Remarks
-This decorator rewrites the outgoing conversation and interprets incoming text so the agent stack can remain unchanged. Before calling the inner provider it serialises prior tool calls into inline markers and appends a system message that documents the available tools and the expected wire format. While streaming, it splits live text deltas and buffers the tail when it detects a tool-call marker; after the stream completes it parses the buffered tail to synthesise ToolCall events which the agent receives just like native tool calls. The bridge does not execute tools itself — actual tool execution remains the responsibility of the server-side AgentService/ITool pipeline.
-
-## Example
-```csharp
-// Wrap an existing tool-incapable provider so the agent loop can handle tool events
-IChatProvider innerProvider = new OllamaChatProvider(...);
-var bridge = new GabrielToolBridge(innerProvider, logger);
-
-await foreach (var ev in bridge.StreamAsync(history, tools, modelName))
-{
-    // ev can be standard text deltas, reasoning events, or synthesized ToolCall events
-    HandleEvent(ev);
-}
-```
+This decorator adapts an inner IChatProvider by: translating prior structured tool interactions into inline markers, injecting a system message that documents the available tools and the wire format, streaming the inner provider's text while detecting embedded <tool_call> markers, and parsing buffered tail text into ToolCall events. It intentionally does not execute tools itself — tool execution remains the responsibility of the server-side AgentService/ITool pipeline. The class preserves provider identity and model metadata (Name and Models) so registry and selection logic continue to behave as if the original provider were used.
 
 ## Notes
-- Live typewriter-style streaming is provided only on the first parse attempt; if the bridge must retry parsing the tool-call block (MaxParseRetries = 2), subsequent attempts do not stream their corrected text — only their final tool calls are emitted.
-- The bridge calls the inner provider with an empty tools list; tool descriptors are injected into the system prompt instead. Do not assume the inner provider will perform tool execution.
-- If the underlying model nevertheless emits native tool-call events, the bridge will pass them through unchanged — this means the decorator is safe but possibly redundant in that case.
-- Parsing can fail; the bridge will append a corrective user message and retry a bounded number of times before falling back to emitting the raw text.
+- Live streaming of text is only provided for the first parse attempt. If the bridge must retry parsing the model output, the retry's textual output is not re-streamed (to avoid "unsending" already emitted text); only the corrected tool-call events from the retry are produced.
+- The inner provider is called with an empty tools list: tool descriptors are embedded in the injected system prompt instead of being passed via the tools parameter.
+- This class only bridges the wire protocol/format; it does not execute tools. Tool execution continues to occur via AgentService and ITool implementations.
+- If the underlying provider unexpectedly emits native tool calls despite receiving an empty tools list, the bridge will pass them through (honouring the inner provider rather than hiding them).
 
 ---
 
@@ -69,25 +56,14 @@ public GabrielToolBridge(IChatProvider inner, ILogger<GabrielToolBridge> logger)
 | `inner` | [`IChatProvider`](../IChatProvider.cs.md) | — |
 | `logger` | `ILogger<GabrielToolBridge>` | — |
 
-**Returns:** `public`
 
-
-GabrielToolBridge's constructor wires two essential dependencies into the bridge: an IChatProvider for chat I/O and an `ILogger<GabrielToolBridge>` for logging and diagnostics. Use this constructor when configuring the bridge in a DI container or in tests, providing concrete implementations (or mocks) of IChatProvider and `ILogger<GabrielToolBridge>` so the bridge can delegate messaging and logging.
+Initializes a GabrielToolBridge with the provided IChatProvider and `ILogger<GabrielToolBridge>` instances, storing them for subsequent use by the bridge to perform chat operations and to emit diagnostic logs.
 
 ## Remarks
-GabrielToolBridge serves as a bridge between the Gabriel engine and a chat provider, centralizing chat I/O behind a stable abstraction and enabling observable logging through the bridge’s logger. By accepting dependencies rather than instantiating them, it remains easily testable and swappable in different environments. Note that the constructor shown does not perform argument validation, so callers should guarantee non-null values to avoid a NullReferenceException later in the bridge’s operation.
-
-## Example
-```csharp
-// Example: simple instantiation
-IChatProvider chat = new ConsoleChatProvider();
-ILogger<GabrielToolBridge> logger = new LoggerFactory().CreateLogger<GabrielToolBridge>();
-var bridge = new GabrielToolBridge(chat, logger);
-```
+This constructor embodies dependency injection by taking its collaborators as parameters, enabling easy swapping of implementations and straightforward unit testing with mocks. It decouples GabrielToolBridge from concrete chat or logging implementations, and the `ILogger<GabrielToolBridge>` parameter provides type-scoped logging to aid diagnosis and tracing through the bridge's activity.
 
 ## Notes
-- The constructor does not enforce null-checks; passing null for either dependency may lead to NullReferenceException during bridge operation.
-- When wiring via a DI container, ensure that IChatProvider and `ILogger<GabrielToolBridge>` are resolved with appropriate lifetimes to match the bridge’s usage.
+- No argument validation is performed; ensure non-null values are supplied to avoid NullReferenceException during use.
 
 ---
 
@@ -100,23 +76,14 @@ public IReadOnlyList<LLMModel> Models => _inner.Models
 ```
 
 
-This property exposes the read-only list of LLMModel instances sourced from the underlying inner provider. It delegates to _inner.Models, giving callers a non-mutating view of the models currently available through the Gabriel Tool Bridge.
+This property surfaces the current collection of LLMModel configurations available through the ToolBridge. It delegates to the underlying inner provider and exposes them as a read-only `IReadOnlyList<LLMModel>`, letting callers enumerate the models and inspect their metadata (e.g., Name, IsActive, ContextWindowTokens, and pricing or capability flags) without mutating the collection.
 
 ## Remarks
-By delegating to the inner provider, this symbol decouples consumers from the concrete implementation and provides a consistent surface for discovering available models at the bridge boundary. It simplifies testing and composition by letting the inner provider vary without requiring callers to change their access pattern. It also serves as a stable access point for UI bindings or logging that need to enumerate the models.
-
-## Example
-```csharp
-// Most common usage: list available models from the bridge
-foreach (var model in bridge.Models)
-{
-    Console.WriteLine($"{model.Name} ({model.Id})");
-}
-```
+By acting as a pass-through, Models decouples consumer code from the inner implementation and provides a stable contract for discovering available models. It relies on the LLMModel metadata to inform orchestration decisions about activation, context, and pricing when selecting a model for a task.
 
 ## Notes
-- This is a live view into the inner provider's Models; there is no snapshot. Changes to the underlying collection are reflected here as they occur.
-- You cannot mutate the list via this property; to change which models exist, modify the inner provider.
+- Read-only contract ensures consumers cannot alter the collection; mutations (if any) would need to occur via the inner provider.
+- If the inner model list updates over time, consumers may observe updated items on subsequent enumerations.
 
 ---
 
@@ -129,14 +96,16 @@ public string Name => _inner.Name
 ```
 
 
-This read-only property forwards to the inner provider's Name, preserving the underlying provider identity even when the provider is wrapped by a decorator. It enables callers to rely on the base provider’s canonical name for registry resolution and model wiring, without needing to unwrap the decorator.
+Returns the underlying provider’s name by delegating to the wrapped (inner) provider, preserving the base provider’s identity even when wrapped by this decorator. This ensures that the agent registry resolves by the original provider’s name, and that models owned by the wrapped provider remain associated with that base name.
+
+Use this property when you need the original provider name for registry lookups, logging, or configuration that relies on the base provider’s identity rather than the decorator’s wrapper.
 
 ## Remarks
-This member is a transparent piece of the decorator pattern: identity remains stable across wrapping boundaries, so consumers can treat decorated and non-decorated providers uniformly when querying by Name. It keeps the naming contract intact for the agent registry and any components that log or route based on a provider’s Name.
+This property is a straightforward pass-through of the inner provider’s Name. It lets the decorator participate in naming and discovery without altering identity, which helps maintain consistent behavior across wrapped providers and preserves the semantics described in the comments that identity passes through.
 
 ## Notes
-- If the decorator is not initialized with a non-null inner provider, accessing Name will throw a NullReferenceException.
-- Name is immutable from the decorator’s perspective; it simply exposes the inner provider's Name. To change identity, alter the inner provider itself.
+- Assumes _inner is non-null; accessing Name will throw if the inner provider is null.
+- The value is delegated live — changes to the inner provider’s Name reflect immediately through this property.
 
 ---
 
@@ -162,7 +131,7 @@ private static IReadOnlyList<ChatProviderMessage> AppendFixupMessage(
 **Returns:** `IReadOnlyList<ChatProviderMessage>`
 
 
-After a parse failure caused by an invalid tool_call block in the chat history, this helper constructs a new, augmented history that includes the model’s previous output and a corrective prompt. It appends two messages: first, the Assistant’s last model output to preserve context, and second, a User-facing fixup message that exposes the offending block and the parse error, then instructs the model to re-issue a corrected response using a valid <tool_call>{"name":"...","arguments":{...}}</tool_call> structure. The method returns a new `IReadOnlyList<ChatProviderMessage>` that preserves the original history while supplying the necessary guidance for retry. This keeps retry logic encapsulated in one place and ensures consistent, self-describing prompts during error recovery.
+Appends a corrective messaging sequence to a chat history after a tool-call parse failure. The method accepts the current history, the full textual model output, and the parse exception, and returns a new read-only history that first preserves the previous history and the model's failed output, then appends a user-facing fix-up prompt. This prompt reports the offending block, states the parse error, and instructs the model to re-issue its response from scratch with valid <tool_call>{"name":"...","arguments":{...}}</tool_call> blocks, ensuring the "arguments" field is a JSON object and that the block is not wrapped in code fences.
 
 ---
 
@@ -183,21 +152,14 @@ private static string BuildToolDocs(IReadOnlyList<ToolDescriptor> tools)
 **Returns:** `string`
 
 
-BuildToolDocs generates a narrative description of how to invoke runtime tools from within a response. It accepts a list of ToolDescriptor objects and renders a self-contained guide that explains the exact inline tool_call blocks to emit, the required JSON structure for arguments, and the rule that tool results arrive in subsequent messages prefixed with [Tool result: ToolName]. Use this when you need to expose up-to-date, machine-generated tool invocation guidance to users or client code, instead of hand-writing the instructions.
+BuildToolDocs constructs a compiled, human- and machine-readable guide describing how to invoke runtime tools. Given a collection of ToolDescriptor entries, it returns a single string that begins with a [Tool calling] header and enumerates the exact block format to emit when requesting a tool invocation. It also lists each available tool by name, its description, and a JSON schema for its parameters. This helper is used whenever you need to expose the current tool set to users or to other parts of the system in a stable, self-describing format.
 
 ## Remarks
-By centralizing tool metadata into ToolDescriptor, this helper ensures the documentation stays in sync with the actual tool surface. It decouples the presentation from the tool definitions and provides a consistent protocol that downstream clients can rely on when integrating tool calls into their workflows.
-
-## Example
-```csharp
-// Most common usage: emit a tool call block inline
-<tool_call>{"name":"SpellCheck","arguments":{"text":"Ths sntnc has erors."}}</tool_call>
-```
+BuildToolDocs centralizes the formatting of tool invocation guidance, ensuring consistent help text across tool sets and reducing duplication when tool availability changes. By deriving the documentation from ToolDescriptor, the output stays in sync with the actual surface exposed by the tool bridge. The produced string is intended for display or logging rather than direct execution.
 
 ## Notes
-- The "arguments" field must be a JSON object; use {} if there are no arguments.
-- Do not wrap the <tool_call> block in Markdown code fences; emit inline in your response.
-- After a tool runs, results will appear as messages prefixed with [Tool result: ToolName]; use those results to drive further actions.
+- The generated text begins with a literal [Tool calling] section and instructs users to emit a <tool_call> block in a specific JSON format. The exact block shape is not executed by this function; downstream components are responsible for handling tool invocations.
+- If the tools collection is empty, the output still contains the header and a section listing "Available tools" but with no tool entries.
 
 ---
 
@@ -219,22 +181,15 @@ private static string EscapeJsonString(string s) =>
 **Returns:** `string`
 
 
-Escapes a string so it can be safely embedded in a JSON string literal. It first escapes backslashes by doubling them, then escapes double quotes, ensuring the value remains syntactically valid when inserted into manually constructed JSON.
+EscapeJsonString converts a string into a form safe for JSON string literals by escaping backslashes and double quotes. Use it when you need to embed arbitrary text into a JSON string literal without relying on a full serializer.
 
 ## Remarks
-This tiny helper centralizes a focused escaping behavior, reducing duplication across call sites and guarding against basic JSON syntax errors in hot paths where a full serializer would be overkill. It is not a full JSON encoder; for complete JSON serialization, rely on a dedicated library.
-
-## Example
-```csharp
-// Common case: escape a value before embedding in JSON
-string input = "A \"quote\" with \\ backslash";
-string escaped = EscapeJsonString(input);
-```
+This is an internal helper that ensures consistent escaping across the ToolBridge code path. By performing replacements in a fixed order (backslashes first, then quotes), it avoids double-escaping issues and aligns with JSON string rules. Because it's private to the containing class, its usage is restricted to that scope, reducing the risk of inconsistent escaping elsewhere.
 
 ## Notes
-- Escapes only backslashes and double quotes; other JSON control characters are not handled here.
-- Not a substitute for a proper JSON serializer.
-- Private method; intended for internal usage within the hosting class.
+- The method does not handle null input; passing null would throw a NullReferenceException.
+- It escapes only backslashes and double quotes; other JSON-sensitive characters (e.g., newlines) are not escaped by this helper.
+- Being private, it's intended as an internal utility. If you need to escape in external code, use a standard JSON serializer.
 
 ---
 
@@ -258,14 +213,14 @@ private static IReadOnlyList<ChatProviderMessage> InjectToolDocs(
 **Returns:** `IReadOnlyList<ChatProviderMessage>`
 
 
-InjectToolDocs constructs a single system message containing tool documentation and inserts it into the chat history so that the model is aware of available tools before responding. It relies on BuildToolDocs(tools) to render the descriptors and places the resulting system message right after existing system messages but before the first user/assistant turn; if there are no non-system messages yet, the docs are appended at the end. The method returns a new history list, leaving the original history untouched.
+InjectToolDocs augments a chat history by injecting a generated tool-documentation payload as a system message, placing it immediately after any existing system messages. When a non-empty set of ToolDescriptor entries is provided, it creates a new ChatProviderMessage with Role set to System and Content produced by BuildToolDocs(tools). It then computes the insertion point at the boundary between system messages and the rest of the conversation and returns a new history sequence that includes the docs message at that point; if no tools are supplied, it returns the original history unmodified. This enables the runtime to expose available tools to the model without altering the original conversation flow.
 
 ## Remarks
-This symbol exists to decouple tool metadata generation from prompt assembly. By centralizing the tool documentation in a system message, the model consistently sees the same tool surface across turns and callers can enable or disable tooling without changing prompt logic. The insertion logic preserves the surrounding system messages so system-level context is kept at the top.
+InjectToolDocs centralizes the mechanism of advertising tool capabilities to the model. By deriving the docs content from BuildToolDocs and injecting it at the system boundary, it guarantees the model sees the tools before any user or assistant turns. The approach helps keep the tool-availability concerns separate from the rest of the chat history manipulation, making testing and reasoning easier. It also preserves the original ordering of messages, only adding a single docs message.
 
 ## Notes
-- Repeated calls may duplicate the docs; call only once at the start of a conversation or guard against existing docs.
-- The function scans history linearly to find the insertion point; for very long histories this is O(n).
+- Repeated calls can insert multiple identical tool-doc messages if the history is augmented multiple times; consider guarding against re-injection in cases where history may already include tool docs.
+- If there are no tools provided (tools.Count == 0), the function is a no-op and returns the input history unchanged.
 
 ---
 
@@ -287,22 +242,14 @@ private static string SerializeCallInline(string name, string argumentsJson)
 **Returns:** `string`
 
 
-Serializes a tool invocation into a compact JSON payload by pairing a tool name with its arguments. The tool name is escaped for safe JSON embedding, and the provided arguments string is validated as JSON; if it is blank or invalid, an empty object is substituted to guarantee a valid payload.
+Converts a tool invocation into a single JSON payload used by the inline renderer. It takes a tool name and a JSON-encoded arguments string, validates and normalizes the arguments, escapes the tool name, and returns a JSON string in the shape {"name":"<escaped>","arguments":<args>}.
 
 ## Remarks
-Centralizes the formatting of inline tool calls produced by the assistant. It decouples name escaping and argument validation from callers, ensuring consistency and reducing the risk of malformed tool invocations being rendered downstream. The implementation uses a lightweight JSON validation step (JsonDocument.Parse) to avoid altering the original arguments when they are already valid JSON.
-
-## Example
-```csharp
-// Example
-var payload = SerializeCallInline("ComputeSum", "{\"a\":1,\"b\":2}");
-// payload == "{\"name\":\"ComputeSum\",\"arguments\":{\"a\":1,\"b\":2}}"
-```
+This helper centralizes the creation of tool-call payloads and guards against malformed input. It uses JsonDocument.Parse to validate the provided arguments and falls back to {} when arguments are missing or invalid, ensuring downstream consumers never receive invalid JSON. The tool name is escaped with EscapeJsonString to prevent injection issues inside the payload.
 
 ## Notes
-- If argumentsJson is blank or invalid JSON, the resulting payload uses an empty object for the arguments field, which may drop intended arguments.
-- The name is escaped with EscapeJsonString to prevent breaking the JSON payload.
-- The method is private and intended for internal use by the ToolBridge to standardize tool call serialization.
+- If argumentsJson is valid JSON but not an object (e.g., an array or primitive), that value is embedded as the arguments field as-is.
+- The validation step does not mutate the input beyond choosing a safe default when invalid; the original string is otherwise preserved inside the payload.
 
 ---
 
@@ -330,40 +277,15 @@ public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
 **Returns:** `IAsyncEnumerable<ChatProviderEvent>`
 
 
-Streams an asynchronous sequence of chat provider events produced by a language model, wrapping an inner provider to pre-inject tool descriptors into the system prompt and post-process the output to reliably surface tool invocations. It supports a retry strategy: the first pass streams live; subsequent passes buffer text until a valid tool-call candidate is observed, ensuring tool calls are surfaced correctly even when the model delays or obscures them.
+Streams chat provider events asynchronously by wrapping an inner provider, enriching the history with tool descriptors, and emitting a sequence of events that may include TextDeltaEvent, ReasoningDeltaEvent, ToolCallReadyEvent, or FinishEvent. It first translates the incoming history and injects tool documentation, then delegates to the inner provider and post-processes its stream to surface tool invocations in a way that supports both live streaming and retry scenarios.
 
 ## Remarks
-By isolating tool-call handling behind a splitter and a retry buffer, this symbol decouples tool invocation from plain text streaming. It guarantees a consistent surface for tool calls across models and timing variations, while keeping the rest of the streaming pipeline agnostic to the exact signaling of tool usage. It also embeds tool descriptors into the system prompt once, so the inner provider can reference them without re-supplying descriptors on every turn; if the inner provider emits unexpected tool-calls, they are still forwarded safely rather than being dropped.
-
-## Example
-```csharp
-// Example: consuming the streamed events from the tool bridge
-IAsyncEnumerable<ChatProviderEvent> stream = bridge.StreamAsync(history, tools, modelName, ct);
-await foreach (var e in stream)
-{
-    switch (e)
-    {
-        case TextDeltaEvent td:
-            Console.Write(td.Delta);
-            break;
-        case ReasoningDeltaEvent rd:
-            // Optional: surface reasoning in a debugging or audit view
-            break;
-        case ToolCallReadyEvent tc:
-            // Handle the surfaced tool call (invoke tooling as needed)
-            break;
-        case FinishEvent f:
-            // End of the current turn
-            break;
-    }
-}
-```
+This symbol acts as a façade around the inner chat provider to inject tool-related metadata into the prompt and to orchestrate a two-mode streaming strategy. In live mode, it yields sanitized text chunks as the model streams, preserving the surrounding narrative while suppressing or transforming tool-call cues as needed. In retry mode, it buffers output to allow corrections or re-folding of tool invocations, ensuring that the final presented stream reflects the intended tool usage even if the initial live stream includes imperfect tool markers. The ToolCallStreamSplitter is the abstraction that detects tool_call markers in the text and governs when to emit plain text versus tool-invocation signals. This design isolates the complexity of tool invocation handling from callers, providing a consistent streaming experience while guarding against unsafe retractions of already-emitted content.
 
 ## Notes
-- The method relies on the inner provider emitting or allowing tool calls to be surfaced as markers; if the inner provider does not emit or signal tool calls with the expected marker, tool invocations may be delayed or suppressed accordingly.
-- The retry mechanism trades latency for correctness: increasing MaxParseRetries can improve the chance a tool call is captured, at the cost of additional buffering.
-- CancellationToken ct is respected to cancel streaming; long-running streams will terminate when ct is canceled.
-
+- The method operates in two phases: a live mode that streams text as produced and a retry mode that buffers text for a consolidated re-emission. You cannot retract text emitted in live mode; the retry path exists to mitigate scenarios where tool calls need to be reinterpreted.
+- If no <tool_call> marker showed up, the implementation emits a FinishEvent with the inner finish reason, ensuring clean turn boundaries. In retry mode, if the buffered tail contains no tool_call markers, the buffered text is emitted as a single delta to preserve readability.
+- When the inner provider emits native tool signals despite an empty tool-descriptor list, those signals are forwarded to callers for safety, though the outer wrapper typically drives the tooling via InjectToolDocs.
 
 ---
 
@@ -384,28 +306,14 @@ private static IReadOnlyList<ChatProviderMessage> TranslateHistory(IReadOnlyList
 **Returns:** `IReadOnlyList<ChatProviderMessage>`
 
 
-Translates the assembled chat history into a wire-format understood by the inner model by inlining tool calls in assistant messages and tagging tool results as user messages. Use this when you need to present tool interactions to a non-tool-capable model, rather than exposing raw tool calls.
+Translates a history of ChatProviderMessage entries into a wire-format compatible with an inner model that cannot perform tools directly. It does this by first building a map from tool-call IDs to tool names and then producing a translated history: assistant messages that invoked tools are expanded to include inline <tool_call> blocks for each call, and tool messages are converted into user messages labeled with the corresponding tool result. The function returns the transformed, read-only history while leaving the original history untouched.
 
 ## Remarks
-This method uses a two-pass transformation: first it builds a map from tool-call IDs to tool names by scanning assistant messages that contain ToolCalls; then it rewrites the history to inline each tool call in the assistant content and convert tool messages to user messages annotated with the tool name. The translation clears the ToolCalls on assistant messages so the inner model sees plain text. If a tool call reference cannot be resolved (for example the ToolCallId is missing or unknown), the name defaults to "unknown" in the resulting user-facing tag.
-
-## Example
-```csharp
-// Example: translate a history with one tool invocation
-var history = new List<ChatProviderMessage>
-{
-  new ChatProviderMessage(Role: MessageRole.Assistant, Content: "Running tool...", ToolCalls: new [] { new ToolCall { Id = "tool-1", Name = "Summarize", ArgumentsJson: "{\"text\":\"Hello world\"}" } }),
-  new ChatProviderMessage(Role: MessageRole.Tool, Content: "Result text", ToolCallId: "tool-1")
-};
-var translated = TranslateHistory(history);
-// translated[0].Content now contains an inline tool_call block for Summarize
-// translated[1].Role == User and Content starts with "[Tool result: Summarize] ..."
-```
+This translation layer decouples the outer tool-boundary interactions from the inner model's expectations. By materializing tool calls as inline blocks, it preserves the semantic meaning of tool usage without requiring the inner model to understand ToolCall constructs. The forward scan ensures that every tool-output can be named consistently when a Tool message is encountered. If a tool call ID cannot be resolved, the tool result is labeled as unknown, which helps surface incomplete tool-traceability rather than failing silently.
 
 ## Notes
-- The translation inlines tool calls into the assistant text and clears the ToolCalls field on that message.
-- Tool messages are turned into user messages tagged with the original tool name when available; unknown mappings fall back to "unknown".
-- The order of messages and the two-pass approach are crucial to correctly resolve ToolCallIds to names.
+- If a Tool message references a ToolCallId that cannot be resolved, the code uses "unknown" as the tool name.
+- The transformation never mutates the input history; it returns a new translated list.
 
 ---
 
@@ -418,13 +326,21 @@ private const int MaxParseRetries = 2
 ```
 
 
-Defines the maximum number of parse attempts allowed in the parsing loop of GabrielToolBridge. With a value of 2, the total number of attempts is three (the initial parse plus two retries). This centralizes the retry policy and aligns with the EmptyStopMaxRetries pattern used elsewhere in the agent loop, so callers can rely on a consistent, bounded parsing effort rather than ad hoc retries.
+MaxParseRetries is a private constant that defines how many additional parse attempts are allowed after the initial attempt. With a value of 2, this enforces a total of three parse attempts before giving up, mirroring the EmptyStopMaxRetries pattern used in the agent loop.
 
 ## Remarks
-MaxParseRetries encodes the bounded-retry policy for parsing within GabrielToolBridge. Centralizing the limit ensures consistent behavior with the system's other retry patterns, specifically the EmptyStopMaxRetries pattern used in the agent loop. It prevents endless parsing loops by constraining effort after a fixed number of retries, helping maintain responsiveness under persistent input issues.
+MaxParseRetries is private to the containing class and serves as an internal tuning knob for the parsing path. It establishes a deterministic retry ceiling that helps bound latency and resource usage within the GabrielToolBridge flow, while keeping external behavior untouched. Adjusting this value should be coordinated with other retry semantics in the agent loop to preserve consistent retry behavior across the system.
+
+## Example
+```csharp
+// Example usage of the retry bound
+for (int attempt = 0; attempt <= MaxParseRetries; attempt++)
+{
+    // attempt to parse; exit loop on success
+}
+```
 
 ## Notes
-- Not configurable at runtime; changing requires editing the code and recompiling.
-- Keep in sync with other retry-pattern constants to avoid inconsistent behavior across the parsing/agent loops.
+- The loop bound using <= MaxParseRetries yields MaxParseRetries + 1 total parse attempts (the initial attempt plus retries).
 
 ---

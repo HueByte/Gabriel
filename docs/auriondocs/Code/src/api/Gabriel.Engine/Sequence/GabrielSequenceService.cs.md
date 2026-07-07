@@ -8,12 +8,16 @@ public sealed class GabrielSequenceService : IGabrielSequenceService
 ```
 
 
-GabrielSequenceService is a sealed service that builds GabrielSequence instances for either a Conversation or a Project. It orchestrates repository access, enforces authentication, and delegates to IGabrielSequenceGenerator to render a sequence from the retrieved avatar seed, current state, and any overrides.
+GabrielSequenceService is a concrete implementation of IGabrielSequenceService that builds GabrielSequence objects for a conversation or a project by validating the current user, loading the required aggregate state from repositories, and delegating to the generator with the avatar seed and any overrides.
+
+For conversations it loads the conversation with messages to preserve history, uses its GetState() plus any PatternOverride or PaletteOverride to generate the sequence (and throws NotFoundException if missing); for projects it uses the latest conversation in the project as the live state (or null to fall back to neutral defaults) and feeds that into the generator along with the project's avatar seed and overrides.
 
 ## Remarks
-By centralizing data retrieval and sequence generation, this service isolates I/O concerns from the generation logic and provides clear failure signals (e.g., UnauthorizedAccessException for unauthenticated users and NotFoundException for missing aggregates) before a sequence is produced. It serves as the boundary between the application layer’s data access and the domain/presentation concerns that consume GabrielSequence objects, ensuring consistent state-driven rendering across both conversations and projects.
+
+GabrielSequenceService centralizes the orchestration between data retrieval and sequence generation, shielding callers from repository details and ensuring consistent semantics across conversations and projects. The implementation is a pragmatic first cut: it favors straightforward state derivation and a deterministic latest-conversation selection for projects, leaving room for caching or more sophisticated approaches in a future iteration.
 
 ## Notes
-- The generator receives a possibly null state when there are no relevant conversations (e.g., no conversations in a project), so the generator must handle neutral defaults in that scenario.
-- If the current user is not authenticated, GetForConversationAsync and GetForProjectAsync throw UnauthorizedAccessException.
-- When a requested Conversation or Project cannot be found, a NotFoundException is thrown to indicate the precise missing aggregate.
+
+- Requires an authenticated user; otherwise UnauthorizedAccessException is thrown.
+- NotFoundException is thrown when the targeted Conversation or Project cannot be found for the current user.
+- If a project has no conversations, latest is null and the generator uses neutral defaults.

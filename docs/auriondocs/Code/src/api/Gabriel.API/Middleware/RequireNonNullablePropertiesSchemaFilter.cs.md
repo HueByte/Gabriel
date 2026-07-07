@@ -8,22 +8,12 @@ public class RequireNonNullablePropertiesSchemaFilter : ISchemaFilter
 ```
 
 
-Implements a schema filter that marks non-nullable C# reference-type properties as required in the OpenAPI schema so generated TypeScript clients treat them as non-optional fields. It mutates the concrete OpenApiSchema properties by adding camel-cased property names to the Required collection when the corresponding C# property is non-nullable.
+Adds C# non-nullable reference-type properties to OpenAPI's required set so the generated TS client emits them as non-optional fields. This schema filter mutates the OpenApiSchema to reflect C# nullability semantics during OpenAPI generation, ensuring that non-nullable references are treated as required.
 
 ## Remarks
-
-By aligning C# non-nullability with OpenAPI required constraints, this filter helps keep generated clients in sync with the server model. It reads nullability information via NullabilityInfoContext and mutates the Required set, without changing the underlying nullable flag. It only affects the properties that exist in the generated schema and uses a simple camelCase mapping to property names.
-
-## Example
-```csharp
-// Typical usage in SwaggerGen setup
-services.AddSwaggerGen(c =>
-{
-    c.SchemaFilter<RequireNonNullablePropertiesSchemaFilter>();
-});
-```
+Conceptually, it bridges the gap between C# nullability and OpenAPI's contract, ensuring the generated client enforces non-nullability at the type level. It inspects public properties, uses NullabilityInfoContext to determine whether a property is NotNull in the context of the type, and, when the property is represented in the OpenAPI schema under its camelCase name, marks it as required. The mutation happens in-place on the concrete OpenApiSchema to preserve compatibility with existing schema generation pipelines.
 
 ## Notes
-- Matches property keys using camelCase transform of the C# property name; ensure the OpenAPI schema uses matching keys (naming attributes like JsonPropertyName may affect alignment).
-- Relies on the project's nullable reference type context to determine nullability; enable nullable reference types to get meaningful results.
-- Only runs when the schema contains properties; if a property is not present in the OpenAPI schema, it will not be added to Required.
+- Relies on being able to cast the schema to OpenApiSchema; if the concrete type changes, this could break.
+- Only adds to Required when a corresponding camelCase property is present in the OpenAPI schema.
+- Does not alter the OpenAPI 'nullable' flags; it complements them by affecting 'required' instead.

@@ -35,24 +35,28 @@ public sealed record AgentAssistantMessage(Guid MessageId, string Content, strin
 | `ReasoningContent` | `string?` | `null` |
 
 
-Represents a persisted final assistant message within the agent event stream. It carries a unique MessageId, the textual Content of the response, and an optional ReasoningContent containing the model's chain of thought when the provider emits it. Use this record when you need to store or transmit a completed assistant turn as an immutable event (instead of passing around raw strings) and when you want to associate a stable identifier with the message for reconciliation, auditing, or client rendering.
+AgentAssistantMessage is a sealed, immutable record that represents the final, persisted reply from an assistant in the agent framework. It encapsulates the unique MessageId, the textual Content of the reply, and an optional ReasoningContent that contains the accumulated chain-of-thought for that turn when such data is produced. Because it derives from AgentEvent, instances can be processed, transported, and stored alongside other agent-related events in a consistent, event-driven pipeline.
 
 ## Remarks
-AgentAssistantMessage is an immutable, value-based event that teammates can rely on for deterministic history reconstruction. By deriving from AgentEvent, it participates in the agent's event stream and can be ordered, filtered, or archived alongside other events. The ReasoningContent is optional and only present when the provider exposes the model's reasoning; when null, consumers should treat it as absent privacy-preserving metadata.
+- This abstraction separates the persisted, canonical message from transient processing state. It provides a stable object you can store or transmit as the authoritative representation of a single assistant turn.
+- ReasoningContent is optional; it exists only when the provider emits a reasoning channel. When present, it preserves the internal rationales behind the reply; when absent, the system can still rely on Content and MessageId as the definitive delivery.
+- Since AgentAssistantMessage derives from AgentEvent, it participates in the same event-handling semantics as other agent-originated events, enabling uniform handling, dispatch, and auditing across the system.
 
 ## Example
 ```csharp
-// Example usage showing construction of the event
+// Create a persisted assistant message with reasoning data
+var id = Guid.NewGuid();
 var message = new AgentAssistantMessage(
-    MessageId: Guid.NewGuid(),
-    Content: "Here is the result you asked for.",
-    ReasoningContent: null
+    id,
+    "The calculated result is 42.",
+    ReasoningContent: "Reasoning: normalize inputs -> apply transformation -> derive result -> format output."
 );
 ```
 
 ## Notes
-- ReasoningContent is optional and may be large; avoid transmitting it when not needed for diagnostics or auditing.
-- This is a sealed record, so it provides value-based equality and immutability; treat it as a historical event rather than a mutable DTO.
+- ReasoningContent may be null if the provider did not emit a reasoning channel; always check for null before consuming.
+- If ReasoningContent is populated, be mindful of potential payload size when persisting or transporting messages.
+
 
 ---
 
@@ -72,15 +76,10 @@ public sealed record AgentCompactDone(int MessageCount, int SummaryTokens) : Age
 | `SummaryTokens` | `int` | — |
 
 
-Represents the successful completion of a compaction (summarization) operation. It carries two values: MessageCount, the number of messages included in the new rolling summary, and SummaryTokens, the token length of that summary. The event is raised after AgentCompactStart when the summarization succeeds, so UI can render a line such as 'summarized N messages into M tokens.' If the summary step fails, AgentCompactDone is not emitted and the UI will observe only the extended thinking phase.
+AgentCompactDone is a data-carrying event that signals the completion of a compaction pass. It reports how many messages were summarized (MessageCount) and how many tokens the summary occupies (SummaryTokens). MessageCount mirrors AgentCompactStart so the UI can render a 'summarized N messages into M tokens' line. The event is emitted only after AgentCompactStart has succeeded; if the summary step fails, AgentCompactDone is not produced, and the UI may show a longer thinking phase instead.
 
 ## Remarks
-This event marks a completed milestone in the compaction workflow and decouples the initiation signal from the completion signal. It enables consumers such as the UI, logging, and analytics to react specifically to the outcome of the summarization without inspecting the internal compaction process. The immutable record nature ensures a consistent snapshot of the results at the moment of completion, simplifying reasoning about when the operation finished.
-
-## Notes
-- AgentCompactDone is only emitted for a successful summary; it is paired with a preceding AgentCompactStart.  
-- MessageCount mirrors the input count established by AgentCompactStart to present the before/after narrative to the UI.  
-- Ensure the values reflect the actual results; misreporting can confuse UI and metrics.
+Represents the terminal signal of a compaction cycle and provides concrete metrics about its results. By carrying MessageCount and SummaryTokens as a single, immutable payload, it enables downstream components to render progress and metrics without peeking into the compaction logic. Its relationship to AgentCompactStart establishes a clear lifecycle: start, then finish, with this event emitted only on a successful finish.
 
 ---
 
@@ -101,31 +100,10 @@ public sealed record AgentCompactStart(int MessageCount, int CurrentTokens, int 
 | `ThresholdTokens` | `int` | — |
 
 
-Represents an event signaling that compaction of the chat history is about to begin. A rolling-summary LLM call will fold the first MessageCount messages into a single summary. It is emitted before the summary provider is invoked so the UI can display a compacting overlay while waiting for the real turn to start. CurrentTokens is the pre-compact total; ThresholdTokens is the token threshold that was crossed to trigger the compaction.
+AgentCompactStart is a sealed record that represents a domain event signaling that a rolling-summary compaction is about to begin. It derives from AgentEvent and carries the metrics used to coordinate the upcoming operation: MessageCount—the number of messages that will be folded, CurrentTokens—the token total before compaction, and ThresholdTokens—the token threshold that was crossed to trigger compaction. This event is emitted just before the summary provider is invoked so the UI can display a "compacting..." overlay while the system prepares the new compacted context.
 
 ## Remarks
-The symbol is part of the AgentEvent stream and serves to synchronize backend processing with frontend feedback and telemetry. By exposing the planned scope of the upcoming compaction (MessageCount) along with token pressure (CurrentTokens and ThresholdTokens), it enables the UI and monitoring layers to respond promptly without coupling to the summary logic itself.
-
-## Example
-```csharp
-// Example usage: handling an event stream of AgentEvent
-void HandleEvent(AgentEvent ev)
-{
-  switch (ev)
-  {
-    case AgentCompactStart s:
-      Console.WriteLine($"Compacting first {s.MessageCount} messages (tokens {s.CurrentTokens} → {s.ThresholdTokens}).");
-      // Trigger a UI overlay or progress indicator here
-      break;
-    // other cases...
-  }
-}
-```
-
-## Notes
-- This event represents a pre-compact state; the actual compaction result is produced by subsequent events.
-- AgentCompactStart is immutable (a record); treat instances as read-only data passed through the event pipeline.
-
+AgentCompactStart marks a transition in the agent workflow from regular processing to the compacted-summary pathway. By packaging the three counters as a simple, immutable value, it enables observers to synchronize UI state, logging, and downstream processing without relying on side effects.
 
 ---
 
@@ -138,23 +116,7 @@ public sealed record AgentDone() : AgentEvent
 ```
 
 
-AgentDone is a terminal event in the AgentEvent hierarchy that signals the end of the processing loop and the imminent closure of the SSE stream. It serves as a lightweight, strongly-typed sentinel so consumers can gracefully stop processing without relying on nulls or ambiguous flags.
-
-## Remarks
-Modeling termination as its own sealed record makes termination explicit and pattern-friendly: readers can switch on the event type to trigger cleanup without inspecting payloads. The empty payload reinforces that this signal carries no associated data; if you need additional context about why termination occurred, introduce a dedicated event type with payload.
-
-## Example
-```csharp
-// Common termination handling
-if (ev is AgentDone)
-{
-    // Close streams, dispose resources, exit loop
-    break;
-}
-```
-
-## Notes
-- It carries no payload; if you need data about the termination, define a separate event with data fields.
+AgentDone is the terminal event in the AgentEvent hierarchy. It signals that the main loop has completed and the SSE stream will close, carrying no payload. Use this type to express completion in a strongly-typed manner instead of resorting to flags or nulls, allowing downstream consumers to pattern-match on AgentEvent and react accordingly when processing ends.
 
 ---
 
@@ -173,21 +135,21 @@ public sealed record AgentError(string Message) : AgentEvent
 | [`Message`](../../Gabriel.Core/Entities/Message.cs.md) | `string` | — |
 
 
-Represents an in-stream error event carried by the agent's event stream. It exposes a single Message describing the failure encountered during a streaming operation and inherits from AgentEvent to participate in the shared event-handling pipeline. Use this concrete record to signal lookup or streaming failures without throwing, so downstream consumers can translate the condition into HTTP 4xx/5xx responses and apply consistent error handling.
+AgentError represents an in-stream error that occurs during an upfront lookup phase; when a lookup fails before streaming begins, the error is thrown and surfaced to the client as an HTTP 4xx/5xx response. As a sealed record deriving from AgentEvent, it carries a single payload: the Message describing the failure. Developers reach for this type to abort the streaming workflow cleanly and convert a lookup failure into a well-formed client error, rather than continuing with a partial or invalid stream.
 
 ## Remarks
-AgentError sits in the AgentEvent hierarchy as an explicit, typed signal of failure within the streaming path. Modeling errors as events enables uniform logging, routing, and resilience strategies without blurring control flow with exceptions. The Message field provides contextual detail for diagnostics while keeping errors data-driven and easy to pattern-match.
+This subtype exists to separate normal event flow from error signaling. It enables pattern-based handling in the agent pipeline and centralizes the translation of lookup failures into HTTP error responses. The immutability of a record ensures the error details are preserved across asynchronous boundaries.
 
 ## Example
 ```csharp
-// Example usage: emit an error when a lookup fails during streaming
-yield return new AgentError("Lookup failed for agent 42: not found");
+// When a pre-stream lookup fails, surface a consistent error to the client
+throw new AgentError("Lookup failed before streaming started");
 ```
 
 ## Notes
-- The Message should avoid including sensitive data; consider sanitizing before emitting in production.
-- Consumers must handle AgentError to avoid unhandled stream failures; treat as a failed item in the sequence.
-- Because AgentError is a record with a single string property, equality is based on the Message content; this can be used in tests or dedup logic if appropriate.
+- The Message should be suitable for user-facing error messages since it may be shown to clients.
+- AgentError being a record provides value-based equality, which can be useful in tests or when comparing errors.
+- This error is intended to be thrown before streaming begins; do not instantiate or propagate it as a regular event during normal streaming.
 
 ---
 
@@ -217,6 +179,15 @@ public abstract record AgentEvent
 | `TypeDiscriminatorPropertyName` | — | `"type"` |
 
 
+AgentEvent is the root of the streaming event hierarchy produced by AgentService.RunAsync and the corresponding SSE wire format. It is a polymorphic JSON envelope whose concrete event is determined by the type discriminator (the "type" property) and mapped to derived records such as AgentUserMessagePersisted, AgentTextDelta, AgentReasoningDelta, AgentToolCall, AgentToolResult, AgentAssistantMessage, AgentCompactStart, AgentCompactDone, AgentError, and AgentDone.
+
+Developers consuming the stream read the incoming event, inspect its type, and switch on the concrete derived type to handle the payload accordingly. This design keeps the server and clients loosely coupled as new event kinds can be added without disrupting existing consumers.
+
+## Remarks
+AgentEvent abstracts the streaming protocol from the actual event payloads and defines a stable contract across the AgentService and its clients. The JSON discriminator enables forward-compatible deserialization: new event kinds can be introduced without breaking existing clients, provided they recognize the new "type" values and handle them gracefully. By centralizing the event surface under a single base type, the architecture avoids duplicating streaming logic across each event type and simplifies client-side dispatch based on the discriminator.
+
+## Notes
+- Unknown or unrecognized "type" values can lead to deserialization failures; consumers should be prepared to handle or gracefully skip such events or update to support new derived types when available.
 
 ---
 
@@ -235,25 +206,23 @@ public sealed record AgentReasoningDelta(string Delta) : AgentEvent
 | `Delta` | `string` | — |
 
 
-AgentReasoningDelta represents a single incremental token of the model's reasoning (the chain-of-thought) produced during reasoning-enabled interactions. It encapsulates a Delta string and is emitted as an AgentEvent to separate the evolving thinking trail from the final output; the UI can render this Delta in a dedicated panel, and the final assistant message carries the accumulated reasoning alongside its content for persistence.
+Represents an incremental thinking token produced by reasoning-enabled agents. It carries the evolving chain-of-thought delta from the model, which tooling or UIs can surface in a dedicated panel and persist alongside the final assistant content as part of the agent's event stream.
 
 ## Remarks
 
-By modeling the reasoning trace as its own AgentEvent type, the system cleanly separates cognitive telemetry from user-facing results. This makes debugging, auditing, and advanced UI features possible without forcing the rationale into every response payload.
+This type provides a typed wrapper around the Delta string to distinguish reasoning content from other agent events. By inheriting from AgentEvent, it participates in the agent's event processing pipeline and can be routed to loggers, UIs, or auditors that need to inspect the agent's evolving reasoning. Use it when you want to surface, display, or persist the model's incremental reasoning steps, separate from final outputs.
 
 ## Example
 
 ```csharp
-// Example usage: emit an incremental reasoning token to the agent's event stream
-var delta = new AgentReasoningDelta("Step 1: infer user intent; Step 2: apply constraints");
-agentEventStream.Emit(delta);
+// Example: capture a reasoning delta for debugging or UI rendering
+var delta = new AgentReasoningDelta("Step 1: Initialize; Step 2: Evaluate constraints; Step 3: Propose solution");
 ```
 
 ## Notes
 
-- Do not expose chain-of-thought to untrusted components; apply proper access controls.
-- Delta strings can be large; prefer streaming/partial persistence and consider trimming.
-- If you do not need the reasoning trail, you can disable emission of AgentReasoningDelta to conserve resources.
+- Delta data is sensitive; avoid exposing chain-of-thought publicly; apply redaction or disable in production.
+- AgentReasoningDelta is immutable (record) and sealed; equality is value-based.
 
 ---
 
@@ -272,28 +241,22 @@ public sealed record AgentTextDelta(string Delta) : AgentEvent
 | `Delta` | `string` | — |
 
 
-AgentTextDelta is a minimal, immutable piece of the agent's streaming output that carries a fragment of the current message. Each instance holds a Delta string, which clients concatenate in sequence to reconstruct the full assistant message as data arrives. Because it derives from AgentEvent, this record participates in a unified event stream that consumers can pattern-match against to handle deltas separately from other events such as completion or errors.
+AgentTextDelta represents a single incremental token in a streaming assistant response. When the system streams text, each Delta token can be emitted as an AgentTextDelta event and concatenated by the client to reconstruct the full message; developers reach for it when implementing or consuming the streaming UI of the assistant, rather than waiting for the complete string.
 
 ## Remarks
-Architecturally, AgentTextDelta isolates the progressive text payload from the rest of the event types, enabling progressive rendering and responsive UI without waiting for the complete message. Pattern matching on AgentEvent makes it straightforward to render deltas on the fly or accumulate them for final assembly, depending on the consumer's needs.
+AgentTextDelta is part of the AgentEvent event hierarchy, modeling incremental updates separate from complete messages. Its immutability and small payload (a single string Delta) enable efficient, thread-safe production and consumption of a live text stream, while preserving the order of tokens as delivered by the producer. By isolating token-level updates, this type allows clients to render partial results as they arrive and progressively build the final response.
 
 ## Example
 ```csharp
-// Common usage: accumulate deltas to form the full message
-StringBuilder builder = new StringBuilder();
-foreach (AgentEvent e in streamedEvents)
-{
-    if (e is AgentTextDelta delta)
-        builder.Append(delta.Delta);
-}
-string fullMessage = builder.ToString();
+// Example
+AgentTextDelta d1 = new AgentTextDelta("Hello ");
+AgentTextDelta d2 = new AgentTextDelta("world!");
+string full = string.Concat(d1.Delta, d2.Delta); // "Hello world!"
 ```
 
 ## Notes
-- Preserve the emission order: reconstructing the message relies on applying deltas in the original delivery sequence.
-- The Delta string may be empty in some edge cases; consumers should gracefully handle no-op deltas.
-- If multiple producers emit deltas concurrently, synchronize processing to avoid interleaving fragments.
-
+- AgentTextDelta is a fragment; do not assume Delta represents a full message.
+- Ensure deltas are applied in delivery order to avoid corrupted text.
 
 ---
 
@@ -315,15 +278,25 @@ public sealed record AgentToolCall(Guid MessageId, string ToolCallId, string Nam
 | `ArgumentsJson` | `string` | — |
 
 
-AgentToolCall represents an event emitted when the agent requests the execution of an external tool. It captures the originating assistant message via MessageId, assigns a unique ToolCallId for tracing and deduplication, identifies the tool to invoke by Name, and carries the invocation parameters as a JSON string in ArgumentsJson. As a sealed record that derives from AgentEvent, it participates in the same event stream as other agent-related events while remaining immutable and strongly typed. Use this type whenever the agent must trigger external tooling and you need to persist, correlate, and audit the tool invocation with the originating message.
+AgentToolCall represents a request from an agent to invoke an external tool. It carries the essential context needed to route and correlate the invocation: the originating MessageId, a ToolCallId for unique identification, the tool's Name, and a JSON payload in ArgumentsJson describing the parameters.
 
 ## Remarks
-Because it is a distinct event type, tooling orchestration can remain decoupled from the agent's decision logic. The MessageId linkage enables end-to-end traceability from the assistant's message through the tool invocation to the eventual tool result. ToolCallId helps recognize retries or duplicates across retries or replays.
+AgentToolCall is a concrete member of the AgentEvent hierarchy, enabling the event stream to distinguish tool invocations from other agent actions. By anchoring the ToolCallId and ArgumentsJson to a single event, it supports reliable correlation, auditing, and subsequent handling by tooling adapters. The flexible ArgumentsJson pattern lets different tools define their own parameter schemas without altering the event type, at the expense of requiring consumers to parse and validate JSON as needed.
+
+## Example
+```csharp
+// Example: creating a tool invocation event
+var call = new AgentToolCall(
+    MessageId: Guid.NewGuid(),
+    ToolCallId: "tc-001",
+    Name: "TranslateText",
+    ArgumentsJson: "{ \"text\": \"Hello\", \"to\": \"es\" }"
+);
+```
 
 ## Notes
-- ArgumentsJson must be valid JSON and match the contract of the named tool.
-- ToolCallId must be unique per invocation; reusing it across retries can break deduplication.
-- Be mindful of the size of ArgumentsJson to avoid excessive logging or storage overhead.
+- Ensure ArgumentsJson is well-formed JSON before sending.
+- ToolCallId should be unique per invocation to preserve traceability.
 
 ---
 
@@ -344,15 +317,20 @@ public sealed record AgentToolResult(Guid MessageId, string ToolCallId, string C
 | `Content` | `string` | — |
 
 
-A sealed record that signals the completion of an agent tool invocation and carries the tool's output as a persisted observation. Use this when you need to propagate tool results through the agent's event stream and correlate them with the original tool call.
+AgentToolResult is a concrete AgentEvent that encapsulates the output of a tool invocation performed by an agent. As a sealed record, it carries the global message identifier (MessageId), the particular tool call identifier (ToolCallId), and the tool's textual output (Content), enabling downstream components to correlate responses with their requests in an event-driven workflow.
 
 ## Remarks
-This abstraction decouples tool execution from result handling, enabling asynchronous processing and durable persistence of observations. The MessageId ties the event to the persisted content, while ToolCallId provides traceability back to the initiating tool request, supporting reliable auditing and replay scenarios.
+By deriving from AgentEvent and grouping the three fields, this type provides a stable, immutable payload that can be routed, logged, and audited without exposing internals of the tool implementation. The MessageId allows tracing across the system, while ToolCallId preserves per-invocation correlation even when multiple tools are involved.
+
+## Example
+```csharp
+var result = new AgentToolResult(Guid.NewGuid(), "tool-42", "Tool finished successfully.");
+```
 
 ## Notes
-- Do not rely on Content alone for long-term storage; fetch the full observation via MessageId when needed.
-- AgentToolResult is immutable (record); do not mutate after creation to preserve a clear event history.
-- Be mindful of tool output size; large Content may affect transport and logging; consider storing large outputs in dedicated storage and keeping only a reference in Content.
+- This type is immutable and uses value-based equality; avoid mutating its properties after creation.
+- Be cautious about Content size and sensitivity when routing through logs or telemetry; consider truncation or redaction if necessary.
+
 
 ---
 
@@ -371,27 +349,22 @@ public sealed record AgentUserMessagePersisted(Guid MessageId) : AgentEvent
 | `MessageId` | `Guid` | — |
 
 
-The AgentUserMessagePersisted event is the first event in a turn that originates from a user message (RunAsync, not RegenerateAsync). It carries the real database MessageId assigned when the server persisted the message, enabling the client to replace its temporary tmp-xxxxx identifier with the canonical ID in place, without triggering a follow-up GET conversation round-trip after streaming completes.
+AgentUserMessagePersisted is a domain event emitted when the server has successfully persisted a user-originated message during RunAsync (not RegenerateAsync). It communicates the real database MessageId back to the client so the temporary client-side id (tmp-xxxxx) can be swapped with the authoritative id in place, avoiding an extra GET-conversation round-trip after streaming completes.
 
 ## Remarks
-This event decouples persistence from client-side state reconciliation by providing the authoritative ID up front for user-originated turns. It enables in-place ID reconciliation during streaming, ensuring subsequent updates within the same turn reference the server's persistent ID. As part of the AgentEvent family, it acts as a persistence-acknowledgement signal that downstream clients and handlers rely on to maintain a consistent view of messages without extra round-trips.
+This event serves as a lightweight synchronization signal between persistence and the client UI. By exposing the authoritative MessageId as soon as persistence finishes, it decouples the ID-mapping logic from higher-level streaming flow, enabling a smooth, real-time UX without requiring additional round-trips. It fits into the AgentEvent workflow as a concrete payload that informs clients about persistence results without introducing complex transport semantics.
 
 ## Example
 ```csharp
-// Most common usage: reconcile temporary and real IDs when the first user message is persisted
-void HandleEvent(AgentEvent e)
-{
-    if (e is AgentUserMessagePersisted persisted)
-    {
-        // Swap the temporary client-side id with the real, server-generated ID
-        TemporaryToRealIdMap.Swap(persisted.MessageId);
-    }
-}
+// After persisting the user's message and obtaining its real ID from the database
+Guid persistedMessageId = /* obtained from database */ Guid.NewGuid();
+var evt = new AgentUserMessagePersisted(persistedMessageId);
+// Publish 'evt' to the client stream (exact mechanism depends on the surrounding infrastructure)
 ```
 
 ## Notes
-- The MessageId is the official, immutable DB identifier; do not rely on or reuse the temporary client-generated ID after handling this event.
-- This event is emitted only for user-originated turns (RunAsync). RegenerateAsync turns do not emit AgentUserMessagePersisted.
-- If multiple persisted messages arrive in quick succession, ensure the ID mapping is thread-safe and idempotent to prevent duplicate mappings or races.
+- Emit this event only for messages persisted during a RunAsync turn originating from a user message; RegenerateAsync flows have different semantics.
+- The MessageId conveyed by this event is the durable DB identifier, not a temporary client-side id; use it to update client state accordingly.
+
 
 ---
