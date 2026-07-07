@@ -1,18 +1,19 @@
-HashTool computes a cryptographic hash digest of the provided text and returns it as a lowercase hexadecimal string prefixed with the chosen algorithm name (for example: sha256: abcd...).
-It is a pure function of its inputs: there are no I/O, no external dependencies, and no approvals required. Input text is encoded as UTF-8. The tool supports md5, sha1, sha256, and sha512, defaulting to sha256 when the algo is not specified. MD5 and SHA1 are kept for legacy checksum scenarios only and are not recommended for security-sensitive purposes. If you need reversible encoding, use base64 instead of hashing.
+# HashTool
 
-## Remarks
-HashTool abstracts cryptographic digest computation behind a small, deterministic, JSON-based API, enabling callers to obtain a fingerprint for a string without implementing hashing themselves. It centralizes input validation (text length and allowed algorithms) and enforces a consistent output format, which simplifies reasoning about fingerprints across higher-level workflows. The contract is expressed through a JSON payload and a simple string result, making it easy to test and simulate in environments that may not expose cryptographic primitives directly.
+> **File:** `src/api/Gabriel.Engine/Tools/Codecs/HashTool.cs`  
+> **Kind:** class
 
-## Example
 ```csharp
-// Example usage
-var tool = new HashTool();
-var json = "{\"text\": \"example\", \"algo\": \"sha256\"}";
-var result = await tool.ExecuteAsync(json, CancellationToken.None);
-// result is a string like: "sha256: <hex-digest>"
+public sealed class HashTool : ITool
 ```
 
+
+HashTool computes a cryptographic hash of input text (UTF-8) and returns the digest as a lowercase hexadecimal string, prefixed by the algorithm used (for example, 'sha256: ...'). It is a pure function with no I/O or external side effects, intended for fingerprinting or checksumming strings to produce stable identifiers rather than guessing a digest manually.
+
+## Remarks
+HashTool provides a simple, deterministic hashing interface behind a single, well-defined entry point. It supports sha256 (default), sha512, sha1, and md5, while clearly signalling that md5/sha1 are legacy checksums and not suitable for security purposes. By handling UTF-8 encoding and the algorithm prefix in a single place, it prevents inconsistencies in digest computation across callers and promotes consistent, comparable fingerprints.
+
 ## Notes
-- On invalid arguments, ExecuteAsync returns an error string starting with "Error: ..." rather than throwing; callers should handle this as a normal result. The error messages originate from the internal HashException used during argument parsing and validation.
-- The digest length and hex formatting depend on the chosen algorithm; the output always prefixes the digest with the algorithm name (e.g., sha256: ...). MD5 and SHA1 are legacy options and should not be used for security-critical purposes.
+- The input text is limited to 1,000,000 characters; inputs longer than this trigger a validation error.
+- The 'algo' parameter must be one of md5, sha1, sha256, or sha512; md5/sha1 are legacy and should be avoided for security-related use cases.
+- Output format is the chosen algorithm name followed by a colon and a lowercase hexadecimal digest (e.g., 'sha256: <digest>'). If the arguments are invalid, the function returns a string starting with 'Error: ...'.

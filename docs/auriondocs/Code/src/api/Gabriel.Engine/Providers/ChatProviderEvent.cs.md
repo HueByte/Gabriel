@@ -14,200 +14,207 @@
 ---
 
 ## ChatProviderEvent
-
 > **File:** `src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs`  
 > **Kind:** record
 
-Represents a streaming event emitted by IChatProvider.StreamAsync. Use this abstract base when handling events produced by a chat provider; consumers typically switch or pattern-match on concrete event variants (for example, a ToolCallReady event) rather than reassembling partial fragments themselves.
+```csharp
+public abstract record ChatProviderEvent
+```
+
+
+ChatProviderEvent is the abstract base type for all streaming events produced by IChatProvider.StreamAsync. It represents the set of events that can occur during a streaming session and enables consumers to handle different event shapes via polymorphism. The provider buffers partial tool-call deltas internally and only emits a ToolCallReady event when a call is fully assembled, so downstream code receives complete payloads without reassembling JSON fragments.
 
 ## Remarks
-This abstract record centralizes the different event kinds that a chat provider can emit during streaming. Providers buffer partial tool-call deltas internally and only emit a completed ToolCallReady event once a call is fully assembled, so consumers do not need to reconstruct JSON fragments or handle low-level buffering.
+The abstraction isolates streaming semantics from the concrete payloads, allowing the provider to optimize buffering and payload shaping without leaking those details to callers. It also enables a clean separation between the transport/assembly layer and the business logic that handles completed tool calls.
 
 ## Example
 ```csharp
-// Typical event loop that handles different event kinds
-await foreach (var evt in chatProvider.StreamAsync(request, cancellationToken))
+// Consumer pattern: handle concrete event types as they arrive
+await foreach (ChatProviderEvent e in chatProvider.StreamAsync())
 {
-    switch (evt)
+    switch (e)
     {
-        case ToolCallReady toolCall:
-            HandleToolCall(toolCall);
+        case ToolCallReady ready:
+            // process the completed tool call
             break;
         default:
-            HandleOtherEvent(evt);
+            // handle or ignore other event types
             break;
     }
 }
 ```
 
 ## Notes
-- Providers hide partial tool-call fragments: do not expect to receive JSON delta pieces for tool calls — you'll get a fully assembled ToolCallReady instead.
-- This type is a record (value semantics) and should be treated as immutable when handling events.
+- Do not instantiate ChatProviderEvent directly; it is abstract.
+- The stream yields only fully assembled events (e.g., ToolCallReady); do not rely on partial fragments.
+- Use type-pattern matching to access payloads of derived events.
 
 ---
 
 ## FinishEvent
-
 > **File:** `src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs`  
 > **Kind:** record
 
-A terminal ChatProviderEvent that indicates the provider has nothing more to emit for the current turn. It carries a FinishReason describing why the provider finished; consumers handle this event to stop streaming or to finalize turn-level state.
-
-## Remarks
-This record represents the logical end of a single turn's output from a chat provider. It decouples the concept of "no more data for this turn" from transport- or provider-specific details by carrying a FinishReason. Being a sealed positional record, it is immutable and uses value-based equality, making it suitable for event comparison and pattern matching.
-
-## Example
 ```csharp
-// receive an event from a provider and handle terminal condition
-ChatProviderEvent evt = await provider.NextEventAsync();
-if (evt is FinishEvent finish)
-{
-    // stop streaming tokens for this turn and inspect why the provider finished
-    StopStreaming();
-    var reason = finish.Reason;
-    LogFinishReason(reason);
-}
+public sealed record FinishEvent(FinishReason Reason) : ChatProviderEvent
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Reason` | `FinishReason` | — |
+
+
+FinishEvent signals that the current provider turn is complete: the provider has nothing more to emit, and the included FinishReason explains why the turn ended. As a sealed record deriving from ChatProviderEvent, it participates in the same event-stream contract as other provider events, but it is the canonical terminal signal developers check for to know when to stop consuming further events for that turn.
+
+## Remarks
+By representing the end of a turn as a dedicated type, the system can distinguish between ongoing data and termination. It centralizes end-of-turn behavior in one symbol, enabling consumers to perform cleanup, transition to the next turn, or present a completed response to the user based on the FinishReason. The FinishReason value is intended to be interpreted by the consumer to determine next steps; this abstraction decouples production of messages from termination semantics.
+
 ## Notes
-- FinishEvent signals the end of output for the current turn only; a provider may emit events for later turns.
-- As a sealed record, instances are immutable and compared by value; use pattern matching or property access to obtain the Reason.
+- Terminal nature: do not emit further ChatProviderEvent values after receiving FinishEvent within the same turn; subsequent events can be treated as out of band or ignored.
+- FinishReason semantics: ensure alignment between producer and consumer; misalignment can lead to incorrect post-turn handling.
 
 ---
 
 ## ReasoningDeltaEvent
-
 > **File:** `src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs`  
 > **Kind:** record
 
-Represents a single incremental "reasoning" token emitted by a chat provider as part of a separate thinking stream. Use this event when you need to observe, display, or persist the model's internal chain-of-thought as it is produced; it is not the final assistant message and should be treated as an implementation detail of the provider.
-
-## Remarks
-This record exposes small, ordered fragments of a model's internal reasoning (the "thinking" stream) via its Delta property. The abstraction exists so providers can surface reasoning separately from user-facing assistant content — useful for debugging, developer tooling, or UIs that display intermediate thought — while keeping final responses and reasoning distinct. Not all providers emit these events; consumers should handle their absence gracefully and should not treat reasoning deltas as authoritative final output.
-
-## Example
 ```csharp
-// simple handler that appends reasoning deltas to a buffer
-var reasoningBuilder = new StringBuilder();
-
-void HandleEvent(ChatProviderEvent evt)
-{
-    if (evt is ReasoningDeltaEvent r)
-    {
-        // append incremental reasoning as it arrives
-        reasoningBuilder.Append(r.Delta);
-        // update a developer-only UI element, log, or persist for debugging
-        Console.WriteLine("[Reasoning Delta] " + r.Delta);
-    }
-}
+public sealed record ReasoningDeltaEvent(string Delta) : ChatProviderEvent
 ```
 
-## Notes
-- Delta values are incremental fragments and may need to be concatenated in arrival order to reconstruct the full reasoning stream.
-- Providers may emit none of these events; code should not assume their presence.
-- Treat reasoning deltas as internal instrumentation: avoid exposing them directly to end users or relying on them for authoritative answers.
-- The record is immutable (sealed record) and intended for simple transport of text fragments.
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Delta` | `string` | — |
+
+
+ReasoningDeltaEvent represents an incremental token from the model's reasoning stream. It is emitted by chat providers that expose a separate thinking channel (e.g., Grok 4, DeepSeek-R1, OpenAI o-series, Anthropic extended-thinking) as a distinct stream from the final assistant answer. The event carries a Delta string containing the latest segment of the model's internal chain-of-thought, distinct from the final assistant answer. Consumers that want to display or log the thinking in real time can subscribe to this event; however, the Delta is internal reasoning data and should not be treated as the final answer or persisted alongside it. Persistence of final content remains separate from the reasoning stream.
 
 ---
 
 ## TextDeltaEvent
-
 > **File:** `src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs`  
 > **Kind:** record
 
-Represents a single incremental piece (token/chunk) of assistant-produced text emitted by a chat provider. Consumers receive zero or more of these events during a streaming response and should concatenate the Delta values, in arrival order, to reconstruct the final assistant message.
+```csharp
+public sealed record TextDeltaEvent(string Delta) : ChatProviderEvent
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Delta` | `string` | — |
+
+
+TextDeltaEvent represents a chunk of incremental text emitted by a streaming chat provider. It carries a Delta string that should be appended to reconstruct the full message as deltas arrive, enabling progressive rendering and processing of partial content.
 
 ## Remarks
-This record is the minimal event type used for streaming/partial assistant output and extends ChatProviderEvent. It exists so providers can deliver output progressively (reducing latency and memory pressure) while consumers can reassemble the full text by joining the ordered deltas. The record is immutable and contains exactly one string property (Delta) that holds the text fragment.
+As a sealed record deriving from ChatProviderEvent, TextDeltaEvent is immutable and participates in the chat provider's event taxonomy. This abstraction enables streaming consumption: you receive small text fragments as they arrive, and you can render or accumulate them progressively without waiting for a final payload. Maintain the arrival order, since the final message is the concatenation of deltas in sequence.
 
 ## Example
 ```csharp
-// Reconstruct full assistant message from a sequence of TextDeltaEvent
-var deltas = new[] {
-    new TextDeltaEvent("Hello"),
-    new TextDeltaEvent(", wor"),
-    new TextDeltaEvent("ld!")
-};
-var full = string.Concat(deltas.Select(e => e.Delta));
-// full == "Hello, world!"
+// Example: accumulate deltas to form the complete message
+var accumulated = new System.Text.StringBuilder();
+
+void OnEvent(ChatProviderEvent e)
+{
+    if (e is TextDeltaEvent delta)
+        accumulated.Append(delta.Delta);
+}
+
+string GetCompleteMessage() => accumulated.ToString();
 ```
 
 ## Notes
-- Preserve the original event order when concatenating; ordering determines the final message.
-- A Delta may be an empty string or a partial token; do not assume each event is a complete sentence.
-- The record is immutable (sealed) — consumers should not expect mutable state on the event.
+- Deltas are incremental and may be fragments; do not assume each Delta ends at a word boundary.
+- If deltas arrive from multiple threads, synchronize access to the accumulator; the event sequence preserves order for a single stream, but consumer code may require synchronization when aggregating.
+
 
 ---
 
 ## ToolCallReadyEvent
-
 > **File:** `src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs`  
 > **Kind:** record
 
-Represents an event emitted by a chat provider to indicate that a tool call has been prepared and is ready to be executed. It carries the tool's identifier, a human-readable name, and the tool call arguments serialized as a JSON string — use this when handing off a planned tool invocation from the chat provider to a tool dispatcher or executor.
+```csharp
+public sealed record ToolCallReadyEvent(string Id, string Name, string ArgumentsJson) : ChatProviderEvent
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Id` | `string` | — |
+| [`Name`](ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+| `ArgumentsJson` | `string` | — |
+
+
+Represents a complete, ready-to-execute tool call payload produced by the chat tooling pipeline. It carries three fields—Id, Name, and ArgumentsJson—and serves as a dispatched instruction to the tool runner to execute the named tool with the supplied arguments.
 
 ## Remarks
-This sealed record is a lightweight, immutable value object intended for event-based handoffs between components: chat providers create instances when they decide a tool should be invoked, and execution components deserialize ArgumentsJson to perform the call. Keeping the arguments as a JSON string avoids binding the event to a specific argument type or schema, but requires consumers to validate or deserialize the payload according to the expected tool contract.
+Acts as a transport boundary between preparation and execution. By encapsulating the invocation details in an immutable record, it enables reliable auditing, correlation, and retry strategies across the tool invocation workflow.
 
 ## Example
 ```csharp
-using System.Text.Json;
-using System.Collections.Generic;
-
-var evt = new ToolCallReadyEvent(
-    Id: "tool-123",
-    Name: "Search",
-    ArgumentsJson: "{\"query\":\"hello world\",\"limit\":10}"
+var ready = new ToolCallReadyEvent(
+    Id: "tool-001",
+    Name: "WeatherForecast",
+    ArgumentsJson: "{\"location\":\"Seattle\",\"units\":\"metric\"}"
 );
-
-// Deserialize into a flexible shape for inspection
-var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(evt.ArgumentsJson);
-string query = args["query"].GetString();
-int limit = args["limit"].GetInt32();
-
-// Now dispatch to the appropriate tool using Id or Name
-// dispatcher.Invoke(evt.Id, args);
 ```
 
 ## Notes
-- ArgumentsJson must be valid JSON; consumers should handle parse errors and validate the argument schema before executing the tool.
-- Records are immutable and compare by value — equality checks compare the three properties rather than object references.
-- Do not assume a fixed schema for ArgumentsJson; different tools may expect different shapes, so prefer explicit validation or typed deserialization when the target tool's schema is known.
+- ArgumentsJson must be valid JSON; otherwise the executor may fail to parse.
+- Id should be unique per invocation to avoid misrouting or clobbering concurrent invocations.
 
 ---
 
 ## FinishReason
-
 > **File:** `src/api/Gabriel.Engine/Providers/ChatProviderEvent.cs`  
 > **Kind:** enum
 
-Indicates why a chat/assistant response stream stopped. Use this enum when handling provider events or streaming responses so the client (or agent loop) can decide whether to stop, run tool calls and continue streaming, retry/extend after truncation, or surface an error.
+```csharp
+public enum FinishReason
+{
+    Stop,
+    ToolCalls,
+    Length,
+    Error,
+}
+```
+
+
+FinishReason enumerates why a chat provider's generation finished. It signals whether the assistant produced a final response (Stop), requested tool invocations to continue the dialogue (ToolCalls), hit the model’s output length limit (Length), or encountered a provider-side failure (Error).
 
 ## Remarks
-This enum is produced by chat providers to classify the terminal condition of a response stream. Consumers use it to determine control flow: Stop means the assistant completed its reply; ToolCalls signals the assistant is requesting external tool execution (the agent loop should perform those calls and re-stream); Length indicates the model hit an output limit and the response may be truncated; Error represents a provider-side failure.
+FinishReason acts as a contract between the generation engine and the orchestration layer, abstracting control flow decisions away from raw text content. It enables clean streaming semantics by distinguishing normal completion from required tool execution, length-induced termination, or error conditions, and guides the caller on how to proceed within the chat pipeline.
 
 ## Example
 ```csharp
 switch (finishReason)
 {
     case FinishReason.Stop:
-        // Final content received — render to user
+        // Normal completion; end of response stream
         break;
     case FinishReason.ToolCalls:
-        // Execute requested tools, then continue the agent loop / re-stream
+        // Execute required tool invocations and continue streaming
         break;
     case FinishReason.Length:
-        // Response was truncated — consider requesting continuation or increasing limits
+        // Content reached token limit; consider truncation or requesting more budget
         break;
     case FinishReason.Error:
-        // Surface provider error to caller or retry
+        // Propagate or handle provider-side failure
         break;
 }
 ```
 
 ## Notes
-- Treat ToolCalls as a signal to run external tools and continue the conversation rather than a final answer.
-- Length means the output was cut off by model/token limits; don't assume content is complete.
-- When receiving unknown/added enum values (from newer providers), handle them defensively (e.g., treat as Error or log and abort) to preserve forward compatibility.
+- ToolCalls implies the agent loop will resume after performing the necessary tool invocations.
+- Length may indicate truncation; callers might retry with a larger token budget or adjust prompts.
 
 ---

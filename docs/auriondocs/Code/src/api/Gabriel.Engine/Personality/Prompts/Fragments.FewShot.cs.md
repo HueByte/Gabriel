@@ -3,23 +3,28 @@
 > **File:** `src/api/Gabriel.Engine/Personality/Prompts/Fragments.FewShot.cs`  
 > **Kind:** class
 
-A collection of few‑shot persona examples used to seed prompts for the model; use this constant when you need a ready-made set of chat/task examples that demonstrate register‑mirroring, length matching, and the intended conversational voice. The string is a raw, static prompt fragment and contains a {name} placeholder which should be replaced at runtime with the agent's display name.
+```csharp
+public static partial class Fragments
+```
+
+
+Fragments is a utility container that collects prompt fragments used to shape a model's conversational persona. It exposes a single public constant, PersonaFewShot, which holds a multi-line, runtime-substitution-friendly prompt block. The template demonstrates both chat-mode and task-mode exchanges and is designed to calibrate behaviors such as register-mirroring and length-conscious responses. The {name} placeholder is substituted at runtime, just as the static block is substituted, enabling per-prompt persona customization in the prompting pipeline.
 
 ## Remarks
-This constant centralizes the persona examples so callers can reuse a consistent voice across prompt construction without duplicating the examples. It intentionally mixes casual speech, abbreviations, and occasional swearing to teach the model stylistic behaviors (e.g., mirroring case and tone) rather than to provide sanitized content.
+
+Centralizing these few-shot exemplars provides a single source of truth for style calibration across chat and task prompts. The static, immutable nature of the template ensures consistent behavior at startup, while the partial class designation signals extensibility—additional fragments can be added in other files to extend or tailor prompts without changing existing code paths.
 
 ## Example
+
 ```csharp
-// Replace the {name} placeholder and append the fragment to your prompt builder
-var agentName = "Gabriel";
-var seededExamples = Fragments.PersonaFewShot.Replace("{name}", agentName);
-var prompt = new StringBuilder()
-    .AppendLine(seededExamples)
-    .AppendLine("User: What's the plan?")
-    .ToString();
+// Example usage: bind a persona name into the few-shot template
+string persona = "Alex";
+string promptTemplate = Fragments.PersonaFewShot.Replace("{name}", persona);
+// `promptTemplate` can be prepended or integrated into the final prompt payload
 ```
 
 ## Notes
-- The constant includes embedded code fences (```), so if you wrap the final prompt in additional markdown/code fences be careful to avoid fence collisions or escape them.
-- Because it's a const string, changes require recompilation — treat this as a stable, non‑runtime configurable resource (not intended for localization or dynamic editing).
-- The fragment intentionally contains informal language and tone; sanitize or replace it if you must enforce strict content policies.
+
+- Always replace the {name} placeholder before using the template in a prompt to avoid leaking the placeholder to end users.
+- The PersonaFewShot value is defined as a C# 11 raw string literal (triple-quoted); ensure your project targets a compatible language version.
+- The embedded examples cover both chat-mode and task-mode scenarios; adapt tone, length, and content to your app's policy and UX guidelines.

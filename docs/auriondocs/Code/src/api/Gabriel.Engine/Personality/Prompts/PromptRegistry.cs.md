@@ -3,19 +3,23 @@
 > **File:** `src/api/Gabriel.Engine/Personality/Prompts/PromptRegistry.cs`  
 > **Kind:** class
 
-Provides a simple, read-only mapping from prompt key strings to the corresponding prompt fragment constants defined on Fragments.*. Use this registry when callers need to resolve a runtime prompt key to the actual fragment text instead of referencing Fragments.* directly — for example, when the key comes from configuration or user input.
+```csharp
+public sealed class PromptRegistry : IPromptRegistry
+```
+
+
+PromptRegistry is a sealed class that implements IPromptRegistry and acts as the centralized lookup for prompt fragments. It constructs a read-only dictionary mapping each PromptKey to its corresponding Fragments.* string, establishing a single source of truth used when assembling prompts. Use Get with a key to retrieve the fragment; if the key isn't registered, a KeyNotFoundException is thrown with guidance to wire the missing key in the constructor.
 
 ## Remarks
-This is the project's default implementation of IPromptRegistry: the dictionary is constructed once in the constructor and kept as an IReadOnlyDictionary for fast, thread-safe reads. The registry intentionally wires concrete PromptKey.* strings to the matching Fragments.* constants so the compiler enforces the relationship; adding a new fragment requires three coordinated edits (add the Fragments const, add the PromptKey constant, and add the mapping here).
+By decoupling keys from literal text, the registry makes it easy to evolve prompts without scattering strings across call sites. It enforces a strict one-to-one mapping between a PromptKey and a Fragment, ensuring consistent prompt assembly across personas and modes. The three edits described in the inline comments—adding a Fragments.* constant, adding a PromptKey.*, and wiring the mapping—are the intended extension pattern.
 
 ## Example
 ```csharp
 var registry = new PromptRegistry();
-string fragment = registry.Get(PromptKey.PersonaStatic);
-// use fragment as part of a prompt construction
+string fragment = registry.Get(PromptKey.PersonaMemory);
 ```
 
 ## Notes
-- Get throws KeyNotFoundException if the requested key is not present; callers should handle or validate keys beforehand.
-- The internal dictionary uses StringComparer.Ordinal for key comparisons; keys are case-sensitive.
-- The mapping is fixed at construction time; to add or change mappings update the Fragments and PromptKey constants and the registry constructor mapping.
+- Access is via exact keys; missing entries throw KeyNotFoundException with guidance to register it.
+- The dictionary uses StringComparer.Ordinal, so keys are case-sensitive.
+- To add a new prompt, follow the three-step process described in the code comments (add a Fragments.* constant, add a PromptKey.* constant, and wire the mapping in the constructor).

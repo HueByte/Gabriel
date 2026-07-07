@@ -14,68 +14,65 @@
 ---
 
 ## MemoryEditorProps
-
 > **File:** `src/webapp/src/components/MemoryList.tsx`  
 > **Kind:** interface
 
-Props for a Memory editor component — used when rendering a form to create or edit a memory within a (possibly) selected project. Reach for this interface when you need to mount the editor UI and wire up save/cancel behaviour, or when typing components that consume the editor's props.
+```typescript
+interface MemoryEditorProps
+```
+
+
+MemoryEditorProps defines the props accepted by the Memory Editor UI in MemoryList.tsx. Use it when wiring the editor to either create a new memory (omit initial) or edit an existing one (supply initial memory) and to connect save/cancel behavior to the parent component, while scoping changes to a specific project via projectId.
 
 ## Remarks
-This interface encapsulates the minimal context the editor needs: the project scope (projectId), optional initial data for edit mode (initial), and two callbacks for lifecycle actions (onSaved and onCancel). A null projectId represents the absence of a selected project (the editor or caller should handle that case). The optional initial property distinguishes create (undefined) from edit (provided) flows.
+By isolating the editor's inputs into MemoryEditorProps, the editor becomes reusable across create and edit flows without embedding data-fetching concerns. The optional initial prop drives mode (create vs edit) and preloads the form when editing. The projectId ensures all operations are associated with a particular project context, preventing cross-project data mixing. The onSaved callback is the hook the parent uses to refresh lists or navigate after a successful save.
 
 ## Example
 ```typescript
-// Create new memory (no initial data)
-<MemoryEditor
-  projectId={currentProjectId}
-  onSaved={() => { refreshList(); closeModal(); }}
-  onCancel={() => closeModal()}
-/>
+// Create mode
+const createProps: MemoryEditorProps = {
+  projectId: 'proj-42',
+  onSaved: () => refreshList(),
+  onCancel: () => setEditing(false)
+};
 
-// Edit existing memory
-<MemoryEditor
-  projectId={currentProjectId}
-  initial={existingMemory}
-  onSaved={() => { refreshList(); closeModal(); }}
-  onCancel={() => closeModal()}
-/>
+// Edit mode
+const editProps: MemoryEditorProps = {
+  projectId: 'proj-42',
+  initial: existingMemoryDto,
+  onSaved: () => refreshList(),
+  onCancel: () => setEditing(false)
+};
 ```
 
 ## Notes
-- projectId may be null to signal "no project selected"; callers should not assume a non-null value.
-- initial is optional; presence means the editor should prefill fields for editing, absence indicates creation mode.
-- onSaved and onCancel are required callbacks and should be used to update caller state (e.g., refresh lists, close dialogs).
+- Pass a string for projectId when the memory belongs to a project; pass null if there is no project association.
+- The initial prop is optional; omit it to render a blank form for creation. Ensure MemoryDto shape matches the editor expectations.
+
 
 ---
 
 ## MemoryListProps
-
 > **File:** `src/webapp/src/components/MemoryList.tsx`  
 > **Kind:** interface
 
-Describes the props accepted by the MemoryList component; primarily used to tell the component which scope of memories to display and — importantly — which scope newly created entries should be saved into. Use this prop when rendering a MemoryList for either the current user or a specific project so the component knows where to read and persist memories.
-
-## Remarks
-The scope property is a MemoryScope discriminated union (e.g. { kind: 'user' } or { kind: 'project', projectId }). MemoryList uses this to both filter the list it shows and to determine the target for any newly-added memories. Because the scope determines the destination for new entries, keep it stable when you expect subsequent saves to go to the same place; switching the scope changes where future saves are written.
-
-## Example
 ```typescript
-// Show and save memories for the current user
-<MemoryList scope={{ kind: 'user' }} />
-
-// Show and save memories for a specific project
-<MemoryList scope={{ kind: 'project', projectId: 'proj-123' }} />
+interface MemoryListProps
 ```
 
+
+MemoryListProps defines the props for a MemoryList component and exposes a single field, scope, that determines which memories are shown and where new memories are saved. The scope encodes either a user-wide view (kind: 'user') or a per-project view (kind: 'project', projectId).
+
+## Remarks
+MemoryListProps uses the MemoryScope abstraction to decouple the data-source boundary from UI concerns. This enables the MemoryList component to be reused in both personal and project contexts without duplicating logic, since the actual data retrieval and persistence can share the same memory access layer keyed by the scope.
+
 ## Notes
-- When using { kind: 'project' }, ensure the projectId refers to an existing project and the current user has permission to read/write its memories.
-- The scope controls where newly-added entries are saved; it does not retroactively move existing memories between scopes.
-- MemoryScope is defined separately — follow its shape exactly (project scopes must include projectId).
+- When using project scope, ensure a valid projectId is provided in the MemoryScope.
+- Switching scope at runtime may trigger a rebind or reload of the list's data; callers should manage scope stability to avoid unnecessary data fetches.
 
 ---
 
 ## MemoryEditor
-
 > **File:** `src/webapp/src/components/MemoryList.tsx`  
 > **Kind:** function
 
@@ -84,63 +81,35 @@ export function MemoryEditor(
 ```
 
 
-Renders an editor UI for creating or updating a "memory" (a single item) associated with a project. Use this React component when you need a reusable edit/save/cancel interface that receives an optional initial value and reports user actions through callbacks.
+MemoryEditor is a React function component that presents an editing UI for a memory item tied to a specific project. It takes a projectId, an optional initial value, and onSaved/onCancel callbacks, and should be used when you need to create or modify a memory entry from the MemoryList view rather than editing items inline.
 
 ## Remarks
-This component encapsulates the common edit lifecycle (prefill from an initial value, persist changes, and cancel). It is intended to be used where memories are listed or managed per-project so the surrounding UI can delegate edit behavior and persistence to the component while handling high-level list updates via the provided callbacks.
-
-## Example
-```typescript
-// Typical usage inside a parent component or list view
-<MemoryEditor
-  projectId="project-abc"
-  initial={existingMemory} // or undefined/null when creating a new memory
-  onSaved={(savedMemory) => {
-    // update parent state, refresh list, or navigate
-  }}
-  onCancel={() => {
-    // close editor or revert UI state
-  }}
-/>
-```
-
-## Notes
-- The implementation body was not provided with the signature; confirm the exact prop types (shapes of `initial` and the callback argument) before wiring complex logic.
-- Ensure callbacks are stable (memoized) when rendering inside lists to avoid unnecessary re-renders.
-- Passing a falsy `initial` value typically indicates creation mode; verify how the component differentiates create vs. edit in the source.
-
+Remains focused on input handling, validation, and user actions separate from the list rendering. By encapsulating the edit flow, MemoryEditor centralizes memory-entry semantics (e.g., field validation and save/cancel behavior) and makes MemoryList simpler and more testable. It also makes reuse easier if memory editing is needed in other contexts beyond MemoryList.
 
 ---
 
 ## MemoryList
-
 > **File:** `src/webapp/src/components/MemoryList.tsx`  
 > **Kind:** function
 
-A small React/TSX component exported as MemoryList that accepts a single props object which is destructured to read a `scope` property. The provided source snippet does not include the implementation or type information for `scope`, but the symbol is intended to be used where a component needs to be given a scope value (for example, to render or filter items related to that scope).
-
-## Remarks
-This symbol is declared in a .tsx file and exported as a top-level function, so it is intended to be used as a React function component. Keeping the `scope` prop at the component boundary centralizes whatever scoping logic or rendering is required so callers only need to supply the appropriate scope value.
-
-## Example
 ```typescript
-import { MemoryList } from './components/MemoryList';
-
-function Page() {
-  const currentScope = 'project:123';
-  return <MemoryList scope={currentScope} />;
-}
+export function MemoryList(
 ```
 
-## Notes
-- The implementation and the type (or shape) of the `scope` prop are not present in the provided snippet; check the full source to confirm expected types and behavior.
-- Because this is a .tsx function export, it should be used inside a React render tree and will return JSX (implementation-dependent).
 
+MemoryList is a React function component that accepts a props object and destructures a scope property. It serves as a focused, reusable UI piece to render a list whose content is determined by the given scope, rather than hard-coding a single dataset. Use MemoryList to render a scoped memory-related collection within the web UI, keeping page components lean and avoiding duplication of list-rendering logic.
+
+## Remarks
+By isolating scope-driven rendering, MemoryList provides a clear boundary between layout and item presentation, enabling consistent styling and behavior across different scopes. It helps promote reuse and testability by centralizing the rendering decisions for memory-scoped lists.
+
+## Notes
+- Ensure scope prop is properly typed to avoid runtime errors when MemoryList is used without a value.
+- If MemoryList interacts with external data (fetches based on scope), consider caching or memoization to avoid unnecessary fetches on prop changes.
+- Be mindful of re-renders: keep MemoryList as a light wrapper that delegates actual item rendering to child components to minimize updates.
 
 ---
 
 ## MemoryRow
-
 > **File:** `src/webapp/src/components/MemoryList.tsx`  
 > **Kind:** function
 
@@ -149,69 +118,60 @@ function MemoryRow(
 ```
 
 
-Renders a single row for a "memory" entry and forwards user actions to the parent via callbacks. Reach for this component when you want each memory in a list to encapsulate its own display and to delegate edit/delete behavior back to the list container or parent.
+MemoryRow is a small React function component used inside MemoryList to render a single memory entry as a row. It receives the memory object to display and two callbacks, onEdit and onDelete, which are invoked when the user triggers editing or deletion of that memory. This abstraction keeps the list rendering focused on layout while isolating per-item interactions in a dedicated component, enabling reuse and simpler testing.
 
 ## Remarks
-MemoryRow is a small presentational wrapper that keeps per-item markup and interaction logic encapsulated so the parent (for example, MemoryList) can focus on collection-level concerns such as ordering, filtering, and data loading. The component surfaces edit and delete intent through the onEdit and onDelete callbacks rather than performing those operations itself.
+Isolating per-row logic helps keep MemoryList lean and makes it easy to swap different row presentations without altering the list wiring. It also provides a stable surface for editing or removing a memory, which can be wired to modals or in-line editors without affecting the overall list structure.
 
 ## Example
 ```typescript
-// Parent component rendering a list of memories
-function handleEdit(memory: Memory) {
-  // open editor or navigate
-}
-
-function handleDelete(memoryId: string) {
-  // confirm and remove
-}
-
-return (
-  <table>
-    <tbody>
-      {memories.map(m => (
-        <MemoryRow
-          key={m.id}
-          memory={m}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-        />
-      ))}
-    </tbody>
-  </table>
-);
+// Example usage within a MemoryList
+{memories.map(memory => (
+  <MemoryRow
+    key={memory.id}
+    memory={memory}
+    onEdit={() => editMemory(memory)}
+    onDelete={() => deleteMemory(memory)}
+  />
+))}
 ```
 
 ## Notes
-- Verify the exact shapes/signatures of onEdit and onDelete in the implementation — they may receive the full memory object, its id, or another payload.
-- MemoryRow is expected to be a controlled/presentational component; manage state and side effects (persistence, navigation, confirmations) in the parent handlers.
+- Ensure memory objects have a stable, unique identifier used as the list key (commonly memory.id).
+- Callbacks should be side-effect free within MemoryRow; prefer passing the memory through to the parent rather than mutating it inside the row.
 
 
 ---
 
 ## stopToggle
-
 > **File:** `src/webapp/src/components/MemoryList.tsx`  
 > **Kind:** function
 
-Returns a React mouse-event handler that prevents the event's default action, stops propagation, and then invokes the provided no-argument function. Use this when an inner clickable control (for example a button or link inside a list item) should perform its own action without triggering parent click handlers or the browser's default behavior.
+```typescript
+const stopToggle = (fn: () => void) => (e: React.MouseEvent) =>
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `fn` | `() => void` | — |
+
+
+stopToggle is a higher-order function that turns a simple callback into a React mouse-event handler which first prevents the default action and stops propagation, then invokes the callback. Use it for controls inside clickable rows or cards to perform an action without triggering the row’s click behavior (for example, toggling a item without navigating).
 
 ## Remarks
-This small helper centralizes the common pattern of calling e.preventDefault() and e.stopPropagation() before running a callback, avoiding repetition in JSX event attributes. It is intended for mouse event handlers (React.MouseEvent) and keeps the wrapped callback free of event parameters — useful when the inner action only needs to run code and not inspect the event.
+This utility centralizes the common pattern of suppressing event flow when a user interacts with a nested control inside a larger clickable region. By wrapping the action in stopToggle, the MemoryList UI can attach robust, predictable interactions without duplicating boilerplate across multiple controls, improving maintainability and readability.
 
 ## Example
 ```typescript
-// Prevent the outer list item click from firing when the inner button is clicked
-<li onClick={() => setExpanded(!expanded)}>
-  <button onClick={stopToggle(() => handleDelete(itemId))}>Delete</button>
-</li>
-
-// Close a menu without letting the parent toggle handle the click
-<button onClick={stopToggle(() => setOpen(false))}>Close</button>
+const handleOpen = () => openItem(itemId);
+<button onClick={stopToggle(handleOpen)}>Open</button>
 ```
 
 ## Notes
-- It calls preventDefault(), so using this on anchors or form controls will suppress their native behavior (links won't navigate, forms won't submit).
-- The wrapped function receives no event; if you need the event inside fn, wrap it yourself: onClick={(e) => { e.preventDefault(); e.stopPropagation(); myHandler(e); }}.
-- This helper only affects mouse events; keyboard events (e.g., onKeyDown) are not handled by stopToggle.
+- The wrapped function fn does not receive the event; if you need event data, capture it in a closure and still call fn.
+- The wrapper creates a new handler on each call; consider memoizing if used inside tight render loops.
+- This is specific to mouse events; ensure the element uses a mouse-related event (e.g., onClick) when applying this wrapper.
 
 ---

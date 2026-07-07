@@ -3,23 +3,30 @@
 > **File:** `src/api/Gabriel.Core/Configuration/GrokOptions.cs`  
 > **Kind:** class
 
-Holds configuration for the Grok LLM provider and serves as the target type for configuration binding. It inherits common LLM transport and runtime settings from LLMProviderOptions (BaseUrl, ApiKey, TimeoutSeconds, Temperature, TopP, Models[], etc.) and exposes a SectionName so the Options pipeline can bind the "Providers:Grok" section from appsettings.
+```csharp
+public class GrokOptions : LLMProviderOptions, IConfigSection<GrokOptions>
+```
+
+
+GrokOptions is a configuration-driven options class that encapsulates the transport settings for the Grok LLM provider. It derives all standard transport settings (BaseUrl, ApiKey, TimeoutSeconds, Temperature, TopP, and Models) from LLMProviderOptions and adds no Grok-specific properties at present; its existence simply anchors the Providers:Grok section for configuration binding.
 
 ## Remarks
-This subclass exists primarily to provide a stable configuration section identifier (SectionName) and to act as the concrete options type for dependency injection. There are no Grok-specific settings yet; keeping a dedicated type makes it straightforward to add provider-specific properties in the future and allows helper registration helpers (such as a ConfigureSection extension that uses [`IConfigSection<T>`](IConfigSection.cs.md)) to target the correct configuration slice.
+GrokOptions isolates provider-specific configuration and enables per-provider binding, validation, and future Grok-specific options without impacting the shared transport surface. By exposing a dedicated SectionName, it ensures DI and configuration bind to the correct slice of appsettings (Providers:Grok).
 
 ## Example
 ```csharp
-// appsettings.json (conceptual)
-// "Providers": { "Grok": { "BaseUrl": "https://api.grok.example", "ApiKey": "...", "TimeoutSeconds": 30 } }
+// Example DI wiring for Grok provider configuration
+var services = new ServiceCollection();
+var configuration = new ConfigurationBuilder()
+    .AddJsonFile("appsettings.json")
+    .Build();
 
-// In Program.cs or Startup.cs
-builder.Services.ConfigureSection<GrokOptions>(configuration);
+services.ConfigureSection<GrokOptions>(configuration.GetSection(GrokOptions.SectionName));
 
-// Later you can inject IOptions<GrokOptions> or IOptionsMonitor<GrokOptions> where needed
-``` 
+// Inject IOptions<GrokOptions> into services that need Grok settings
+```
 
 ## Notes
-- The SectionName constant must match the configuration path; changing it will break automatic binding.
-- GrokOptions currently adds no properties beyond LLMProviderOptions, so provider behavior is driven by the base-class settings until Grok-specific fields are introduced.
-- The class implements [`IConfigSection<GrokOptions>`](IConfigSection.cs.md) so make sure the app's ConfigureSection helper (or equivalent) recognizes that pattern when registering options.
+- Binding relies on GrokOptions.SectionName; ensure the appsettings.json includes Providers:Grok with the relevant fields.
+- No new properties are defined yet; Grok-specific options can be added here in the future without changing the shared transport surface.
+- If the Providers:Grok section is missing or misnamed, binding may yield defaults from LLMProviderOptions or require explicit handling at startup.

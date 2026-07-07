@@ -3,27 +3,31 @@
 > **File:** `src/api/Gabriel.API/Controllers/SequenceController.cs`  
 > **Kind:** class
 
-Returns a small set of read-only, top-level Gabriel sequence endpoints that are not tied to a specific conversation or project. Primarily used to retrieve the static catalog of available pattern and palette identifiers a client can apply as a "skin" override; the catalog is cheap to fetch and intended to be requested once per client session.
+```csharp
+[ApiController]
+[Authorize]
+[Route("sequence")]
+public class SequenceController : ControllerBase
+```
+
+
+SequenceController exposes sequence-scoped endpoints that are not tied to a specific conversation or project. Today it hosts the skin-picker catalog, accessible via GET /sequence/catalog. The endpoint returns a catalog of pattern and palette identifiers that clients can pin as a skin override on a project or conversation. The data is static and inexpensive to fetch, so clients should retrieve it once per session and cache it for UI rendering.
 
 ## Remarks
-This controller centralizes sequence-related endpoints that are global to the application rather than scoped to a conversation or project. Per-conversation and per-project sequence endpoints remain on their respective controllers (ConversationsController, ProjectsController) so those behaviors stay colocated with their domain logic. SequenceController is an ApiController that requires authentication (Authorize) and exposes small, read-only endpoints intended for low-cost client consumption.
+This controller provides a lean, static surface dedicated to the skin system, decoupled from per-entity controllers. By isolating the catalog from ConversationsController and ProjectsController, the API surfaces a stable resource that can be cached and reused across sessions without depending on any particular conversation or project state. The endpoint is protected by authorization, reflecting that skin configuration is part of the authenticated user experience rather than public data.
 
 ## Example
 ```csharp
-// Example: fetching the catalog with HttpClient and System.Text.Json
-using var client = new HttpClient { BaseAddress = new Uri("https://api.example.com/") };
-client.DefaultRequestHeaders.Authorization =
-    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "<token>");
-
-var res = await client.GetAsync("sequence/catalog");
-res.EnsureSuccessStatusCode();
-
-var json = await res.Content.ReadAsStringAsync();
-var catalog = System.Text.Json.JsonSerializer.Deserialize<SequenceCatalogResponse>(json);
-// use catalog.Patterns and catalog.Palettes
+// Fetch the catalog (requires authentication)
+using var http = new HttpClient { BaseAddress = new Uri("https://api.example.com/sequence/") };
+http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "<token>");
+var resp = await http.GetAsync("catalog");
+resp.EnsureSuccessStatusCode();
+var catalog = await resp.Content.ReadFromJsonAsync<SequenceCatalogResponse>();
+// Use catalog.Patterns and catalog.Palettes to populate UI
 ```
 
 ## Notes
-- The controller is decorated with [Authorize]; callers must be authenticated.
-- The catalog lists are static and inexpensive to produce — clients are expected to fetch them once per session and may cache them.
-- The endpoint is read-only (GET) and returns a SequenceCatalogResponse wrapped in a 200 OK.
+- The catalog data is static and does not change per request; changes require redeploys or explicit cache invalidation.
+- This endpoint is read-heavy and side-effect free; avoid issuing excessive requests beyond session-wide caching.
+- Access requires authentication due to the [Authorize] attribute on the controller.

@@ -10,58 +10,42 @@
 ---
 
 ## AuthOptions
-
 > **File:** `src/api/Gabriel.Core/Configuration/AuthOptions.cs`  
 > **Kind:** class
 
-Holds application-level authentication configuration that controls two surface-level behaviors: whether new user registration is allowed and the parameters for an optional bootstrap (seed) user. Reach for this class when you need to toggle the public registration endpoint for single-tenant or private deployments, or to configure a seeded account created at startup.
-
-## Remarks
-This class centralizes small auth-related toggles that are not part of JWT/token issuance (for example, the token signing keys or token lifetimes). The SectionName property exposes the configuration section key ("Auth") so the type can be bound from configuration during startup. The Seed property represents an idempotent bootstrap user; the application will skip seeding if a user with the configured UserName already exists.
-
-## Example
 ```csharp
-// Bind directly from IConfiguration
-var authOptions = configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>();
-
-// Or register with the DI options system
-services.Configure<AuthOptions>(configuration.GetSection(AuthOptions.SectionName));
+public class AuthOptions : IConfigSection<AuthOptions>
 ```
 
+
+AuthOptions groups authentication-related configuration knobs that are not part of the JWT issuance flow, including a startup toggle to enable or disable user registration (RegistrationEnabled) and a seed bootstrap user (Seed) created at startup; the seed is idempotent and skipped if a user with the configured UserName already exists. It implements [`IConfigSection<AuthOptions>`](IConfigSection.cs.md) and exposes the SectionName Auth so the framework can bind configuration sections (for example from appsettings.json) into this strongly typed object.
+
+## Remarks
+AuthOptions decouples operational authentication settings from the validation and issuance logic, allowing operators to toggle registration and seed behavior without touching runtime auth code. Placing these controls in a dedicated config section improves transparency and supports consistent initialization across deployments.
+
 ## Notes
-- RegistrationEnabled defaults to true; setting it to false disables POST /api/auth/register (returns 403) but does not affect login/refresh/logout endpoints.
-- Seed is initialized to a new SeedUserOptions instance by default and is applied idempotently at startup (skipped when a user with the configured UserName exists).
-- SectionName is the literal configuration key ("Auth") used for binding.
+- The RegistrationEnabled switch acts as a kill-switch for the registration endpoint: when false, POST /api/auth/register returns 403 while login/refresh/logout remain available.
+- Seed bootstrap is idempotent and skipped if the seed user already exists.
 
 ---
 
 ## SeedUserOptions
-
 > **File:** `src/api/Gabriel.Core/Configuration/AuthOptions.cs`  
 > **Kind:** class
 
-Holds configuration for an opt-in, deploy-time "seed" Identity user used to create a single account from configuration. Reach for this type when you want to provision an initial administrative or service account from app configuration (or secrets) rather than creating it interactively; the class encodes the minimal fields the seeding logic needs and a small convenience API for validation.
-
-## Remarks
-This class is a small POCO intended to be populated from configuration (for example appsettings or environment-backed configuration providers) and consumed by a startup/seed routine. The Enabled flag prevents accidental account creation by default; ResolvedEmail mirrors the registration behavior by falling back to UserName when Email is blank. Password is stored as plaintext only in configuration and must be handed to Identity's PasswordHasher when creating the user — the type itself never hashes or logs the password.
-
-## Example
 ```csharp
-// Typical usage in startup/seed code
-var seed = configuration.GetSection("SeedUser").Get<SeedUserOptions>();
-if (seed?.IsConfigured == true && seed.Enabled)
-{
-    var email = seed.ResolvedEmail;
-    // Create user via your UserManager<ApplicationUser>
-    // var user = new ApplicationUser { UserName = seed.UserName, Email = email };
-    // await userManager.CreateAsync(user, seed.Password);
-}
+public class SeedUserOptions
 ```
 
+
+SeedUserOptions is a lightweight configuration object used to seed a user into the identity system during deployment. It exposes an opt-in Enabled flag to prevent silent account creation, and when Enabled is true and both UserName and Password are provided, the seed process can create an initial user whose identity is defined by UserName and, optionally, Email for login. ResolvedEmail returns the effective login email by preferring Email and falling back to UserName. IsConfigured reports readiness for seeding: Enabled is true and UserName and Password are non-empty. The Password field is plaintext on input; it is hashed by the configured PasswordHasher during seed, and never logged.
+
+## Remarks
+SeedUserOptions centralizes seed-time identity data and decouples seed logic from the domain user model, enabling safe defaults and explicit opt-in. It mirrors registration semantics by aligning the login target (ResolvedEmail/UserName) with how JWTs identify users, while enabling deployments to customize which field acts as the login email. This abstraction exists to let deployments opt into seeding a known administrator without leaking plaintext credentials or altering runtime user configuration.
+
 ## Notes
-- Enabled defaults to false to avoid silently creating accounts in misconfigured deployments.
-- ResolvedEmail returns Email when present, otherwise UserName — ensure this matches your Identity validation rules (RequireUniqueEmail). 
-- Password is plaintext only until handed to Identity; do not log it and prefer secure configuration providers (user secrets, vaults) in production.
-- IsConfigured requires Enabled && non-empty UserName && non-empty Password; Email may be blank but must be a valid email if your Identity configuration enforces unique/valid emails.
+- Password is provided in plaintext and hashed via PasswordHasher; never log the plaintext.
+- If Email is blank, ResolvedEmail uses UserName; ensure a meaningful UserName when Email is not supplied.
+- Enabled is the gate for seeding; check IsConfigured to confirm readiness before performing seed operations.
 
 ---

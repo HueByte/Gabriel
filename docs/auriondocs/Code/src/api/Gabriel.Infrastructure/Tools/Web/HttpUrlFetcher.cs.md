@@ -3,24 +3,36 @@
 > **File:** `src/api/Gabriel.Infrastructure/Tools/Web/HttpUrlFetcher.cs`  
 > **Kind:** class
 
-Fetches a web URL and returns a sanitized, size-limited plain-text representation suitable for feeding into an LLM or other text-processing pipeline. Use this when you need a safe, predictable extraction of a page's readable content (HTML cleaned to text, entities decoded, whitespace collapsed) with built-in SSRF protections and explicit truncation reporting — not when you need binary downloads or the full raw HTML.
+```csharp
+public sealed class HttpUrlFetcher : IUrlFetcher
+```
+
+
+Fetches a remote URL into a cleaned, size-bounded plain-text result while protecting the host from SSRF-style requests. Use this implementation of IUrlFetcher when you need a safe, agent-friendly fetcher that (1) refuses non-http(s) schemes and hosts that resolve to loopback/link-local/private ranges, (2) bounds the number of bytes read from the wire and the number of characters returned, and (3) converts HTML into readable text by removing page chrome (scripts, styles, nav/header/footer), stripping tags, decoding entities, and collapsing whitespace. Truncation is explicit (the returned UrlFetchResult.Truncated flag will be set and the content will include a "…[truncated]" marker).
 
 ## Remarks
-HttpUrlFetcher centralizes three concerns: (1) SSRF defense (it accepts only http/https and refuses hosts that resolve to loopback, link-local or private RFC1918 addresses), (2) size limiting (it bounds the bytes read from the wire and also caps the returned character count, marking results as truncated when either limit is reached), and (3) content normalization (HTML pages have script/style/nav/header/footer removed, remaining tags stripped, entities decoded and whitespace collapsed). The implementation uses an IHttpClientFactory-created client named "WebFetch", streams headers-first (ResponseHeadersRead) to avoid buffering large responses, and falls back to UTF-8 if the response charset is unknown or unsupported.
+This class is a defensive wrapper around HttpClient intended for use by agents or services that feed web content into language models or other consumers that require compact, readable text. It implements IUrlFetcher and relies on an IHttpClientFactory; the named client constant HttpClientName ("WebFetch") is used when creating the HttpClient instance, so configure that client in DI if you need custom timeouts, handlers, or proxy settings. The fetcher validates host reachability (to block requests that resolve to local or private addresses), enforces a maximum byte read from the network and a maximum number of characters returned, and rejects non-text Content-Types.
 
 ## Example
 ```csharp
-// Typical usage when you have DI-provided IHttpClientFactory and ILogger<HttpUrlFetcher>:
+// Register the named client (example in ASP.NET Core DI)
+services.AddHttpClient(HttpUrlFetcher.HttpClientName)
+        .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
+
+// Resolve and use (pseudo-code)
 var fetcher = new HttpUrlFetcher(httpFactory, logger);
 var result = await fetcher.FetchAsync("https://example.com/article", CancellationToken.None);
 if (result.Truncated)
 {
-    Console.WriteLine("Content was truncated; consider fetching the source or increasing limits.");
+    Console.WriteLine("Content was truncated; only the first portion was returned.");
 }
+Console.WriteLine($"Final URL: {result.FinalUrl}");
 Console.WriteLine(result.Content);
 ```
 
 ## Notes
-- The class expects an IHttpClientFactory and uses the named client "WebFetch"; ensure that client is registered/configured (timeouts, proxy, etc.) in your DI container.
-- The method throws ArgumentException for non-absolute or non-http(s) URLs, HttpRequestException for non-success responses, and InvalidOperationException when the Content-Type is not text-like; callers should handle these cases.
-- Charset decoding falls back to UTF-8 on errors; pages using uncommon legacy encodings may be mis-decoded and require special handling upstream.
+- The method throws ArgumentException for non-absolute URLs or for schemes other than http/https.
+- Non-success HTTP status codes cause an HttpRequestException, and non-text Content-Types cause an InvalidOperationException.
+- Truncation can occur for two reasons: the fetch reached the MaxBytesToRead limit while reading the response stream, or the cleaned text exceeded MaxContentChars. The UrlFetchResult.Truncated flag is set if either occurred; ContentLength is the length of the cleaned (possibly truncated) string.
+- Character decoding uses the response Content-Type charset when present; on decoding errors it falls back to UTF-8.
+- Because a named HttpClient is used (HttpUrlFetcher.HttpClientName), consumers should register/configure that named client if they need specific handlers, proxy configuration, or timeouts.

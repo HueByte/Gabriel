@@ -3,29 +3,26 @@
 > **File:** `src/api/Gabriel.Engine/Sequence/IGabrielSequenceGenerator.cs`  
 > **Kind:** interface
 
-Deterministically produces a complete 64-frame GabrielSequence from a stable numeric seed and optional runtime state. Use this interface when you need the canonical avatar sequence for a personality (e.g. Project.AvatarSeed or Conversation.AvatarSeed) or when you want the same seed to generate identical base frames while optionally applying live conversation signals for the final frames.
+```csharp
+public interface IGabrielSequenceGenerator
+```
+
+
+Deterministically generates a full 64-frame Gabriel Sequence from a seed. Implementations provide a repeatable avatar animation derived from a stable identity, with optional live-state signals and user-specified skin overrides.
 
 ## Remarks
-This generator cleanly separates stable identity from ephemeral state: the first three conceptual layers of the generated sequence are derived solely from the seed (so they remain consistent across sessions), while the Live State layer (frames 48..63) is influenced by the optional ConversationState to reflect current mood, tempo, or engagement. Pattern and palette overrides, when provided, take precedence over seed-derived selections but unrecognized identifiers are silently ignored and fall back to seed behavior (see SequenceCatalog for identifier resolution). The interface is intentionally stateless and deterministic, making implementations safe to register as singletons.
+It sits at the boundary between identity and presentation: the seed establishes the baseline avatar, while state drives the latter frames (frames 48–63) to reflect mood, tempo, and engagement. The interface is stateless and safe to register as a singleton, enabling reuse across the application. PatternOverride and PaletteOverride, when provided, take precedence over seed-derived picks; if an identifier is unknown, the system falls back to seed-derived behavior rather than erroring (see SequenceCatalog). This decouples the caller from seed management and skin-picking logic, centralizing sequence generation in Gabriel engine.
 
 ## Example
 ```csharp
-// Generate sequence for a project-shared avatar seed, no live state
-var sequence = generator.Generate(Project.AvatarSeed, state: null);
-
-// Generate sequence for a conversation with live signals and a pinned skin
-var sequenceWithOverrides = generator.Generate(
-    seed: Conversation.AvatarSeed,
-    state: currentConversationState,
-    patternOverride: "striped",
-    paletteOverride: "warm-sunset");
-
-// Unknown pattern/palette identifiers will not throw; they fall back to seed-derived choices
-var sequenceFallback = generator.Generate(seed, state: null, patternOverride: "unknown-pattern");
+// Typical usage via DI
+var generator = serviceProvider.GetRequiredService<IGabrielSequenceGenerator>();
+long seed = /* personality's stable identity */
+ConversationState? state = /* optional live-state signals */;
+GabrielSequence sequence = generator.Generate(seed, state, patternOverride: "neon", paletteOverride: "aurora");
 ```
 
 ## Notes
-- The seed must be stable to guarantee deterministic outputs across calls; changing the seed changes the entire seed-derived portion of the sequence.
-- ConversationState affects only frames 48..63 (the Live State layer); other frames remain seed-determined.
-- Pattern and palette overrides have higher precedence than seed choices; invalid identifiers are ignored rather than causing errors.
-- Implementations should be thread-safe and avoid internal mutable state since the interface is intended for singleton registration.
+- PatternOverride and PaletteOverride take precedence over seed-derived picks; unknown identifiers fall back to seed-derived behavior rather than erroring.
+- Frames 48–63 are driven by ConversationState when provided, allowing mood/tempo/engagement signals to influence the latter portion of the sequence.
+- The generator is stateless; it is safe to register as a singleton and call Generate without side effects.

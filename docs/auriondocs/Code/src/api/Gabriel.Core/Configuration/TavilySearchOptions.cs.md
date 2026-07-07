@@ -3,39 +3,34 @@
 > **File:** `src/api/Gabriel.Core/Configuration/TavilySearchOptions.cs`  
 > **Kind:** class
 
-Stores configuration for the Tavily search service used by the web/tools search integration. Use this type when binding the "Tools:Web:Tavily" configuration section or when registering the Tavily search tool so callers have a single place for defaults (BaseUrl, timeout, and search depth) and for checking whether the service has been configured (ApiKey).
+```csharp
+public class TavilySearchOptions : IConfigSection<TavilySearchOptions>
+```
+
+
+TavilySearchOptions is a strongly-typed configuration container for the Tavily web search integration. It exposes the API base URL, API key, search depth tier, and request timeout, and is bound as the Tools:Web:Tavily configuration section via [`IConfigSection<TavilySearchOptions>`](IConfigSection.cs.md). Use it to configure how calls to Tavily are made; populate ApiKey from secrets or environment variables, set BaseUrl, select a depth tier ("basic" or "advanced"), and tune TimeoutSeconds. IsConfigured is a convenience flag indicating whether an API key has been provided, allowing callers to guard enabling the tool and avoid attempting requests when the credentials are missing.
 
 ## Remarks
-This class centralizes the small set of options required to call the Tavily API: the service base URL, an API key, a search depth mode and a timeout. It provides sane defaults appropriate for most uses (public API base URL, 15s timeout, and "basic" search depth) and exposes IsConfigured so code can treat an empty or whitespace ApiKey as "disabled" rather than throwing at runtime. The SectionName constant makes it easy to locate or bind the corresponding configuration section.
+By centralizing these settings, TavilySearchOptions decouples configuration from usage and improves testability. The SectionName constant anchors the config mapping and ensures consistency across the codebase. Because ApiKey controls access to the upstream service, IsConfigured doubles as a quick capability check for bootstrap paths and feature toggling.
 
 ## Example
 ```csharp
-// appsettings.json
+// Common usage: configure the options then initialize the client if configured
+var options = new TavilySearchOptions
 {
-  "Tools": {
-    "Web": {
-      "Tavily": {
-        "BaseUrl": "https://api.tavily.com/",
-        "ApiKey": "tvly-...",
-        "SearchDepth": "advanced",
-        "TimeoutSeconds": 20
-      }
-    }
-  }
-}
+    BaseUrl = "https://api.tavily.com/",
+    ApiKey = "tvly-abcdef", // securely sourced in real apps
+    SearchDepth = "basic",
+    TimeoutSeconds = 15
+};
 
-// Program.cs (binding example)
-var options = new TavilySearchOptions();
-configuration.GetSection(TavilySearchOptions.SectionName).Bind(options);
-if (!options.IsConfigured)
+if (options.IsConfigured)
 {
-    // disable or skip registering the Tavily-based search tool
+    // Initialize Tavily search client with these options
 }
 ```
 
 ## Notes
-- BaseUrl must include a trailing slash so that relative endpoints (e.g. "search") concatenate correctly.
-- An empty or whitespace ApiKey disables the tool (the integration is expected to return an "unconfigured" error instead of throwing).
-- SearchDepth accepts "basic" or "advanced"; basic is lower-cost/faster, advanced performs a deeper crawl and costs more credits.
-- TimeoutSeconds is in seconds and defaults to 15.
-- IsConfigured checks only that ApiKey is not null/empty/whitespace; it does not validate the key format or test connectivity.
+- Ensure ApiKey is stored securely (e.g., secret stores, environment vars) and never checked in to source.
+- BaseUrl must end with a trailing slash to ensure the relative /search path resolves correctly.
+- The code does not validate allowed values for SearchDepth; prefer "basic" or "advanced" and perform validation at call sites if needed.

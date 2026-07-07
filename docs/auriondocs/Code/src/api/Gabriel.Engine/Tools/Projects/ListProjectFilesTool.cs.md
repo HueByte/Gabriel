@@ -3,21 +3,27 @@
 > **File:** `src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.cs`  
 > **Kind:** class
 
-Lists all files uploaded to the current conversation's project and formats a concise, human-readable summary including each file's GUID, name, size, content type, and upload timestamp. Use this tool when you need to discover what reference materials are available in the conversation-scoped project before calling read_project_file to fetch specific file contents. The tool takes no parameters and returns a plain text result suitable for model consumption or display to a user.
+```csharp
+public sealed class ListProjectFilesTool : ITool
+```
+
+
+Lists every file uploaded to the current conversation's project and returns a readable catalog that includes each file's name, id, size, content type, and upload timestamp. Use this to discover what material is available before reading a specific file with read_project_file.
 
 ## Remarks
-This tool is a thin adapter over IProjectFileService.ListAsync that enforces the conversation's project context (via IToolExecutionContext) and converts the returned ProjectFile entities into a single textual summary. It intentionally includes each file's GUID (labeled as `id:`) because downstream tools — notably read_project_file — require the GUID rather than a filename. Errors from the underlying service are caught and returned as error messages rather than being thrown, so callers should treat the returned string as the complete response.
+By encapsulating the retrieval and formatting behind a tool, this symbol cleanly separates data access from presentation. The output always includes the file IDs so callers can supply file_id to read_project_file, enabling an ergonomic, stepwise workflow in chat-driven interactions. The implementation also guards against missing project context and surfaces errors as user-friendly messages rather than throwing exceptions, which keeps conversations flowing.
 
 ## Example
 ```csharp
-// Typical usage inside an async context
-var tool = new ListProjectFilesTool(projectFileService, toolExecutionContext);
-string result = await tool.ExecuteAsync("{}", CancellationToken.None);
-Console.WriteLine(result);
+// Example output
+Project has 2 file(s):
+- README.md  [id: 123e4567-e89b-12d3-a456-426614174000, 12.3 KiB, text/markdown, uploaded 2024-08-10 12:00:00Z]
+- data.csv   [id: a1b2c3d4-e5f6-7890-1234-56789abcdef0, 2.5 MiB, text/csv, uploaded 2024-08-11 09:30:00Z]
+
+Pass the bracketed `id:` value as `file_id` to read_project_file.
 ```
 
 ## Notes
-- The tool requires the conversation to be attached to a project; if not, it returns an error message rather than listing files.
-- File sizes use binary units (KiB, MiB) and are formatted to one decimal place for readability.
-- Upload timestamps are formatted using the universal sortable pattern (ToString("u")).
-- The tool's ParametersJsonSchema is empty — no arguments are accepted — and the returned value is plain text (not structured JSON).
+- Requires the conversation to be attached to a project; otherwise the tool returns a user-facing error string.
+- Output is informational text, not structured data; callers should treat lines as display content and extract the id for subsequent reads if needed.
+- The sizes use human-friendly units (KiB, MiB) and timestamps are presented in UTC format.

@@ -3,14 +3,20 @@
 > **File:** `src/api/Gabriel.API/Middleware/RequireNonNullablePropertiesSchemaFilter.cs`  
 > **Kind:** class
 
-Adds C# non-nullable reference-type properties to the OpenAPI schema's `required` set so generated TypeScript clients treat them as non-optional fields. Reach for this filter when your project uses C# nullable-reference-type annotations and you want those non-nullable properties to be represented as required in the emitted OpenAPI document (and thus in downstream client code), because the built-in nullable metadata alone only controls `nullable: true/false`, not the `required` list.
+```csharp
+public class RequireNonNullablePropertiesSchemaFilter : ISchemaFilter
+```
+
+
+Implements a schema filter that marks non-nullable C# reference-type properties as required in the OpenAPI schema so generated TypeScript clients treat them as non-optional fields. It mutates the concrete OpenApiSchema properties by adding camel-cased property names to the Required collection when the corresponding C# property is non-nullable.
 
 ## Remarks
-This schema filter examines each public instance property on the reflected CLR type using NullabilityInfoContext to determine whether the property is annotated as non-nullable (ReadState or WriteState == NotNull). When a matching property exists in the OpenAPI schema (matched by a simple camelCase conversion of the CLR property name), the filter adds that property name to the schema's Required set. The filter mutates the concrete OpenApiSchema (it is a no-op if the provided schema isn't the concrete type) and is intended to run during OpenAPI/Swagger generation so client generators see the required information.
+
+By aligning C# non-nullability with OpenAPI required constraints, this filter helps keep generated clients in sync with the server model. It reads nullability information via NullabilityInfoContext and mutates the Required set, without changing the underlying nullable flag. It only affects the properties that exist in the generated schema and uses a simple camelCase mapping to property names.
 
 ## Example
 ```csharp
-// Register the schema filter when configuring Swagger/Swashbuckle
+// Typical usage in SwaggerGen setup
 services.AddSwaggerGen(c =>
 {
     c.SchemaFilter<RequireNonNullablePropertiesSchemaFilter>();
@@ -18,6 +24,6 @@ services.AddSwaggerGen(c =>
 ```
 
 ## Notes
-- Requires runtime support for NullabilityInfoContext (introduced in .NET 5+) and meaningful nullable annotations in the source code for the nullability checks to be accurate.
-- Property name matching uses a simple camelCase conversion of the CLR property name and does not respect JsonPropertyName attributes or serializer naming policies; if your JSON contract uses different naming, some properties may be missed.
-- Only public instance properties are inspected; fields, non-public properties, or explicit interface implementations are ignored.
+- Matches property keys using camelCase transform of the C# property name; ensure the OpenAPI schema uses matching keys (naming attributes like JsonPropertyName may affect alignment).
+- Relies on the project's nullable reference type context to determine nullability; enable nullable reference types to get meaningful results.
+- Only runs when the schema contains properties; if a property is not present in the OpenAPI schema, it will not be added to Required.

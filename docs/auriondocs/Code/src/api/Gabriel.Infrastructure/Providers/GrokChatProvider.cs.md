@@ -1,7 +1,19 @@
-GrokChatProvider is a streaming wrapper around xAI's OpenAI-compatible /v1/chat/completions endpoint. It relies on a named HttpClient (Grok) resolved through IHttpClientFactory, configured by GrokOptions, and it logs via ILogger to perform streaming requests and interpret incremental responses. It also exposes the configured model catalog (snapshotted at startup) so tooling UI can present a model picker, with the available models surfaced through the Models property.
+# GrokChatProvider
 
-StreamAsync returns an IAsyncEnumerable<ChatProviderEvent> and yields events as the remote stream progresses. Each HTTP call builds a request body, posts to chat/completions, and reads the response as a stream of data: lines. Data lines are parsed into StreamChunk payloads; the special token [DONE] ends the stream. For each chunk, the first delta is inspected: if ReasoningContent is present, a ReasoningDeltaEvent is yielded; if Content is present, a TextDeltaEvent is yielded. ToolCalls arriving in the chunk are accumulated by index and emitted when the tool-calls phase completes.
+> **File:** `src/api/Gabriel.Infrastructure/Providers/GrokChatProvider.cs`  
+> **Kind:** class
 
-If the HTTP response is not successful, the error body is logged and a FinishEvent with FinishReason.Error is yielded to signal termination, after which the stream ends.
+```csharp
+public class GrokChatProvider : IChatProvider
+```
 
-This class centralizes the HTTP transport, streaming protocol parsing, and the composition of UI-facing events, enabling callers to consume a live, event-driven chat experience without needing to manage the low-level HTTP/JSON streaming logic themselves.
+
+Streams chat completions from xAI's OpenAI-compatible /v1/chat/completions endpoint and yields incremental ChatProviderEvent items (text deltas, reasoning deltas, tool call events, finish/error). Use this provider when you need low-latency, token- or chunk-level streaming from Grok models and want the HTTP plumbing (base URL, timeout, auth) managed via a named HttpClient configured in DI.
+
+## Remarks
+GrokChatProvider encapsulates the HTTP streaming mechanics and event parsing so callers receive a sequence of high-level events instead of raw HTTP/SSE frames. It resolves a named HttpClient from IHttpClientFactory per call to preserve handler health and DNS refresh semantics, and exposes a snapshot of available models from GrokOptions for UI model selection. The implementation accumulates piecewise tool-call fragments (indexed by call) and emits complete tool call events only when the provider receives the terminal chunk, which simplifies consumers that react to tool invocations.
+
+## Notes
+- The stream is read line-by-line and expects server lines prefixed with "data:"; malformed JSON chunks are logged and skipped rather than failing the whole stream.
+- If the HTTP response is not successful the provider logs the response body, yields a FinishEvent with FinishReason.Error, and ends the stream.
+- Models is a snapshot taken at construction from configuration; updates to the underlying options after construction are not reflected in the Models property.

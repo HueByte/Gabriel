@@ -12,135 +12,116 @@
 ---
 
 ## SkinPickerProps
-
 > **File:** `src/webapp/src/components/SkinPicker.tsx`  
 > **Kind:** interface
 
-Properties for the SkinPicker component. Use this interface when a parent component needs to provide the current pattern and palette overrides and receive updates; it also exposes an optional reroll action and a disabled flag for temporarily disabling interaction.
-
-## Remarks
-This interface models externally controlled skin overrides (pattern and palette) so the parent fully controls the selected values. The optional onReroll callback causes the picker to render a reroll button when provided; invoking reroll changes seed-derived dimensions only and does not clear any explicit pattern/palette overrides.
-
-## Example
 ```typescript
-// inside a parent React component
-const [pattern, setPattern] = useState<string | null>(null);
-const [palette, setPalette] = useState<string | null>(null);
-const [saving, setSaving] = useState(false);
-
-const props: SkinPickerProps = {
-  pattern,
-  palette,
-  onChange: ({ pattern: nextPattern, palette: nextPalette }) => {
-    setPattern(nextPattern);
-    setPalette(nextPalette);
-  },
-  onReroll: () => {
-    // trigger a reroll of seed-derived dimensions; does not clear pattern/palette
-  },
-  disabled: saving,
-};
-
-// JSX
-// <SkinPicker {...props} />
+interface SkinPickerProps
 ```
 
+
+SkinPickerProps defines the props for the SkinPicker component. It models a controlled skin-selection surface where pattern and palette can be strings or null to represent an unset state; changes are emitted via onChange with the new { pattern, palette }. If onReroll is supplied, a reroll button is rendered beside the pickers and the skin overrides remain pinned (pins survive a reroll; only seed-derived dimensions change). The disabled flag toggles user interaction to reflect loading or saving.
+
+## Remarks
+This interface enforces a clear boundary between presentation and state. It adopts a controlled-component pattern: the parent owns pattern and palette and reacts to onChange with a new value object. The optional onReroll captures an alternate UX path that can be provided to enable seed-based exploration without losing user pins.
+
 ## Notes
-- The onChange callback receives an object with pattern and palette which may be null; treat null as "no override".
-- If onReroll is omitted, no reroll button is rendered.
-- Reroll does not clear pinned overrides: explicit pattern/palette values survive a reroll (reroll only affects seed-derived aspects).
+- pattern and palette may be null; treat null as "not selected" and handle in UI logic.
+- onReroll, when provided, will not clear existing pins; only seed-derived dimensions are affected.
+- The disabled flag disables interaction; ensure the consuming UI reflects this state and guards onChange invocations accordingly.
 
 ---
 
 ## SkinPicker
-
 > **File:** `src/webapp/src/components/SkinPicker.tsx`  
 > **Kind:** function
 
-Renders a UI control for selecting a "skin" composed of a pattern and a color palette. Use this component when you need a reusable, likely controlled widget that displays the current pattern/palette and lets the user change or randomize that selection; it also supports disabling user interaction.
+```typescript
+export function SkinPicker(
+```
+
+
+SkinPicker is a reusable React functional component that renders a control for selecting a skin pattern from a provided palette. It is a controlled UI unit: it receives the current pattern and the available palette via props, and communicates changes back to its parent through onChange. It also exposes onReroll to request a new, alternate pattern and respects the disabled flag to render in a non-interactive state. This symbol should be used when you need a compact, standardized skin-selection control in editors or customization screens, rather than building separate pattern and color pickers from scratch.
 
 ## Remarks
-This component appears to be intended as a controlled input: the current selection is supplied via the pattern and palette props and changes are reported back via onChange. An onReroll callback is provided so callers can implement a "randomize" or alternate-selection action. Passing disabled should prevent user interaction (verify exact behavior and visual states against the implementation).
+Skins are a common customization primitive; SkinPicker encapsulates the UX of choosing and iterating through skins. By isolating this behavior, the rest of the UI can rely on a single contract (pattern, palette, onChange, onReroll) and swap in different palettes or patterns without altering layout code. It also eases testing by making the interaction surface consistent across pages.
 
 ## Example
 ```typescript
-// Typical controlled usage (adapt to the real onChange/onReroll signatures in the implementation):
-const [pattern, setPattern] = useState(initialPattern);
-const [palette, setPalette] = useState(initialPalette);
-
 <SkinPicker
-  pattern={pattern}
+  pattern={currentPattern}
   palette={palette}
-  onChange={(next) => {
-    // `next` will contain the new selection — check the real shape in source
-    setPattern(next.pattern ?? pattern);
-    setPalette(next.palette ?? palette);
-  }}
-  onReroll={() => {
-    // request a new random skin from caller logic
-  }}
+  onChange={setPattern}
+  onReroll={rollPattern}
   disabled={false}
 />
 ```
 
 ## Notes
-- The source provided for this symbol was truncated; confirm the exact prop types and the shape of the onChange/onReroll callbacks in the implementation before integrating.
-- Treat it as a controlled component: updating pattern/palette in response to onChange is likely required for changes to be reflected.
-- If you pass callbacks, consider memoizing them to avoid unnecessary re-renders depending on the component's implementation.
+- SkinPicker is intended to be a controlled component; avoid mutating internal state. Instead, update the parent state via onChange.
+- The onReroll callback is a hint for generating a new pattern; the parent should apply the change so the pattern prop updates synchronously.
+- When disabled is true, all interactive affordances should be inert to prevent user interaction.
 
 ---
 
 ## handlePalette
-
 > **File:** `src/webapp/src/components/SkinPicker.tsx`  
 > **Kind:** function
 
-Updates the selected palette for the current skin and notifies the parent via the onChange callback. It converts an empty-string selection into null (representing "no palette") and preserves the existing pattern value from the surrounding scope. Reach for this helper when wiring a palette <select> or similar input to the SkinPicker's change pipeline so the parent receives a consistent { pattern, palette } object.
-
-## Remarks
-This small adapter exists to normalize UI input values into the shape expected by the onChange consumer: empty selections become null while non-empty values are forwarded as-is. It keeps the pattern value from the surrounding closure untouched and only changes the palette field, so callers don't need to construct the full update object themselves.
-
-## Example
 ```typescript
-// Typical usage inside a React component's JSX
-// <select onChange={e => handlePalette(e.target.value)}>
-//   <option value="">(none)</option>
-//   <option value="warm">Warm</option>
-//   <option value="cool">Cool</option>
-// </select>
+const handlePalette = (value: string) =>
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `value` | `string` | — |
+
+
+handlePalette is a small UI helper that updates the selected palette in the SkinPicker when the user changes the palette input. It takes a string value and forwards the new palette along with the existing pattern to the onChange callback; if the input is cleared (empty string), it sends null for palette to indicate 'no palette selected'.
+
+## Remarks
+Acts as a thin adaptor between the palette input and the parent state. By preserving the current pattern while normalizing the palette value, it keeps state transitions simple and centralized in one consumer (onChange) rather than scattering logic across multiple handlers.
+
 ## Notes
-- handlePalette relies on `pattern` and `onChange` from the containing scope; ensure they are defined and have the expected types.
-- It maps an empty string to `null`. If consumers expect undefined or an empty string to represent "no palette," adapt accordingly.
-- This function builds and sends a new object to onChange but does not mutate any external state itself.
+- Relies on onChange and pattern being in scope; missing them will cause runtime errors.
+- Using value === '' to clear the palette means any non-empty string is treated as a valid palette; ensure downstream logic can handle the palette value type (string | null).
 
 ---
 
 ## handlePattern
-
 > **File:** `src/webapp/src/components/SkinPicker.tsx`  
 > **Kind:** function
 
-Normalizes a user-provided pattern string and propagates it via the component's onChange callback. Empty strings are converted to null to represent the absence of a pattern, and the current palette value from the surrounding scope is forwarded unchanged.
+```typescript
+const handlePattern = (value: string) =>
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `value` | `string` | — |
+
+
+handlePattern is a small helper used when the user edits the skin pattern in the SkinPicker. It updates the parent state by invoking onChange with an object that always contains the latest palette and a normalized pattern: if the input is an empty string, pattern is set to null to denote 'no pattern'; otherwise, it uses the provided string. This centralizes how pattern changes are propagated, ensuring the UI and the underlying data model stay in sync with a single payload.
 
 ## Remarks
-This small handler centralizes the normalization rule (empty -> null) so callers and the rest of the component receive a consistent representation for "no pattern". It captures `onChange` and `palette` from the enclosing scope and delegates the actual update to the provided `onChange` function rather than mutating state itself.
+By pooling pattern and palette updates into one call, this function reduces the risk of the UI diverging from the data model if pattern and palette occasionally fall out of sync. It also imposes a single representation for "no pattern" (null) across the codebase, which simplifies downstream checks.
 
 ## Example
 ```typescript
-// typical usage inside the SkinPicker component JSX
-<input
-  value={pattern ?? ''}
-  onChange={e => handlePattern(e.target.value)}
-  placeholder="Enter pattern or leave empty"
-/>
+// Most common case: set a non-empty pattern
+handlePattern('grid-pattern');
+
+// User clears the field
+handlePattern('');
 ```
 
 ## Notes
-- handlePattern relies on `palette` and `onChange` from the surrounding scope; ensure those are defined and have the expected shape.
-- The conversion of an empty string to null is intentional; if an empty string should be preserved as a meaningful value, remove or adjust this normalization.
-- This function is synchronous and not debounced; if input rate is high or onChange triggers expensive work, consider debouncing at the caller level.
-
+- Normalization: '' becomes null to represent 'no pattern'; downstream code should handle null accordingly.
+- Palette dependency: the function reads palette from its closure; ensure palette is updated in the component state when necessary.
+- No whitespace trimming: if you want to strip spaces, call handlePattern(value.trim()) before invocation.
 
 ---

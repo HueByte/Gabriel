@@ -10,34 +10,25 @@
 ---
 
 ## pickPalette
-
 > **File:** `prototype/palettes.js`  
 > **Kind:** function
 
-Returns a randomly selected palette from the global PALETTES array using Math.random. Reach for this helper when you need a quick, uniformly random palette choice for UI theming or prototyping; if you need determinism or testability, inject or stub the source instead of relying on this global helper.
-
-## Remarks
-This small utility centralizes the common operation of choosing a palette at random so callers don't duplicate the Math.random + index calculation. It intentionally reads from a global PALETTES array rather than accepting an argument, favoring convenience in small prototypes; for larger or testable code paths prefer a function that accepts the palette list as a parameter.
-
-## Example
 ```javascript
-// Choose a palette and apply its colors to a UI component
-const palette = pickPalette();
-if (palette) {
-  document.body.style.background = palette.background;
-  // ...apply other colors
-}
+function pickPalette()
 ```
 
+
+pickPalette returns a random element from PALETTES by selecting an index with Math.random. It should be used whenever you need to choose a palette at runtime instead of hard-coding or wiring the choice at multiple call sites.
+
+## Remarks
+This function centralizes the randomness and the dependency on PALETTES, turning a scattered, ad-hoc palette selection into a single reusable utility. It relies on PALETTES being a non-empty array at runtime; by importing this function you commit to keeping the palette list in one place.
+
 ## Notes
-- If PALETTES is undefined or not an array, this will throw or return undefined; ensure PALETTES is a defined, non-empty array before calling.
-- If PALETTES is an empty array the function returns undefined (no index to select).
-- Selection uses Math.random (not cryptographically secure) and is non-deterministic, which can make unit testing harder unless you inject or stub the source of randomness or the palettes array.
+- If PALETTES is empty, the function yields undefined. Ensure PALETTES is non-empty or guard with a fallback in calling code.
 
 ---
 
 ## sampleGradient
-
 > **File:** `prototype/palettes.js`  
 > **Kind:** function
 
@@ -53,24 +44,20 @@ function sampleGradient(stops, t)
 | `t` | — | — |
 
 
-Interpolates a color from a list of RGB stops using a normalized parameter t (0..1). Use this when you need a simple, evenly‑spaced linear interpolation across a palette of RGB stops — for example sampling colors along a gradient made from two or more anchors.
+Interpolates a color along a defined sequence of RGB stops for a given parameter t in the range [0, 1]. It clamps t, handles the single-stop case by returning that color, and linearly blends the RGB channels between adjacent stops with per-channel rounding. Use this function when you need a smooth gradient color corresponding to a normalized position rather than choosing a fixed color or precomputing a gradient map.
 
 ## Remarks
-This utility treats the provided stops as evenly spaced anchors across the 0..1 range. It clamps t to [0,1], finds the two neighbouring stops for the segment containing t, and linearly interpolates each RGB channel independently. If only one stop is provided it is returned unchanged. The function returns a new array of integer RGB components (values are rounded).
+This is a pure, deterministic function with no side effects. It operates on RGB triplets where each channel is in the 0–255 range and returns a new triplet by per-channel linear interpolation with rounding. The function handles the edge cases of a single stop and of t at the boundaries, making it suitable for sampling intermediate colors in UI palettes or theme generators.
 
 ## Example
 ```javascript
-const stops = [ [255, 0, 0], [0, 255, 0], [0, 0, 255] ]; // red -> green -> blue
-console.log(sampleGradient(stops, 0));    // [255, 0, 0]
-console.log(sampleGradient(stops, 0.5));  // near [0, 255, 0] (middle stop)
-console.log(sampleGradient(stops, 0.25)); // interpolated between red and green
-console.log(sampleGradient(stops, 1));    // [0, 0, 255]
+sampleGradient([[255,0,0],[0,0,255]], 0.5)
+// => [128, 0, 128]
 ```
 
 ## Notes
-- The function expects each stop to be an array-like RGB triple (numeric [r, g, b]); there is no runtime validation of stop element lengths or types.
-- t is clamped to [0,1]; passing values outside that range will yield an endpoint color.
-- Returned components are rounded to integers; alpha channel is not supported.
-- If stops.length === 1 the single stop is returned directly (no copy guarantees beyond the returned array).
+- Requires at least one stop; zero stops will cause a failure.
+- Output channels are rounded to integers (0–255).
+- t is clamped to [0, 1]; values outside this range are treated as endpoints.
 
 ---

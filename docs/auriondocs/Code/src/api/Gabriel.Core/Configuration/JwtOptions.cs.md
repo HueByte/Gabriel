@@ -3,36 +3,17 @@
 > **File:** `src/api/Gabriel.Core/Configuration/JwtOptions.cs`  
 > **Kind:** class
 
-Holds configuration for JWT issuance and validation used by the authentication/token code paths. Use this type when binding configuration (the section name is Jwt) or when passing a single typed settings object into components that create or validate JWTs (token issuer, authentication middleware, refresh token logic).
-
-## Remarks
-Centralizes the values that must match between token generation and validation: issuer, audience, the symmetric signing key, and token lifetimes. It provides a small convenience property (IsConfigured) to detect whether a minimally valid signing key has been supplied. The class is intended to be bound from configuration (appsettings, environment, or secrets) so callers can read one typed object rather than scattering magic strings and numbers across the codebase.
-
-## Example
 ```csharp
-// appsettings.json
-// {
-//   "Jwt": {
-//     "Issuer": "gabriel",
-//     "Audience": "gabriel",
-//     "SigningKey": "<a-secure-32+ character secret>",
-//     "AccessTokenMinutes": 15,
-//     "RefreshTokenDays": 30
-//   }
-// }
-
-// Program.cs / Startup.cs
-var jwtOptions = new JwtOptions();
-configuration.GetSection(JwtOptions.SectionName).Bind(jwtOptions);
-if (!jwtOptions.IsConfigured) {
-    throw new InvalidOperationException("JWT signing key is not configured or is too short.");
-}
-
-// Use jwtOptions when configuring token generation or the authentication middleware
-// (passing Issuer, Audience, SigningKey-derived SymmetricSecurityKey, lifetimes, etc.).
+public class JwtOptions : IConfigSection<JwtOptions>
 ```
 
+
+JwtOptions is the configuration section that groups all JWT-related settings used to issue and validate tokens; it centralizes issuer, audience, signing key, and token lifetimes. The IsConfigured property signals whether a valid 32+ character SigningKey has been provided, guiding startup logic to enable or skip JWT-based authentication.
+
+## Remarks
+JwtOptions centralizes JWT policy in a single, strongly-typed object, simplifying how the rest of the system reads token settings. By exposing a simple IsConfigured flag, it helps startup logic decide whether JWT-based authentication should be enabled. The defaults provide baseline values for issuer, audience, and token lifetimes, while the signing key constraint ensures a minimum security level for HS256.
+
 ## Notes
-- The SigningKey must be at least 32 characters (256 bits) for HS256; IsConfigured only checks length and whitespace, not cryptographic strength.
-- Never commit the SigningKey to source control; supply it via a secret manager/environment variables (e.g., user-secrets, Infisical) as suggested in the source comments.
-- Access tokens are intentionally short-lived; refresh tokens are longer-lived but expected to be revocable and rotated by server-side logic (see related refresh token store/rotation code).
+- SigningKey must be loaded from a secure secret store (e.g., Infisical JWT__SIGNINGKEY) or user-secrets (Jwt:SigningKey); otherwise IsConfigured will be false.
+- Avoid exposing the SigningKey in logs or error messages; rely on IsConfigured to indicate readiness instead of printing the key.
+- If you rotate the signing key, update the configuration and re-check IsConfigured to ensure the change is picked up at startup.

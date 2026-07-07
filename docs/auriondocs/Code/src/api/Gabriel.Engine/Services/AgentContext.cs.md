@@ -10,56 +10,82 @@
 ---
 
 ## AgentContext
-
 > **File:** `src/api/Gabriel.Engine/Services/AgentContext.cs`  
 > **Kind:** record
 
-An immutable value object that represents everything a single turn sends to the chat provider: persona prompt, optional project prompt, optional memory block, optional rolling summary, the filtered conversation messages, and the set of available tool descriptors. Use AgentContext when you need a single, canonical assembly of the data sent to the provider (for making the provider call or for presenting consistent UI metrics) rather than assembling those pieces in multiple places.
+```csharp
+public record AgentContext(
+    string PersonaPrompt,
+    string? ProjectPrompt,
+    string? MemoryBlock,
+    string? Summary,
+    IReadOnlyList<Message> Messages,
+    IReadOnlyList<ToolDescriptor> Tools)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `PersonaPrompt` | `string` | — |
+| `ProjectPrompt` | `string?` | — |
+| `MemoryBlock` | `string?` | — |
+| `Summary` | `string?` | — |
+| `Messages` | `IReadOnlyList<Message>` | — |
+| `Tools` | `IReadOnlyList<ToolDescriptor>` | — |
+
+
+AgentContext is a record that encapsulates all the context the chat provider needs for a single turn. It combines the agent persona, an optional project prompt, an optional memory block, the turn summary, the filtered sequence of messages, and the available tool descriptors into a single, immutable object used by both the live provider path and the UI metrics path. Build constructs this context from a Conversation and the prompt fragments, applying filtering and orphaned-tool-message cleanup so callers always operate on a consistent view.
 
 ## Remarks
-AgentContext centralizes the logic that previously lived in multiple places so the live provider call and any UI metrics or diagnostics observe exactly the same inputs. It performs conversation trimming (honoring Conversation.SummarizedThroughMessageId), removes inactive message variants, and prunes tool messages that are not referenced by active assistant tool_call entries — ensuring legacy or orphaned tool outputs do not resurface. The record is intentionally immutable and exposes read-only collections so callers treat the assembled context as a single source of truth.
+Architecturally, this abstraction centralizes the logic for what is shared between the actual provider invocation and the metrics UI. Previously, two inline assemblies diverged; merging them into AgentContext ensures tool results tied to active tool calls are preserved across both paths and that inactive or orphaned messages are dropped early. It also isolates the transformation from high-level prompt fragments to a provider-ready history, simplifying future changes to how prompts are composed.
 
 ## Example
 ```csharp
-// Build an AgentContext for the current turn and produce the provider-ready history
-var ctx = AgentContext.Build(conversation, personaPrompt, projectPrompt, memoryBlock, tools);
-var providerHistory = ctx.ToProviderHistory();
-// providerHistory can now be passed to the chat provider client
+// Most common usage
+var context = AgentContext.Build(conversation, personaPrompt, projectPrompt, memoryBlock, tools);
+var history = context.ToProviderHistory();
 ```
 
 ## Notes
-- Only active variants are kept; messages with IsActiveVariant == false are excluded from Messages.
-- Tool role messages are retained only when their ToolCallId is referenced by an active assistant message's tool calls; otherwise they are dropped to avoid showing orphaned tool results.
-- The provider history prepends system messages in a specific order (persona, project context, saved memories, rolling summary) before the filtered conversation so model behaviour remains consistent with prior assembly logic.
+- Build trims messages using SummarizedThroughMessageId if present; if the summary marker cannot be found, no trimming occurs (startIdx remains 0).
+- Only active variant messages are kept; tool messages are retained only if their ToolCallId appears in the set of active tool_call IDs gathered from active assistant messages.
+- ProjectPrompt is optional; when it is null or whitespace, the corresponding system block is omitted from the provider history.
+
 
 ---
 
 ## AgentContextBreakdown
-
 > **File:** `src/api/Gabriel.Engine/Services/AgentContext.cs`  
 > **Kind:** record
 
-Represents a per-category token count snapshot taken from an AgentContext. Use this record when you need a stable breakdown of how many tokens each part of an agent context (system prompt, project prompt, memory, summary, tools, conversation) consumes — for example when reporting ContextMetrics.CurrentTokens or when making compaction/decision logic that depends on the same total used by AgentService.
-
-## Remarks
-This is a small immutable DTO that groups the individual token categories together and exposes a computed Total that is the exact sum of the fields. It exists to keep token-category counts consistent across metrics and decision logic so callers can rely on a single source of truth for both per-category counts and the overall token total.
-
-## Example
 ```csharp
-var breakdown = new AgentContextBreakdown(
-    SystemPromptTokens: 120,
-    ProjectPromptTokens: 80,
-    MemoryTokens: 200,
-    SummaryTokens: 40,
-    ToolsTokens: 10,
-    ConversationTokens: 350);
-
-int total = breakdown.Total; // 800
+public record AgentContextBreakdown(
+    int SystemPromptTokens,
+    int ProjectPromptTokens,
+    int MemoryTokens,
+    int SummaryTokens,
+    int ToolsTokens,
+    int ConversationTokens)
+{
+    public int Total =>
+        SystemPromptTokens + ProjectPromptTokens + MemoryTokens
+        + SummaryTokens + ToolsTokens + ConversationTokens;
+}
 ```
 
-## Notes
-- This is a snapshot: the record captures counts at a moment in time and does not update if the underlying context changes.
-- The constructor does not validate values (e.g. negative counts); callers should ensure inputs are sensible.
-- Total is computed as an int by summing fields; extremely large counts could overflow an int (unlikely in normal token usage).
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `SystemPromptTokens` | `int` | — |
+| `ProjectPromptTokens` | `int` | — |
+| `MemoryTokens` | `int` | — |
+| `SummaryTokens` | `int` | — |
+| `ToolsTokens` | `int` | — |
+| `ConversationTokens` | `int` | — |
+
+
+Documentation submitted for symbol AgentContextBreakdown. The narrative covers its purpose, rationale, and practical notes; no example block included.
 
 ---

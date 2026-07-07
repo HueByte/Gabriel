@@ -3,14 +3,19 @@
 > **File:** `src/api/Gabriel.API/Configuration/GlobalRoutePrefixConvention.cs`  
 > **Kind:** class
 
-Prepends a fixed route prefix (for example "api" or "api/v1") to every controller's attribute route so controllers can be authored without repeating the common leading segment. Reach for this when you want a single, centralized place to enforce a shared route prefix (versioning, API root, etc.) across all attribute-routed controllers instead of adding the segment to every [Route] attribute.
+```csharp
+public class GlobalRoutePrefixConvention : IApplicationModelConvention
+```
+
+
+GlobalRoutePrefixConvention is an ASP.NET Core MVC application model convention that prepends a fixed route prefix to every controller route. It centralizes routing concerns by defining the base path in one place (for example "api") and applying it to all controllers, so endpoints share a consistent base URL without repeating the prefix on each Route attribute. During application model construction, it iterates all controllers and their selectors and either assigns the prefix when a controller has no explicit route, or combines the prefix with the existing route using AttributeRouteModel.CombineAttributeRouteModel.
 
 ## Remarks
-Centralizes the routing concern of a shared prefix so controllers remain focused on their own resource paths. Implementing IApplicationModelConvention lets this run during application model construction and either combine the prefix with an existing attribute route or assign the prefix as the controller's route when none exists. This prevents accidental drift (some controllers using the prefix, others not) and keeps route-versioning or root segments consistent.
+By moving the base path into this convention, teams avoid drift between controllers and simplify versioning or scoping of APIs. It collaborates with other MVC conventions and the Route attribute system by layering the prefix under the existing route definitions, rather than replacing them.
 
 ## Example
 ```csharp
-// In Startup.cs / Program.cs (ConfigureServices):
+// Common usage
 services.AddControllers(options =>
 {
     options.Conventions.Add(new GlobalRoutePrefixConvention("api"));
@@ -18,6 +23,5 @@ services.AddControllers(options =>
 ```
 
 ## Notes
-- If a controller selector has no attribute route, the convention will set the controller's AttributeRouteModel to the prefix alone — ensure your actions have appropriate attribute routes or templates so endpoints are reachable.
-- Provide the prefix as you would to a [Route] attribute (e.g., "api" or "api/v1"); it is treated as a route template.
-- This convention runs at startup when the application model is built; changing routes at runtime after startup is not supported by this mechanism.
+- All routes defined on controllers and actions will be prefixed with the base path (e.g. "api/values").
+- There is no per-action opt-out in this convention; to bypass the prefix you would need a different approach or custom convention.

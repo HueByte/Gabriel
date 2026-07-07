@@ -3,29 +3,32 @@
 > **File:** `src/api/Gabriel.Core/Configuration/ModelSelection.cs`  
 > **Kind:** record
 
-Represents the resolved, per-turn model choice used across the agent loop and provider integrations. Use this immutable snapshot when you need a single, authoritative descriptor of which provider/model is in play for a turn — it ensures the provider call, compacting heuristics, metrics, and any tool-emulation wrapper all agree on the same model settings.
-
-## Remarks
-This record is produced by IModelCatalog.Resolve from a user's PreferredProvider / PreferredModel (with configuration-driven fallbacks) and then threaded through the agent loop. It centralizes the provider name, the wire-level model identifier, the context window size (in tokens), an optional compact-mode threshold, and the tool-handling mode so separate components don't diverge on which model or behavior should be used for a given turn.
-
-## Example
 ```csharp
-// Construct a snapshot of the selected model for a single turn. Replace
-// ToolMode.Default with the appropriate enum value defined in your codebase.
-var selection = new ModelSelection(
-    Provider: "openai",
-    Name: "gpt-4o",
-    ContextWindowTokens: 8192,
-    CompactThreshold: 0.5,
-    ToolMode: ToolMode.Default
-);
-
-// Pass this immutable selection to any component that needs to act
-// consistently for the turn (provider client, compacting logic, metrics, etc.).
-// e.g. providerClient.InvokeModelAsync(selection, input);
+public sealed record ModelSelection(
+    string Provider,
+    string Name,
+    int ContextWindowTokens,
+    double? CompactThreshold,
+    ToolMode ToolMode)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Provider` | `string` | — |
+| [`Name`](../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+| `ContextWindowTokens` | `int` | — |
+| `CompactThreshold` | `double?` | — |
+| [`ToolMode`](ToolMode.cs.md) | [`ToolMode`](ToolMode.cs.md) | — |
+
+
+Represents the per-turn model selection used by the system. This sealed, immutable record bundles the provider name, the wire-level model identifier, the context window size in tokens, an optional per-model compact threshold override, and the tool-handling mode. It is produced by IModelCatalog.Resolve from a user’s PreferredProvider / PreferredModel (with a config-driven fallback) and threaded through the agent loop so the provider invocation, the compact heuristic, the metrics endpoint, and the tool-emulation wrapper all agree on which model is in play.
+
+## Remarks
+This record acts as a single source of truth for the active model across the runtime, coordinating provider invocation, compact heuristics, metrics reporting, and tool emulation. By encapsulating provider, model name, context window, and mode in one immutable value object, the system can reason about identity, caching, and reproducibility without scattering literal strings around.
+
 ## Notes
-- CompactThreshold is nullable: a null value means there is no per-model compact override and consumers should fall back to the system/default compacting behavior.
-- ModelSelection is an immutable record — it represents a snapshot for a single turn; modify selection by creating a new instance rather than mutating.
-- ContextWindowTokens should reflect the actual token limit expected by the provider/model; callers may need to validate or clamp this value before sending payloads to the provider.
+- CompactThreshold being null means no per-model override; global defaults apply.
+- ContextWindowTokens should be positive; invalid values indicate misconfiguration.
+- Ensure Name belongs to the specified Provider; a mismatch can lead to confusing behavior.

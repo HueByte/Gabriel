@@ -17,38 +17,28 @@
 ---
 
 ## MemoryDto
-
 > **File:** `src/webapp/src/api/memories.ts`  
 > **Kind:** interface
 
-Represents the shape of a "memory" returned from or sent to the server API. Use this DTO when reading or writing memory records across the network or when mapping API responses into client-side models; it describes the transport form (strings for timestamps and IDs, nullable project association) rather than any rich domain behavior.
-
-## Remarks
-This interface is a plain data contract between client and server: it focuses on serializable fields only. It separates the API transfer shape from any richer domain objects you might use in the client (for example, converting ISO timestamp strings to Date objects or enriching the body with parsed content). The MemoryType field identifies the category of the memory and is defined elsewhere.
-
-## Example
 ```typescript
-const example: MemoryDto = {
-  id: "m_12345",
-  projectId: null, // null = user-scope
-  type: /* MemoryType value */ "note",
-  name: "Shopping list",
-  description: "Groceries to buy",
-  body: "- Milk\n- Eggs\n- Bread",
-  createdAt: "2024-06-01T12:34:56.000Z",
-  updatedAt: "2024-06-02T09:00:00.000Z",
-};
+export interface MemoryDto
 ```
 
+
+MemoryDto defines the API-facing shape of a memory record. It carries the memory’s id, scope (projectId; null indicates a user-scoped memory), type classification (MemoryType), and descriptive content (name, description, body), along with audit timestamps (createdAt, updatedAt). It is used when transferring memory data between client and server—such as listing, creating, or updating memories—so callers receive a stable, explicit structure and can rely on a consistent mapping across layers. The MemoryType field enables consistent filtering and categorization of memories by kind.
+
+## Remarks
+MemoryDto exists to decouple API contracts from storage details; it defines the contract the UI and API share. The projectId field encodes scope, enabling both user-scoped and project-scoped memories to be represented by the same interface. CreatedAt/UpdatedAt support synchronization and ordering; they should be treated as authoritative for freshness rather than derived values.
+
 ## Notes
-- projectId may be null — treat null as a user-scoped memory rather than belonging to a project. 
-- createdAt and updatedAt are ISO 8601 strings; convert to Date objects on the client if you need date arithmetic or formatting. 
-- The DTO uses plain strings for id and timestamps; it carries no methods or behavior and should be mapped to richer models if immutability or validation is required.
+- projectId can be null to indicate user-scoped memories; callers should handle both scopes.
+- createdAt and updatedAt are ISO 8601 strings; parse them to Date objects with explicit timezone handling on the client.
+- The body field may contain lengthy content; rendering should sanitize content and consider lazy-loading or truncation in listings to avoid performance issues when displaying many memories.
+
 
 ---
 
 ## SaveMemoryRequest
-
 > **File:** `src/webapp/src/api/memories.ts`  
 > **Kind:** interface
 
@@ -57,167 +47,144 @@ export interface SaveMemoryRequest
 ```
 
 
-Represents the payload sent from the web UI to the API when creating or updating a memory. Use this interface whenever you need to construct the request body for the endpoint that persists a memory entry — it groups the optional project association, the memory's type, a human-readable name and description, and the memory content itself.
+SaveMemoryRequest defines the shape of the payload sent to the memories API when persisting a new memory item. Use it when constructing a client-side request to create a memory entry; it bundles optional project context, the memory type, a display name, a short description, and the actual memory content in body, rather than assembling these fields ad-hoc.
 
 ## Remarks
-This is a plain data-transfer shape (compile-time only in TypeScript) that defines the contract between the frontend and the backend for saving memories. projectId is nullable to indicate the memory may be unassociated with any specific project; MemoryType categorizes the memory and is defined separately.
-
-## Example
-```typescript
-import { MemoryType } from './memory-types';
-
-const req: SaveMemoryRequest = {
-  projectId: null, // not tied to a project
-  type: MemoryType.Note,
-  name: 'Meeting notes — 2025-06-01',
-  description: 'Summary of architecture discussion',
-  body: 'Decisions: use X for Y; follow-up: assign Z.'
-};
-
-// then send `req` to the API client that handles saving memories
-apiClient.saveMemory(req);
-```
+SaveMemoryRequest serves as a typed contract between the client and server for saving memory snippets. It centralizes the payload structure, enabling validation and consistent API usage across the codebase. The nullable projectId supports saving memories that are not tied to a specific project; when null, the server should apply a global or default scope.
 
 ## Notes
-- projectId being null means "no project association"; do not use an empty string to represent that unless the API explicitly expects it.
-- This interface provides compile-time guarantees only — perform any required runtime validation (length limits, allowed characters, etc.) before sending to the server.
-- Ensure MemoryType value is valid for the server-side implementation; mismatched or unknown types may be rejected by the API.
+- projectId may be null to indicate a global or unscoped memory.
+- body can be large; ensure server limits and client-side encoding are respected.
+- MemoryType must be a valid MemoryType value known to the API.
 
 ---
 
 ## MemoryScope
-
 > **File:** `src/webapp/src/api/memories.ts`  
-> **Kind:** type
+> **Kind:** type alias
 
-Represents the scope of a memory as a discriminated union: at minimum there are two variants indicated by the kind property — 'user' for user-scoped memories and 'project' for project-scoped memories. Use this type wherever code needs to branch on whether a memory belongs to the current user or to a project.
+```typescript
+export type MemoryScope =
+  |
+```
+
+
+MemoryScope defines the memory context used by the memory subsystem. It is a discriminated union with two variants: user and project. Each variant is an object with a kind property; the user variant marks memory that is scoped to an individual user, while the project variant marks memory scoped to a particular project. Consumers use MemoryScope to route storage or caching operations to the appropriate backing store without duplicating logic across scopes.
 
 ## Remarks
-This is a simple discriminated-union (tagged union) that enables safe, idiomatic narrowing in TypeScript by switching on the kind field. It exists to make scope checks explicit in APIs and business logic so callers can handle user-scoped and project-scoped memories differently without runtime type assertions.
+By encoding scope as a single value, MemoryScope enables centralized routing of memory-related operations and helps keep concerns separated: the caller doesn't need to know where memory is stored, just which scope to use. It also makes exhaustive handling possible with discriminated unions, catching missing scope variants at compile time.
 
 ## Example
 ```typescript
-function handleScope(scope: MemoryScope) {
+function getMemoryStore(scope: MemoryScope) {
   switch (scope.kind) {
     case 'user':
-      // handle user-scoped memory
-      console.log('user scope');
-      break;
+      return getUserMemoryStore();
     case 'project':
-      // handle project-scoped memory
-      // Note: the source for the 'project' variant appears truncated in the repository
-      // — verify the full shape (e.g. project id) before accessing additional properties.
-      console.log('project scope');
-      break;
-    default:
-      // If you enable --strictNullChecks/--noImplicitReturns, this helps ensure exhaustiveness
-      const _exhaustiveCheck: never = scope;
-      return _exhaustiveCheck;
+      return getProjectMemoryStore();
   }
 }
 ```
 
 ## Notes
-- The source declaration appears truncated for the 'project' variant; confirm any payload fields (such as a projectId) before relying on them.
-- Because this is a plain discriminated union of objects, it is safe to perform narrowing via switch, if/else on kind, or type guards.
+- Ensure exhaustive handling of the kind discriminator; add a default case only if you truly intend to support a runtime variant.
+- If the project variant carries additional payload (e.g., identifiers), narrow the type before accessing those fields.
+- Keep consumers aligned with any storage backends that implement per-user or per-project caches.
 
 ---
 
 ## MemoryType
-
 > **File:** `src/webapp/src/api/memories.ts`  
-> **Kind:** type
+> **Kind:** type alias
 
-A string-literal union that enumerates the allowed categories for a memory record used by the webapp API. Use this type when accepting, validating, or annotating the category of a memory so the compiler enforces one of the allowed values ('user', 'feedback', 'project', 'reference').
-
-## Remarks
-This type is a compile-time constraint that documents and restricts the set of valid memory categories across the codebase. It is intended to be used in API request/response shapes, function parameters, and internal DTOs so callers and implementers share a single canonical set of category values.
-
-## Example
 ```typescript
-function createMemory(type: MemoryType, content: string) {
-  // type is guaranteed to be one of the four literals at compile time
-  return { id: generateId(), type, content };
-}
-
-// usage
-const m = createMemory('project', 'Notes about the new feature');
+export type MemoryType = 'user' | 'feedback' | 'project' | 'reference'
 ```
 
+
+MemoryType is a TypeScript type alias that defines the allowed categories for memory records within the memories API. It restricts memory types to one of four string literals: 'user', 'feedback', 'project', or 'reference'. This type is used wherever a memory item must be classified, ensuring that only valid categories are assigned and enabling type-safe handling of memories by consumers of the API.
+
+## Remarks
+This type centralizes the valid memory categories, enabling consistent handling of memories across features like filtering, display, and persistence. It prevents invalid category values from being used and makes it easy to extend with additional kinds in the future by updating a single definition.
+
 ## Notes
-- This is a compile-time-only TypeScript construct; there is no runtime enforcement. Validate any external input (e.g., from HTTP requests) before trusting it as a MemoryType.
-- When adding or removing variants, update any serialization, API docs, database schemas, and backend code that expects these exact string values to avoid mismatches.
-- Prefer this narrow union over a plain string to get exhaustiveness checking in switches and better IDE completion.
+- If memory data comes from external input (e.g., API responses or user input), perform runtime validation to guard against values outside the defined union, since TypeScript types are erased at runtime.
+
+```typescript
+const isMemoryType = (v: unknown): v is MemoryType =>
+  v === 'user' || v === 'feedback' || v === 'project' || v === 'reference';
+```
 
 ---
 
 ## deleteMemory
-
 > **File:** `src/webapp/src/api/memories.ts`  
 > **Kind:** function
 
-Deletes a memory resource on the server by ID. Use this when you need to remove a stored memory from the backend; the function performs an HTTP DELETE to /api/memories/:id, resolves when the operation completes, and throws on error responses (404 is treated as success and will not cause an exception).
-
-## Remarks
-This is a thin client helper that encapsulates the DELETE request for a single memory resource. The call is executed through the project’s withRefresh wrapper (used by other API helpers), and sends credentials ('include'), so it participates in cookie-based authentication flows.
-
-## Example
 ```typescript
-// Delete a memory and handle cancellation
-const controller = new AbortController();
-try {
-  await deleteMemory('my-memory-id', controller.signal);
-  console.log('Memory deleted');
-} catch (err) {
-  console.error('Failed to delete memory:', err);
-}
-
-// To cancel the request:
-// controller.abort();
+export async function deleteMemory(id: string, signal?: AbortSignal): Promise<void>
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `id` | `string` | — |
+| `signal` | `AbortSignal` | — |
+
+**Returns:** `Promise<void>`
+
+
+Deletes a memory by id by issuing an HTTP DELETE to /api/memories/{id}, URL-encoded. It uses withRefresh to ensure the request benefits from any automatic authentication refresh, and it includes credentials in the request. An optional AbortSignal can cancel the operation. The function resolves when the response is OK or when the resource is not found (404); for any other non-success status, it throws an Error with the status code and text.
+
+## Remarks
+deleteMemory centralizes the deletion semantics for memory resources. By treating 404 as not an error, callers can safely issue deletes without first verifying existence, reducing boilerplate and extra round-trips. The wrapper around fetch encapsulates session maintenance (such as token refresh), so callers don't need to manage authentication details for this operation.
+
 ## Notes
-- A 404 (not found) response is treated as non-fatal; the function will not throw for 404.
-- Any non-OK response other than 404 causes an Error to be thrown with the HTTP status and statusText.
-- The id parameter is URL-encoded via encodeURIComponent before being included in the path.
-- The optional AbortSignal may be provided to cancel the underlying fetch request; if aborted, fetch will reject and the rejection will propagate to the caller.
+- Aborting the request via the provided AbortSignal will reject the Promise with an AbortError; callers should handle cancellation if needed.
+- A 404 response is treated as a non-error; no exception is thrown in that case, and the memory is considered non-existent.
+- The ID is URL-encoded to support special characters in IDs; ensure IDs with reserved URL characters are handled correctly.
 
 ---
 
 ## listMemories
-
 > **File:** `src/webapp/src/api/memories.ts`  
 > **Kind:** function
 
-Fetches the list of memories for a given MemoryScope from the server and returns them as an array of MemoryDto. Use this helper when the UI or other client code needs to load memories for a particular scope; the function performs the HTTP request, handles the response status, and parses the JSON payload.
+```typescript
+export async function listMemories(scope: MemoryScope, signal?: AbortSignal): Promise<MemoryDto[]>
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `scope` | `MemoryScope` | — |
+| `signal` | `AbortSignal` | — |
+
+**Returns:** `Promise<MemoryDto[]>`
+
+
+Fetches the list of memories for the specified MemoryScope by performing an authenticated GET request to the API endpoint derived from the scope. It uses withRefresh to handle token refresh flows and supports cancellation via an optional AbortSignal. If the response indicates failure, it throws a descriptive error; on success, it returns the response parsed as an array of MemoryDto.
 
 ## Remarks
-This function constructs the request URL via urlFor(scope) and performs the network call through the withRefresh wrapper, allowing any centralized request wrapper behavior (for example, token refresh or retries) to apply. It passes the provided AbortSignal to fetch so callers can cancel the request, and it includes credentials (cookies) with the request.
+Centralizes memory retrieval behind a single API surface, shielding callers from URL construction (urlFor(scope)) and HTTP error handling. It also ensures the consumer always receives MemoryDto objects and lets withRefresh manage authentication concerns, reducing duplication across UI code.
 
 ## Example
 ```typescript
-const controller = new AbortController();
-try {
-  // `scope` should be a valid MemoryScope value in your application
-  const memories = await listMemories(scope, controller.signal);
-  console.log('Got memories:', memories);
-} catch (err) {
-  console.error('Failed to load memories', err);
-}
-// To cancel:
-// controller.abort();
+// Example usage
+const scope = MemoryScope.All; // or any valid MemoryScope value
+const memories = await listMemories(scope, abortController?.signal);
 ```
 
 ## Notes
-- If the HTTP response has a non-OK status, the function throws an Error containing the status code and status text.
-- The JSON response is cast to MemoryDto[]; a mismatch between the server payload and MemoryDto shape will surface at runtime.
-- The fetch call uses credentials: 'include', so cookies are sent; ensure the server/CORS configuration allows credentialed requests.
-- Aborting via the provided AbortSignal will cause fetch to reject (typically with an AbortError); callers should handle that if cancellation is a supported flow.
+- Non-OK HTTP responses throw an Error with a message that includes the status code and status text; callers should catch and handle accordingly.
+- Abort signals allow cancellation; pass an AbortController.signal when you need to cancel in-flight requests.
+- This function relies on withRefresh to refresh authentication; in contexts without that wrapper, you may need to implement your own refresh strategy.
 
 ---
 
 ## saveMemory
-
 > **File:** `src/webapp/src/api/memories.ts`  
 > **Kind:** function
 
@@ -232,89 +199,81 @@ export async function saveMemory(
 
 | Parameter | Type | Default |
 |-----------|------|---------|
-| `request` | [`SaveMemoryRequest`](../../../api/Gabriel.API/Contracts/Memories/MemoryDto.cs.md) | — |
+| `request` | `SaveMemoryRequest` | — |
 | `signal` | `AbortSignal` | — |
 
-**Returns:** ``Promise<MemoryDto>``
+**Returns:** `Promise<MemoryDto>`
 
 
-Sends a POST request to /api/memories with the provided SaveMemoryRequest serialized as JSON and returns the created MemoryDto. Use this helper when you want to create/save a memory from the web client and receive the server's canonical memory representation; it includes credentials (cookies) and supports cancellation via an optional AbortSignal.
+saveMemory persists a memory by POSTing a SaveMemoryRequest to /api/memories and returns the resulting MemoryDto. The call runs through withRefresh to refresh authentication if needed, sends JSON payload with credentials included, and resolves to MemoryDto on success; on non-ok responses it throws an error containing the HTTP status and any server-provided text.
 
 ## Remarks
-This function uses a local helper (withRefresh) to perform the fetch — the wrapper is used consistently by API helpers to centralize concerns such as retries or authentication refresh before the actual request is executed. On success the response body is parsed as JSON and returned as MemoryDto.
-
-## Example
-```typescript
-const req: SaveMemoryRequest = { title: 'Trip', content: 'Visited the lake' };
-const controller = new AbortController();
-
-try {
-  const memory = await saveMemory(req, controller.signal);
-  console.log('Saved memory', memory.id);
-} catch (err) {
-  console.error('Failed to save memory', err);
-}
-```
+Encapsulates the memory-creation API; centralizes error handling and the authentication refresh flow. The wrapper ensures a valid authentication state before attempting the request, so callers don't need to manage token refresh themselves.
 
 ## Notes
-- The request includes credentials: cookies will be sent with the request (credentials: 'include').
-- If the response has a non-OK status, the function throws an Error containing the HTTP status and any response text.
-- The function expects the server to return JSON that matches MemoryDto; malformed or non-JSON responses will cause parsing to fail.
-- Pass an AbortSignal to cancel the request; aborted fetches will reject (propagated to the caller).
+- If the server returns non-JSON or payload not matching MemoryDto, the JSON parse or cast may fail at runtime.
+- The error message includes the status code and optional server text; if the server omits text, the message will contain only the status.
 
 ---
 
 ## urlFor
-
 > **File:** `src/webapp/src/api/memories.ts`  
 > **Kind:** function
 
-Returns the HTTP path for the memories API, including an appropriate query string derived from the provided MemoryScope. Use this helper when constructing requests to /api/memories so callers don't need to build the query string manually.
+```typescript
+function urlFor(scope: MemoryScope): string
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `scope` | `MemoryScope` | — |
+
+**Returns:** `string`
+
+
+Constructs the API path to fetch memories for a given scope. It uses URLSearchParams to assemble a query string and returns the base path '/api/memories' with an attached query when parameters exist, or the base path when no parameters are present. If scope.kind is 'all', the produced URL includes scope=all and, if provided, a projectId; if scope.kind is 'project', the URL includes only a projectId.
 
 ## Remarks
-This function maps a MemoryScope to query parameters: when scope.kind is 'all' it sets scope=all and will include projectId only if present; when scope.kind is 'project' it sets only projectId. If there are no parameters the plain path /api/memories is returned.
+Centralizes how memory data is requested, shielding callers from the exact query parameter names and the base path. It guarantees a consistent URL shape across the web app and makes it straightforward to adapt to backend changes without touching call sites.
 
 ## Example
-```typescript
-// No query params
-urlFor({ kind: 'all' }); // -> '/api/memories'
+```ts
+// All memories across projects
+urlFor({ kind: 'all' });
 
-// All scope with project filter
-urlFor({ kind: 'all', projectId: 'proj-123' }); // -> '/api/memories?scope=all&projectId=proj-123'
+// All memories for a specific project
+urlFor({ kind: 'all', projectId: 'project-42' });
 
-// Project-specific scope (projectId should be provided)
-urlFor({ kind: 'project', projectId: 'proj-123' }); // -> '/api/memories?projectId=proj-123'
+// Memories for a specific project only
+urlFor({ kind: 'project', projectId: 'project-42' });
 ```
 
 ## Notes
-- Ensure a valid projectId is provided when using kind === 'project'; omitting it may produce a query like projectId=undefined depending on runtime values.
-- URLSearchParams percent-encodes values, so special characters in projectId will be escaped automatically.
-- The function only sets scope=all for the 'all' kind; other kinds do not include a scope parameter.
+- If kind === 'project' and projectId is missing or falsy, the function may return '/api/memories' with no filtering, which effectively fetches all memories.
+- URLSearchParams handles encoding of projectId values; no manual encoding is required.
+- The function returns a relative path; callers should resolve to an absolute URL if needed based on their fetch/HTTP client context.
 
 ---
 
 ## withRefresh
-
 > **File:** `src/webapp/src/api/memories.ts`  
 > **Kind:** function
 
-Wraps an asynchronous request thunk, detects a 401 (unauthorized) response, attempts a session refresh once, and retries the request. Use this when you need centralized handling of authentication expiry for individual API calls: pass a function that executes the request so the wrapper can re-run it after refreshing the session.
-
-## Remarks
-This helper centralizes the common pattern of "try request → if 401 then refresh session → retry once → if still 401 treat the session as expired." It relies on external functions refreshSession() (which should return a truthy value on success) and signalSessionExpired() to notify the application when refresh fails. Accepting a thunk (doFetch) avoids coupling to a specific HTTP client and lets callers provide a fresh request invocation for the retry.
-
-## Example
 ```typescript
-// Common usage with the Fetch API
-const response = await withRefresh(() => fetch('/api/memories', { method: 'GET', credentials: 'include' }));
-if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-const data = await response.json();
+async function withRefresh(doFetch: () => Promise<Response>): Promise<Response>
 ```
 
-## Notes
-- doFetch may be invoked twice; ensure the request is safe to repeat (avoid non‑idempotent side effects on the first call).
-- If refreshSession() returns a falsy value, the wrapper will not retry and will treat the session as expired (signalSessionExpired is called and an Error is thrown).
-- Errors thrown by doFetch or refreshSession propagate out of withRefresh; this function only handles the 401/refresh/retry flow.
-- Concurrent callers may each call refreshSession; if your refresh logic must be single-flight, coordinate that inside refreshSession or at a higher level.
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `doFetch` | `() => Promise<Response>` | — |
+
+**Returns:** `Promise<Response>`
+
+
+Executes a fetch-like operation and transparently handles session renewal when authentication fails. It accepts a doFetch function that returns a `Promise<Response>`, runs it, and if the response has status 401, attempts to refresh the session via refreshSession(). If the refresh succeeds, it retries the original fetch once. If the retry still results in 401, it signals that the session has expired and throws an error prompting the user to sign in again. The function returns the final Response from either the initial or retried request.
 
 ---

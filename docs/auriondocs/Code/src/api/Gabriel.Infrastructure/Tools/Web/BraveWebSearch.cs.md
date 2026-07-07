@@ -1,9 +1,21 @@
-BraveWebSearch is a concrete implementation of IWebSearch that delegates to the Brave Search API. It uses a named HttpClient (BraveSearch) that is configured via DI so the base address, timeout, and the API key header are centralized for reuse. In SearchAsync, BraveWebSearch requires BraveSearchOptions.IsConfigured to be true; if not, it throws InvalidOperationException. It escapes the query, clamps the limit to 1–10, performs the GET, and on a successful response deserializes the JSON payload into a BraveSearchResponse. It then takes the web.results array (or an empty list if missing) and maps each BraveResult to a WebSearchResult by copying Title to Title, Url to Url, and Description to Snippet, using empty strings as fallbacks when fields are missing.
+# BraveWebSearch
+
+> **File:** `src/api/Gabriel.Infrastructure/Tools/Web/BraveWebSearch.cs`  
+> **Kind:** class
+
+```csharp
+public sealed class BraveWebSearch : IWebSearch
+```
+
+
+BraveWebSearch is a concrete implementation of IWebSearch that queries the Brave Search API over HTTP. It relies on a dependency-injected HttpClient (named BraveSearch) configured in DI to perform requests against Brave's /search endpoint, then maps the API payload into WebSearchResult items and returns them as a read-only list.
 
 ## Remarks
-This abstraction isolates the Brave API specifics behind an IWebSearch implementation, enabling swapping providers or testing with mocks without changing consumers. It centralizes error handling (e.g., API key missing, non-success responses) and ensures a consistent WebSearchResult shape across providers.
+
+By encapsulating Brave Search specifics behind BraveWebSearch, callers stay decoupled from transport details and the Brave API payload shape. The class centralizes error handling and configuration concerns: it throws to signal missing API key configuration, logs and surfaces HTTP errors as exceptions, and translates the API response into the domain model. The internal mapping layer also ensures optional API fields default to safe empty strings, preserving a stable surface for consumers.
 
 ## Notes
-- Requires BraveSearchOptions.IsConfigured; otherwise InvalidOperationException is thrown.
-- The query is escaped and the limit is clamped to 1–10; non-success HTTP responses are logged and result in an HttpRequestException.
-- The payload mapping is null-safe; missing fields default to empty strings and a missing payload yields an empty results set.
+
+- Requires BraveSearchOptions.IsConfigured; if not, an InvalidOperationException is thrown with guidance on configuring the API key.
+- The requested result count is clamped to the range 1–10; values outside this range are sanitized.
+- The HttpClient used must be registered under the BraveSearch name in DI; the client configuration provides BaseAddress, timeout, and the authentication header.

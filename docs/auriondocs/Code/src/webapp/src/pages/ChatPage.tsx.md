@@ -10,52 +10,57 @@
 ---
 
 ## ChatPage
-
 > **File:** `src/webapp/src/pages/ChatPage.tsx`  
 > **Kind:** function
 
-Renders the top-level chat page for a conversation and coordinates client-side state needed by the chat UI. Use this component when you need a full chat view tied to the current conversationId from the URL; it wires up avatar seeding, project context, live Gabriel sequence updates (palette and token stats), and recovery behavior when a conversation is absent.
-
-## Remarks
-ChatPage acts as an orchestrator between route state, the ConversationsService, and the Gabriel sequence UI: it reads the active conversationId from URL params, persists the active conversation so other pages can resume it, and exposes handlers that update the avatar seed, project context, and the server-driven palette (sequenceStops). Rather than refetching the entire conversation list on every chat turn, it refreshes only the Gabriel sequence/state (via bumpSequence) to keep live stats and visuals up to date while avoiding expensive sidebar or project list refetches.
-
-## Example
 ```typescript
-// Typical usage inside a react-router routes setup — the conversationId param is optional
-import { Route } from 'react-router-dom';
-
-<Route path="/chat/:conversationId?" element={<ChatPage />} />
+export function ChatPage()
 ```
 
+
+ChatPage renders the chat UI for a single conversation identified by the URL, orchestrating metadata loading, avatar seed management, project context, and the GabrielSequence-driven color palette. It keeps per-conversation UI state (avatarSeed, projectId, projectIsDefault, sequenceStops) with seed-based fallbacks while the sequence data loads, persists the active conversation so the IndexPage can resume later, and provides actions to reroll the avatar and to refresh the sequence after a turn.
+
+## Remarks
+ChatPage acts as the per-conversation glue between routing, server-provided identity, and local UI state. It ensures a conversation’s avatar seed and color palette reflect server data when available, while gracefully falling back to deterministic seed-based visuals during loading. It also isolates conversation-specific concerns from the broader lists by resetting the server-driven palette when the active conversation changes, preventing visual bleed across chats. This component is the focal point where routing, metadata loading, and the GabrielSequence-driven UI converge, keeping the UI responsive and consistent as data arrives and evolves.
+
 ## Notes
-- sequenceStops may be null until the first GabrielSequence load resolves; the UI falls back to a seed-derived palette until then.
-- Calling the reroll avatar action updates the avatar seed and bumps the sequence (causing palette/pattern change) but intentionally does not refetch the conversation list/sidebar.
-- If a conversation is deleted or returns 404, the component surfaces an error and navigates the user back to the root so the app can choose or create a replacement conversation.
+- The palette relies on a server-provided GabrielSequence; until it loads, a seed-derived palette is used to keep the UI visually coherent.
+- Rerolling the avatar updates the seed and triggers a palette refresh, but does not refetch the entire conversation list to avoid unnecessary network traffic.
+- If the conversation is missing (e.g., deleted in another tab), the handler surfaces an error and navigates away; this behavior is centralized around graceful error handling rather than silent failure.
 
 ---
 
 ## persistActiveConversation
-
 > **File:** `src/webapp/src/pages/ChatPage.tsx`  
 > **Kind:** function
 
-Store or remove the active conversation identifier in localStorage. Use this when the UI or application state changes which conversation is considered active (so it can be restored on reload); call with null to clear the stored active conversation.
+```typescript
+function persistActiveConversation(id: string | null)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `id` | `string | null` | — |
+
+
+Stores the given active conversation ID in localStorage under a shared key; if null is passed, it clears that entry. The operation is wrapped in a try/catch and any errors are ignored to prevent storage failures from interrupting the UI flow. Use this helper when you want to remember or clear the user's last active conversation across page reloads.
 
 ## Remarks
-This function performs a best-effort, side-effecting write to the browser's localStorage and intentionally swallows any exceptions (for example, when storage is unavailable or quota is exceeded). It is synchronous and has no return value — failures are ignored to avoid disrupting normal UI flow.
+Centralizes persistence semantics for the active conversation. It encapsulates the storage key and error handling, keeping ChatPage logic focused on UI concerns and reducing boilerplate across the codebase. It also defines a clear signal for clearing persisted state by using null as the parameter.
 
 ## Example
 ```typescript
-// Save an active conversation id
-persistActiveConversation('conversation-123');
+// Persist the currently active conversation
+persistActiveConversation("abc123");
 
-// Clear the persisted active conversation
+// Clear persisted value when the user signs out or selects none
 persistActiveConversation(null);
 ```
 
 ## Notes
-- The function treats any falsy id (null, undefined, empty string) as a signal to remove the stored key; only truthy strings are saved.
-- Because errors are caught and ignored, callers cannot rely on this function to have succeeded; use other persistence or telemetry if you need guaranteed storage or failure visibility.
-- This should not be called during server-side rendering; localStorage is a browser API and may be undefined in non-browser environments.
+- Errors from localStorage are intentionally ignored to avoid disrupting the user experience.
+- Passing null clears the persisted value; empty strings will also clear due to truthiness rules in JavaScript.
 
 ---

@@ -12,122 +12,111 @@
 ---
 
 ## formatError
-
 > **File:** `src/webapp/src/lib/notify.ts`  
 > **Kind:** function
 
-Convert an unknown thrown value into a user-facing string message. Prefer this helper when presenting errors to UI or logging messages intended for end users — it understands the application ApiError shape (prefers body.detail, then body.title, then the error message), falls back to a generic Error message, and finally returns a supplied fallback string for non-error values.
-
-## Remarks
-Centralizes the logic for extracting a readable message from different error shapes so callers don't duplicate the same instanceof checks and property access. The function expects an application-specific ApiError class that carries a body with optional detail/title fields; for all other Error instances it uses the standard Error.message. It intentionally does not perform logging, localization, or side effects — just string extraction.
-
-## Example
 ```typescript
-// minimal stand-in for the real ApiError used in your app
-class ApiError extends Error {
-  constructor(public body?: { detail?: string; title?: string }) {
-    super(body?.title ?? 'api error');
-  }
-}
-
-// Usage examples
-const apiErrWithDetail = new ApiError({ detail: 'Invalid email address' });
-console.log(formatError(apiErrWithDetail)); // 'Invalid email address'
-
-const apiErrWithTitle = new ApiError({ title: 'Bad Request' });
-console.log(formatError(apiErrWithTitle)); // 'Bad Request'
-
-const runtimeErr = new Error('Something exploded');
-console.log(formatError(runtimeErr)); // 'Something exploded'
-
-console.log(formatError(42, 'Unknown failure')); // 'Unknown failure'
+export function formatError(e: unknown, fallback = 'Something went wrong.'): string
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `e` | `unknown` | — |
+| `fallback` | — | `'Something went wrong.'` |
+
+**Returns:** `string`
+
+
+Formats a given error into a user-friendly string. It accepts any value as the first argument and a fallback message as the second; it returns a string representation suitable for display in the UI or logs. The function applies specialized formatting for ApiError by preferring body.detail, then body.title, and finally the error message; for standard Error instances it returns the error's message; and for any other input it falls back to the provided fallback.
+
+## Remarks
+Acts as a small normalization layer for error handling. By centralizing the logic of how ApiError shapes are surfaced, it prevents leaking internal error structures and keeps error presentation consistent across the app. It relies on ApiError having a body with optional detail and title fields, and gracefully degrades to the error message or a fallback when those fields are absent.
+
 ## Notes
-- The function uses runtime instanceof checks; if an ApiError comes from a different JS realm (iframe, worker) the instanceof test may fail.
-- The ApiError body is accessed via a type cast and may be undefined; the code falls through safely to message or the fallback.
-- Default fallback is the literal string 'Something went wrong.' when no fallback is provided.
+- Non-Error inputs that are not ApiError will not yield their own message; the function falls back to the provided default in those cases.
+- The default fallback message is configurable via the second parameter; supply a localized string if needed.
+- When ApiError.body.detail or body.title are present, formatError uses those values in preference to e.message.
 
 ---
 
 ## notifyError
-
 > **File:** `src/webapp/src/lib/notify.ts`  
 > **Kind:** function
 
-Format an arbitrary error value and display it to the user using the application's toast error UI. Reach for this helper when you need a consistent, single-line call-site to show user-facing error messages (it delegates message extraction to formatError and the actual display to toast.error).
-
-## Remarks
-This small wrapper centralizes how errors are presented to users: callers pass any thrown value (unknown) and an optional fallback message, and notifyError ensures the application uses the same formatting and toast mechanism everywhere. That keeps components and services free of toast-specific details and promotes consistent messaging across the UI.
-
-## Example
 ```typescript
-try {
-  await saveDocument(doc);
-} catch (err) {
-  // Show a user-facing toast with a formatted message; provide a fallback if needed
-  notifyError(err, 'Failed to save document');
-}
+export const notifyError = (e: unknown, fallback?: string) => toast.error(formatError(e, fallback))
 ```
 
-## Notes
-- notifyError only affects user-facing UI; it does not perform logging or error propagation — log separately if you need diagnostics.
-- The function relies on formatError to handle unknown values; ensure formatError is robust for the kinds of errors your code may surface.
-- Avoid exposing sensitive or detailed internal error information in toasts; prefer user-friendly fallbacks for production messages.
+**Parameters:**
 
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `e` | `unknown` | — |
+| `fallback` | `string` | — |
+
+
+notifyError is a concise wrapper that accepts an error value (unknown) and an optional fallback string, formats the error with formatError(e, fallback), and displays it via toast.error. Developers would reach for it when they need to surface a runtime error to users as a standardized toast notification, optionally providing a fallback message if the error lacks a user-friendly description. By funneling errors through a single path (formatError -> toast.error), it provides a consistent error presentation and reduces duplication across the codebase.
+
+## Remarks
+It acts as a centralized UX layer for error notifications: all error toasts pass through this function, enabling consistent styling and making it easier to adjust how errors are formatted and shown in one place.
 
 ---
 
 ## notifyInfo
-
 > **File:** `src/webapp/src/lib/notify.ts`  
 > **Kind:** function
 
-Shows a brief informational notification to the user by delegating to the application's toast/notification library.
-
-This small helper wraps the underlying toast.info call so callers can show informational toasts with a single import and without depending directly on the toast API.
-
-## Remarks
-Centralizes how informational messages are displayed across the app so the implementation can be swapped or extended (for example, to add default options, logging, or telemetry) without changing call sites. It intentionally keeps the surface minimal — a single string message — because it's intended for simple, transient user feedback.
-
-## Example
 ```typescript
-import { notifyInfo } from './lib/notify';
-
-notifyInfo('Settings saved successfully');
+export const notifyInfo = (msg: string) => toast.info(msg)
 ```
 
-## Notes
-- The function has side effects (it shows a UI toast) and does not return a value; callers should not rely on a result.
-- Ensure the app's toast/notification system is initialized (e.g., rendering the required container/provider) before calling this helper, otherwise toasts may not appear.
-- Use for informational messages only; use a different helper for warnings or errors if available so styling/semantics remain consistent.
+**Parameters:**
 
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `msg` | `string` | — |
+
+
+notifyInfo is a small wrapper around the toast.info call that displays an informational toast with the provided message. Use it when you want to surface a non-critical, user-facing info notification in a consistent way without sprinkling toast.info calls all over the codebase.
+
+## Remarks
+Centralizes informational notifications behind a stable API, making it easier to swap the underlying notification library or apply consistent defaults later (such as autoClose duration or position). It communicates intent clearly at the call site, differentiating info toasts from success or error toasts. This can simplify testing by allowing a mock or stub for info toasts and reduces boilerplate in call sites.
+
+## Notes
+- Ensure a toast container is mounted in the app; otherwise calls to notifyInfo will not render anything.
+- If you plan to change defaults (e.g., duration, position) across all info toasts, prefer updating this wrapper rather than individual call sites.
 
 ---
 
 ## notifySuccess
-
 > **File:** `src/webapp/src/lib/notify.ts`  
 > **Kind:** function
 
-Displays a success toast using the application's toast implementation. Use this helper at call sites when you want to show a standard success notification without depending on the toast library directly.
+```typescript
+export const notifySuccess = (msg: string) => toast.success(msg)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `msg` | `string` | — |
+
+
+notifySuccess is a small, dedicated wrapper around toast.success that displays a success message to the user. Use it when you want a consistent, semantic way to show success feedback instead of calling toast.success(msg) at every call site.
 
 ## Remarks
-This is a thin wrapper around the underlying toast.success call. It centralizes success-notification usage so callers remain decoupled from the toast library and so default behavior (timing, styling, position, etc.) can be changed in one place.
+This wrapper centralizes success notification concerns, enabling future changes to the underlying notification mechanism without touching call sites. By providing a stable API surface, it helps maintain UX consistency and simplifies testing since you can mock or stub this single function. It also makes it easier to apply global defaults (such as auto-close duration or position) from a single place if you later refactor the library usage. The wrapper exists to decouple business logic from presentation details and to provide a single point of change for success-toasts.
 
 ## Example
 ```typescript
-import { notifySuccess } from './lib/notify';
-
-async function saveItem() {
-  await api.save(...);
-  notifySuccess('Save completed');
-}
+notifySuccess('Data saved successfully');
 ```
 
 ## Notes
-- The function forwards to the underlying toast implementation and returns whatever that call returns (an opaque handle, not a Promise).
-- Ensure the toast system is mounted in the app (for example, render the Toast container/provider required by your toast library) or notifications will not appear.
-- No validation is performed on the message; pass a non-empty string for best UX.
+- Ensure the toast container (or equivalent) is rendered in the app; otherwise, the toast will not appear.
+- This function forwards the message to the underlying library unchanged. For localization or message normalization, consider translating before calling this wrapper or wrapping it with your i18n layer.
 
 ---

@@ -3,22 +3,17 @@
 > **File:** `src/api/Gabriel.Infrastructure/Persistence/Configurations/MetricEntryConfiguration.cs`  
 > **Kind:** class
 
-Configures the EF Core mapping for MetricEntry entities: sets the table name, primary key, required properties, length constraint for the System column, stores Metric as JSON-capable text, and creates the indexes used by the common read and cleanup queries. Add this configuration to your DbContext model builder so the database schema and indexes match the application's read patterns and storage expectations.
-
-## Remarks
-This class centralizes mapping decisions that balance safety, query performance, and cross-provider compatibility. The System column is constrained to 128 characters to prevent very large strings from inflating index sizes; Metric is left without a max length so callers can persist JSON payloads (including occasional large failure messages or request bodies). Indexes are chosen to optimize the two primary access patterns: recent entries for a specific system (or system prefix) and global time-based cleanup.
-
-## Example
 ```csharp
-protected override void OnModelCreating(ModelBuilder modelBuilder)
-{
-    base.OnModelCreating(modelBuilder);
-    modelBuilder.ApplyConfiguration(new MetricEntryConfiguration());
-}
+public class MetricEntryConfiguration : IEntityTypeConfiguration<MetricEntry>
 ```
 
+
+Defines how MetricEntry is persisted in EF Core: maps to the MetricEntries table, configures the primary key and field constraints, and establishes indexes to support time-based lookups. This configuration centralizes schema decisions so higher-level data access doesn't need to repeat table names, constraints, or index hints, and it enables efficient retrieval of recent metrics per system or by system prefix.
+
+## Remarks
+Serves as the boundary between the MetricEntry domain model and the database schema, encapsulating table naming, key definition, and data constraints along with performance-oriented indexes. The composite index on System and CreatedAt, plus the separate CreatedAt index, encode the two primary access patterns: recent metrics for a specific system and recent metrics for systems sharing a prefix. The Metric property stores JSON payloads as TEXT (SQLite) to accommodate variable content; this choice is deliberately tailored to the storage engine and may differ with other providers.
+
 ## Notes
-- System has a max length of 128; changing this requires a schema migration and may affect index size and performance.
-- Metric is stored as JSON (TEXT on SQLite). SQLite does not have a native JSON column type but supports json_extract/json_each for SQL-side queries.
-- The compound index is defined as (System, CreatedAt) ascending; SQLite can satisfy DESC order via backward index scans, but other providers may have different behaviors—verify query plans if you rely on index-backed ORDER BY CreatedAt DESC.
-- All configured properties (System, Metric, CreatedAt) are required (non-nullable) at the EF model level; ensure callers supply these values to avoid runtime errors.
+- The 128-character limit on System is intentional to bound index size; callers should not rely on longer subsystem names.
+- Metric is a JSON payload; in SQLite it is stored as TEXT; if you switch to a database with native JSON types, mapping and storage semantics may differ.
+- The index order (System, CreatedAt) is chosen to support the two primary read patterns; ensure queries use the same column order to leverage the index. In non-SQLite databases, verify that DESC handling remains efficient for CreatedAt.

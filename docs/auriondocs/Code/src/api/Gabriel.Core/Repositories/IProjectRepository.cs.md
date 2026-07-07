@@ -3,32 +3,18 @@
 > **File:** `src/api/Gabriel.Core/Repositories/IProjectRepository.cs`  
 > **Kind:** interface
 
-Repository abstraction for querying and mutating Project entities scoped to a specific owner user. Use this interface when you need to load, list, create, update, delete, or perform owner-scoped bulk operations on projects rather than dealing with data access logic directly.
-
-## Remarks
-This interface applies the repository pattern to project storage and enforces owner-scoping via the ownerUserId parameter on read operations and the bulk-assignment operation. Implementations are expected to load related data when requested (GetByIdWithFilesAsync) and to perform efficient bulk updates for operations like AssignOrphanConversationsAsync. CancellationToken parameters should be honored by implementations to allow cooperative cancellation of I/O-bound operations.
-
-## Example
 ```csharp
-// Typical usage in an async service method
-var project = new Project { Name = "My Project", OwnerUserId = ownerId };
-await projectRepository.AddAsync(project, cancellationToken);
-
-// Later: load project with its files
-var loaded = await projectRepository.GetByIdWithFilesAsync(project.Id, ownerId, cancellationToken);
-if (loaded != null)
-{
-    loaded.Name = "Renamed";
-    projectRepository.Update(loaded);
-}
-
-// Bulk-assign orphan conversations to this project
-int changed = await projectRepository.AssignOrphanConversationsAsync(ownerId, project.Id, cancellationToken);
+public interface IProjectRepository
 ```
 
+
+Represents a repository contract for Project entities, enabling asynchronous CRUD and query operations scoped to a particular owner. Use this instead of issuing direct data queries to encapsulate persistence details and to enable test doubles; for example, use GetByIdAsync / GetByIdWithFilesAsync to fetch a project, ListAsync to enumerate a user's projects, and AddAsync / Update / Remove to mutate state, while AssignOrphanConversationsAsync supports backfilling orphaned conversations to a given project.
+
+## Remarks
+
+This interface decouples the domain from the persistence mechanism, allowing the data store to change without impacting business logic. The GetByIdWithFilesAsync method indicates the repository can load related File entities alongside the project to satisfy scenarios where file associations are needed immediately. The special bulk operation AssignOrphanConversationsAsync addresses a lazy backfill pattern, enabling safety around interdependent data when a user first interacts with their Default project.
+
 ## Notes
-- Read methods return null when a project is not found; callers should handle null results.
-- ownerUserId must be used by implementations to scope queries and prevent cross-user access; failing to do so is a security risk.
-- Update and Remove are synchronous (void) on this interface; implementations may require an explicit commit/save step elsewhere or may persist changes immediately — check the concrete implementation's semantics.
-- AssignOrphanConversationsAsync returns the number of conversations that were updated as part of the bulk operation.
-- CancellationToken parameters should be forwarded to any underlying I/O or database calls to avoid blocking cancellation.
+- GetByIdWithFilesAsync loads related File entities; expect a heavier query and adjust projection accordingly.
+- Update(Project) is synchronous and void; its persistence is typically coordinated via a unit of work or SaveChanges in the underlying data store.
+- AssignOrphanConversationsAsync can touch a large portion of a user's conversations; consider batching or long-running task considerations in implementations.

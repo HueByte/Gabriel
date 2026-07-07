@@ -11,83 +11,80 @@
 ---
 
 ## Props
-
 > **File:** `src/webapp/src/components/StreamingText.tsx`  
 > **Kind:** interface
 
-Describes the properties accepted by the StreamingText component — a small DTO that carries the text to display and flags that control a typewriter-style reveal, an optional caret, and an optional "galactic cipher" leading-edge reveal. Use this interface when constructing props for the StreamingText component or when writing tests that assert streaming/animation behavior.
+```typescript
+interface Props
+```
+
+
+Props describes the public input contract for StreamingText: the text to display, a flag indicating whether the server-sent events stream is still appending to text (captured at mount; toggling later does not abort the in-flight typewriter — it always finishes), and two optional flags that alter rendering (caret and galactic). The galactic flag renders the leading edge of the reveal in galactic cipher, with the English translation trailing by GALACTIC_LEAD characters. This interface is consumed by StreamingText to govern how and when the text appears during a streaming reveal.
 
 ## Remarks
-The animate flag is sampled at component mount: if true the component performs an in-flight typewriter-style reveal and that reveal is not aborted or restarted by toggling animate afterward. The galactic flag switches the rendering behavior so the visible leading edge is shown in a "galactic cipher" while the English translation trails behind by a fixed offset (referred to in code as GALACTIC_LEAD). caret is optional and controls whether a caret is shown; if omitted the component's internal default behavior applies.
+Props acts as a small, focused contract that encapsulates the variation in how text is revealed. It separates concerns by letting StreamingText know when to animate, whether to show a caret, and whether to apply the galactic-cipher reveal, without embedding this logic in the component's internal state. The animate flag's mount-scoped semantics prevent mid-flight changes from interrupting an ongoing typewriter run, which helps keep the user experience smooth when the underlying data continues to flow.
 
 ## Example
 ```typescript
-// Object form (useful in tests or programmatic construction)
-const props: Props = {
-  text: "We come in peace.",
-  animate: true,
-  caret: true,
-  galactic: false,
-};
-
-// JSX usage (StreamingText is the component that consumes Props)
-// <StreamingText text="Hello" animate caret galactic={false} />
+<StreamingText text="Connecting to server..." animate={true} galactic caret={true} />
 ```
 
 ## Notes
-- animate is captured at mount; toggling it after the component mounts does not abort or restart the current reveal — remount to restart.
-- galactic causes the visual lead to be shown in cipher with the English text trailing by GALACTIC_LEAD characters; consumers expecting synchronous translation should account for this lag.
-- caret is optional; absence means the component will apply its default caret behavior.
+- Changing animate after mount does not abort an in-flight typewriter; to restart the animation you must remount StreamingText.
 
 ---
 
 ## StreamingText
-
 > **File:** `src/webapp/src/components/StreamingText.tsx`  
 > **Kind:** function
 
-A UI component that renders the provided text and exposes options to enable animation, show a caret, and apply a "galactic" visual variant. Reach for this component when you want a single reusable element to display text with optional streaming/animated presentation and small visual variants controlled via props.
-
-## Remarks
-This function is the single entry point for presenting text with a few display modes controlled by props. It centralizes the flags that affect rendering (animate, caret, galactic) so callers don't need to implement the animation or styling logic inline.
-
-## Example
 ```typescript
-// Render static text
-<StreamingText text="Hello, world!" />
-
-// Render with animation and a caret
-<StreamingText text="Typing…" animate caret />
-
-// Render with a themed/variant style (galactic) without animation
-<StreamingText text="Starfield" galactic />
+export function StreamingText(
 ```
 
+
+StreamingText is a UI component that renders the provided text with an optional streaming or typing animation. It accepts a text string and control flags: animate turns on the progressive reveal of characters, caret enables a cursor indicator at the end, and galactic toggles a space-themed styling variant. Use it when you want to convey dynamic, real-time text entry or storytelling in interfaces such as chat windows, terminals, or sci‑fi dashboards. When animate is false, the full text is shown immediately; when true, characters appear progressively according to the component's internal timing. The caret flag adds a blinking cursor at the end to imply ongoing streaming.
+
+## Remarks
+StreamingText centralizes the common pattern of dynamic text reveal, decoupling animation concerns from page composition. It provides a consistent API for enabling a typing-like effect and theming through a single prop set, helping maintainable, reusable UI components across the app.
+
 ## Notes
-- The caret and galactic props default to false (caret = false, galactic = false).
-- The animate prop is a boolean flag provided to the component; omit it or pass false to avoid animation.
+- If the text prop changes during streaming, the component may restart the reveal unless controlled explicitly.
+- The galactic theme may introduce CSS animations or heavier styling; consider performance implications on lower-end devices.
+- When using caret with animation, ensure sufficient contrast so the cursor remains visible against varying backgrounds.
 
 ---
 
 ## tick
-
 > **File:** `src/webapp/src/components/StreamingText.tsx`  
 > **Kind:** function
 
-Advances the two reveal cursors used by the streaming text animation and reschedules animation frames until the target text is fully revealed. It is intended to be called from requestAnimationFrame (it expects the RAF timestamp in now) and will increment internal cursor refs (cursorsRef.current) for the "galactic" and "english" layers according to pacing rules, speed up when backlog grows, and trigger a component update via bump when progress was made.
+```typescript
+function tick(now: number)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `now` | `number` | — |
+
+
+Drives the incremental, frame-synced reveal of a streaming text display by advancing two cursors toward the target content and scheduling the next reveal based on a computed rate. Use this instead of manually managing timers to progressively render text; it encapsulates the timing and mode-specific logic (galactic vs. non-galactic) and stops when the target is fully revealed.
 
 ## Remarks
-This function is the driver for a staggered/dual-layer text reveal: one cursor (gal) always leads, while the other (en) follows and — when in "galactic" mode — is constrained to trail the galactic cursor by a configurable lead (GALACTIC_LEAD). The reveal rate adapts based on how many characters remain (leadBacklog) and is clamped by MAX_RATE. It mutates several refs (cursorsRef, targetRef, nextRevealRef, rafRef) and relies on external constants (BASE_RATE, SPEEDUP_PER_BACKLOG_CHAR, MAX_RATE, GALACTIC_LEAD) and the bump callback to cause React re-renders.
+This function centralizes the streaming reveal logic, coordinating two cursors (gal and en) and a Galactic mode flag. It uses a time accumulator (nextRevealRef) and a RAF loop to keep the pace consistent with backlog-driven speed, so callers don't need to manage per-character timers. It mutates refs and schedules frames, becoming the single source of truth for the reveal cadence.
 
 ## Example
 ```typescript
-// Start the streaming reveal loop (typical usage in an effect or event handler)
-rafRef.current = requestAnimationFrame(tick);
+// Start streaming reveal loop
+tick(performance.now());
 ```
 
 ## Notes
-- tick mutates refs directly (cursorsRef.current, nextRevealRef.current, rafRef.current) and is not a pure function; callers should ensure those refs are initialized and stable.
-- The now parameter must be the DOMHighResTimeStamp provided by requestAnimationFrame; calling tick without that timestamp may cause timing logic to behave incorrectly.
-- The function schedules itself with requestAnimationFrame while there is unread text; when the text is fully revealed it stops rescheduling and sets rafRef.current to null. Ensure bump is a stable updater to avoid unexpected re-renders.
+- Be aware that the function depends on several refs existing in scope (cursorsRef, targetRef, galacticRef, nextRevealRef, rafRef, bump).
+- The reveal rate is bounded by MAX_RATE and BASE_RATE; tuning these constants changes perceived speed and responsiveness.
+- Inactive tabs may pause RAF; the loop resumes when tick is invoked again by the browser's RAF.
+- In Galactic mode, English characters are capped by GALACTIC_LEAD relative to gal characters; ensure this matches intended UX.
 
 ---

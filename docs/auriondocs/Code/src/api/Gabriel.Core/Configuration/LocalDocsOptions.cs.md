@@ -3,30 +3,17 @@
 > **File:** `src/api/Gabriel.Core/Configuration/LocalDocsOptions.cs`  
 > **Kind:** class
 
-Options that control the local, on-disk documentation source used by Gabriel's documentation system. Use this when you want the runtime to read Markdown files from a repository or local folder (the LLM-native self-docs) instead of—or before—falling back to the GitHub-backed source.
-
-## Remarks
-This options class configures a pluggable local docs source that participates in a composite lookup with a GitHub fallback. The resolver treats an absolute Path that exists as authoritative; otherwise it probes Environment.CurrentDirectory and AppContext.BaseDirectory (walking up parent directories) to find a matching folder. If no match is found the local source behaves as empty and emits a one-time warning so the composite lookup can transparently fall back to the GitHub source. The SectionName constant is provided for configuration binding.
-
-## Example
 ```csharp
-// appsettings.json
-{
-  "Tools": {
-    "Docs": {
-      "Local": {
-        "Enabled": true,
-        "Path": "docs/gabriel-self-docs"
-      }
-    }
-  }
-}
-
-// Bind in C# (Microsoft.Extensions.Configuration)
-var localDocs = configuration.GetSection(LocalDocsOptions.SectionName).Get<LocalDocsOptions>();
+public class LocalDocsOptions : IConfigSection<LocalDocsOptions>
 ```
 
+
+LocalDocsOptions is a configuration container that controls the on-disk local documentation source used by Gabriel's LLM-native self-docs. It maps to the Tools:Docs:Local configuration section and exposes two settings: Enabled and Path. When Enabled is true (default), the local Markdown docs found under Path are consulted before the GitHub-backed docs; when false, the system bypasses the local source entirely and uses GitHub docs only. Path designates the folder to read .md files from; it defaults to docs/gabriel-self-docs and accepts either forward or back slashes, with the resolver normalizing to the platform's path separator. The resolution logic proceeds as follows: if Path is absolute and exists, that path is used as-is; otherwise the resolver probes Environment.CurrentDirectory and AppContext.BaseDirectory, walking up a few parent directories until it finds a matching Path. If nothing is found, the local source behaves as empty and logs a one-time warning; the composite lookup then transparently falls back to GitHub.
+
+## Remarks
+LocalDocsOptions centralizes a pluggable, local-first documentation mechanism that lets developers override or extend the shared docs without relying exclusively on GitHub. By enabling this option, teams can ship and test self-docs alongside the application, or operate in environments without network access. The lookup strategy ensures predictable behavior: preferring the local folder when present and gracefully falling back to GitHub when it is not.
+
 ## Notes
-- If Path is a relative path that cannot be resolved by the probing logic, the local source will appear empty and a single warning will be logged; the system then relies on the GitHub fallback.
-- Both forward and back slashes are accepted for Path; the resolver normalizes separators to the platform convention.
-- Setting Enabled to false disables the local source entirely without changing any other docs configuration or wiring.
+- A one-time warning is logged if no matching local path is found, so check logs when enabling local docs to confirm the path resolution worked.
+- Relative Path resolution depends on runtime context (Environment.CurrentDirectory, AppContext.BaseDirectory); place the docs so that one of these roots can reach Path.
+- When Enabled is false, local docs are skipped entirely and only GitHub docs are consulted; ensure GitHub docs cover your needs in that deployment.

@@ -3,25 +3,24 @@
 > **File:** `src/api/Gabriel.Engine/Providers/IModelCatalog.cs`  
 > **Kind:** interface
 
-Read-only registry and resolver for models exposed by registered IChatProvider implementations. Use this interface when you need to enumerate available models or translate a user's preferred provider/model pair into a concrete ModelSelection without performing provider discovery or mutating the catalog.
+```csharp
+public interface IModelCatalog
+```
+
+
+IModelCatalog exposes a read-only view of all models provided by registered IChatProvider implementations and a resolver that maps a user’s preferences to a concrete ModelSelection. The interface remains extensible so tests and future implementations (for example, dynamic model discovery) can swap in alternate realizations without changing call sites. Use this whenever you need to present the available models to a user and to determine which model should handle a request, relying on Resolve to apply a deterministic policy that translates preferences into a ModelSelection.
 
 ## Remarks
-This abstraction separates model discovery from model selection logic and keeps the contract read-only so test doubles and alternative implementations (for example, dynamic discovery) can be substituted. Resolution follows a clear precedence: a matching (provider + model) preference wins; otherwise the configuration-declared default (the model marked IsActive=true) is chosen; if no IsActive model exists the first registered model is used as a last resort.
+The interface centralizes model discovery and selection logic, decoupling consumers from the details of how models are gathered and chosen. Resolve encodes the precedence: an exact provider/model match wins; otherwise the configured default (the IsActive=true model) is used; if none exists, the first registered model is used as a last resort. This encapsulation makes testing and future extensions straightforward—new discovery strategies or selection policies can be plugged in behind the same interface.
 
 ## Example
 ```csharp
-// List available models
-foreach (var model in modelCatalog.AvailableModels)
-{
-    Console.WriteLine($"{model.Provider} / {model.Name}");
-}
-
-// Resolve a user's preference into a concrete selection
-var selection = modelCatalog.Resolve(preferredProvider: "openai", preferredModel: "gpt-4");
-Console.WriteLine($"Resolved provider: {selection.Provider}, model: {selection.Model}");
+// Typical usage: determine which model to use for a user’s session
+IModelCatalog catalog = serviceProvider.GetRequiredService<IModelCatalog>();
+ModelSelection selection = catalog.Resolve(user.PreferredProvider, user.PreferredModel);
 ```
 
 ## Notes
-- AvailableModels is exposed as an IReadOnlyList; callers should not attempt to modify it.
-- Resolve requires both preferredProvider and preferredModel to match a registered model to take precedence; partial matches (only provider or only model) fall back to the default selection behavior.
-- The interface documentation describes a fallback to the "first registered model" if no IsActive entry exists; the behavior when no models are registered at all is not specified in the source comments and should be handled or clarified by consumers/implementations.
+- Resolve follows a deterministic fallback: exact match by provider/model first; if no match, fall back to the default IsActive model; if there is no IsActive entry, use the first registered model. Ensure at least one model is registered to avoid an undefined outcome.
+- AvailableModels is a read-only list; callers should not attempt to mutate the collection. Implementations may still update the underlying view, but consumer code should rely on the IReadOnlyList contract.
+- If the underlying set of models changes, callers relying on a single Resolve call should be prepared for a different result on subsequent calls; treat the catalog as a dynamic source of truth rather than a static snapshot.

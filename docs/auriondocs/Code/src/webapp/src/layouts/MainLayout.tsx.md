@@ -3,33 +3,28 @@
 > **File:** `src/webapp/src/layouts/MainLayout.tsx`  
 > **Kind:** function
 
-Renders the application's primary layout: a Sidebar, a main content column that hosts route children via react-router's Outlet, and a centrally configured ToastContainer for notifications. Use this component as the top-level layout for routes so every page shares the same navigation, content area, and toast behaviour.
+```typescript
+export function MainLayout()
+```
+
+
+MainLayout is a React functional component that defines the app's top-level shell. It renders a persistent Sidebar, a central main column for routed content via Outlet, and a configured ToastContainer for in-app notifications. Use this component when you want a consistent page chrome across routes and to centralize global UI concerns such as navigation and toasts, rather than rendering page content directly.
 
 ## Remarks
-This component composes three concerns into a single top-level shell: navigation (Sidebar), routing outlet (Outlet) and global notifications (ToastContainer). Centralizing the ToastContainer here ensures consistent toast appearance and timing across the app. The component intentionally accepts no props — styling and behaviour are driven by the contained components and CSS classes ("app" and "main-col").
+MainLayout encapsulates layout concerns that would otherwise be repeated across pages: the app chrome (sidebar and content area) and the notification system. By centralizing these concerns, all routed pages render inside a shared shell, ensuring a uniform look and behavior for navigation and toasts. It acts as a boundary between route content and global chrome, so nested routes can render inside Outlet while preserving the persistent navigation and feedback UI.
 
 ## Example
 ```typescript
-// Example route setup (React Router v6)
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { MainLayout } from './layouts/MainLayout';
-import Home from './pages/Home';
-
-function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<Home />} />
-          {/* other nested routes render inside MainLayout's <Outlet /> */}
-        </Route>
-      </Routes>
-    </BrowserRouter>
-  );
-}
+// Typical usage with React Router
+<Routes>
+  <Route path="/" element={<MainLayout/>}>
+    <Route path="dashboard" element={<Dashboard/>} />
+    <Route path="reports" element={<Reports/>} />
+  </Route>
+</Routes>
 ```
 
 ## Notes
-- Only one ToastContainer should be mounted application-wide; mounting multiple containers can produce duplicate or unexpected toasts.
-- The layout relies on CSS classes `app` and `main-col` for structure — changing those class names or their styles will affect page layout.
-- MainLayout is a simple functional component (not memoized) and will re-render when its parent or route changes; avoid placing heavy computation here.
+- The ToastContainer configuration (position, autoClose, newestOnTop, closeOnClick, pauseOnHover, draggable, theme, toastClassName) is baked into MainLayout; changing these affects all toasts application-wide. 
+- Outlet renders the matched child route content; Sidebar remains static across routes. 
+- If you need a different chrome for a subset of routes, consider a separate layout component or render a different element in the parent layout.

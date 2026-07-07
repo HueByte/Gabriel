@@ -3,24 +3,31 @@
 > **File:** `src/api/Gabriel.Core/Configuration/ProjectFilesOptions.cs`  
 > **Kind:** class
 
-Holds configuration for how project-scoped files are stored and treated by the application — where files are placed on disk, the per-upload size cap, an extension whitelist for uploads, and which content types are safe to treat as text. Use this options type when binding configuration (or environment variables) that control project file storage and the behavior of file-reading utilities like ReadTextAsync.
+```csharp
+public class ProjectFilesOptions : IConfigSection<ProjectFilesOptions>
+```
+
+
+ProjectFilesOptions is a configuration container that centralizes the policies for storing and validating per-project uploaded files. It binds to the Projects:Files configuration section and exposes a Root path for per-project subfolders, a maximum file size for uploads, a conservative list of allowed extensions, and a read-time whitelist of text-content types used by ReadTextAsync. Developers reach for it when they need to tailor where project files live, how large uploads can be, and which file types are eligible for reading or inline display, all without touching runtime code.
 
 ## Remarks
-This POCO is intended to be bound from the application's configuration system (the SectionName constant "Projects:Files" is used as the config section key and environment variables such as GABRIEL_PROJECTS__FILES__ROOT can override the Root). Defaults are chosen to make development and single-box deployments work out of the box (a local ./projects-data root and a conservative file-extension whitelist). The AllowedExtensions and TextContentTypePrefixes shape both upload acceptance and the read-paths (e.g., ReadTextAsync uses the content-type prefixes to decide whether a file can be safely presented as text to downstream consumers).
+By isolating these concerns, the class decouples filesystem layout and content moderation from business logic. It documents the expected per-project subfolder structure and the read behavior controlled by TextContentTypePrefixes, ensuring consistent behavior across environments. Because the type implements [`IConfigSection<T>`](IConfigSection.cs.md), changes can be supplied via configuration without recompiling.
 
 ## Example
 ```csharp
-// Bind from IConfiguration in startup
-var options = new ProjectFilesOptions();
-configuration.GetSection(ProjectFilesOptions.SectionName).Bind(options);
+// Common binding in startup/host
+services.Configure<ProjectFilesOptions>(Configuration.GetSection(ProjectFilesOptions.SectionName));
 
-// Later: use options when validating an uploaded file
-if (uploadedFile.Length > options.MaxFileBytes) throw new InvalidOperationException("File too large");
-var ext = Path.GetExtension(uploadedFile.FileName);
-if (!options.AllowedExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase)) throw new InvalidOperationException("Extension not allowed");
+// Optional programmatic override
+var options = new ProjectFilesOptions
+{
+    Root = "/var/app/projects",
+    MaxFileBytes = 50 * 1024 * 1024,
+    AllowedExtensions = new List<string> { ".md", ".txt" }
+};
 ```
 
 ## Notes
-- AllowedExtensions entries include the leading dot (e.g. ".txt"). Checks should typically be performed case-insensitively (the list itself is not normalized by this class).
-- Root is a relative path by default ("./projects-data"); treat it as a runtime/configuration value — changing it requires rebinding/restart if your host binds once at startup.
-- TextContentTypePrefixes are prefix matches (for example, "text/" matches "text/plain"); files whose content type is not in this set may still be downloadable but will be refused by text-reading helpers to avoid feeding binary data into text-based processing.
+- The Root path is relative to the application root by default; ensure the configured directory is writable by the app process in your deployment.
+- MaxFileBytes is a per-upload cap and does not reflect total storage usage; monitor disk consumption and adjust as needed for your workload.
+- TextContentTypePrefixes governs which MIME-like types ReadTextAsync will treat as text for inline reading; files outside this set can be downloaded but won’t be surfaced as text content.

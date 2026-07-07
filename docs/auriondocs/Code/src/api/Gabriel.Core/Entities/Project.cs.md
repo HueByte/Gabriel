@@ -3,28 +3,33 @@
 > **File:** `src/api/Gabriel.Core/Entities/Project.cs`  
 > **Kind:** class
 
-Represents a user-owned container that groups conversations, files and an optional system-level prompt (a "SystemPrompt"). Reach for this when you need a per-user project boundary that provides a stable avatar identity (AvatarSeed), optional skin overrides, and a place to store project-level metadata such as Name, Description and SystemPrompt. The class encapsulates creation and a few mutation operations (rerolling the avatar, pinning/clearing skins) and exposes the project's files as a read-only list.
+```csharp
+public class Project
+```
+
+
+A user-owned container that groups conversations, files and an optional assistant personality override (SystemPrompt). Use Project to represent a user's workspace or bucket for related conversations; a "Default" project is created lazily for every user and behaves as a standalone bucket.
 
 ## Remarks
-Project exists to give conversations a shared identity and configuration: each user-created project has a stable AvatarSeed so all conversations in that project render the same Gabriel Sequence avatar, while the lazily-created "Default" project is treated as a standalone bucket by clients (its seed is present but ignored). SystemPrompt, when set, is prepended into the agent's per-turn history (after the global persona and before any rolling summary). PatternOverride and PaletteOverride are catalog identifiers stored as plain strings here — validation against the sequence catalog is intentionally left to higher layers.
+Project provides a stable identity for a set of conversations: it carries an AvatarSeed that drives a shared Gabriel Sequence (so conversations in the same non-default project render a consistent avatar). The SystemPrompt property is intended to be prepended to the agent's per-turn history (after the global persona and before the rolling summary). Files are stored in an internal list exposed as a read-only `IReadOnlyList<ProjectFile>`. The class uses a private constructor and the Create factory to enforce basic invariants (non-empty owner and name) and to initialize the avatar seed.
 
 ## Example
 ```csharp
 // Create a new project for a user
-var project = Project.Create(ownerUserId: someUserId, name: "Research", description: "AI experiments", systemPrompt: "You are an expert tutor.");
+var project = Project.Create(ownerUserId: userId, name: "Research Notes", description: "Notes for Q3 research", systemPrompt: "You are concise.");
 
-// Pin a skin (catalog ids expected) or clear by passing null/empty
+// Pin a skin (catalog identifiers must be validated by the caller)
 project.SetSkin(pattern: "plasma", palette: "heat");
-project.SetSkin(pattern: null, palette: null); // clear overrides
 
 // Reroll the project's shared avatar
 project.RerollAvatar();
 
-// Read files (collection is read-only from the outside)
-var files = project.Files;
+// Clear any pinned skin
+project.SetSkin(pattern: null, palette: "");
 ```
 
 ## Notes
-- AvatarSeed is generated in the range 1..2^32-1 so it safely round-trips through JSON numbers.
-- SetSkin treats null/empty/whitespace strings as "clear" (null) — callers should pass validated, lower-case catalog identifiers; this entity does not validate them.
-- Create enforces that ownerUserId is not Guid.Empty and name is not null/whitespace and will throw ArgumentException otherwise. The Files collection is exposed as IReadOnlyList; mutations must be performed through the entity's internal mechanisms (not via the Files property).
+- Create validates that ownerUserId is not Guid.Empty and that name is not null/whitespace; name and optional text fields are trimmed.
+- SetSkin treats null or whitespace/empty strings as "clear" (null) and does not validate that the provided pattern or palette exist in any catalog — callers must pass validated, lower-case catalog identifiers.
+- AvatarSeed is generated in the range 1..(2^32-1) so it round-trips safely through JSON numbers.
+- The entity updates UpdatedAt when mutating operations occur (e.g., RerollAvatar, SetSkin, Rename), but the class does not implement explicit synchronization — concurrent callers must synchronise if needed.

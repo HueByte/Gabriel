@@ -3,31 +3,22 @@
 > **File:** `src/api/Gabriel.API/Contracts/Conversations/UpdateConversationRequest.cs`  
 > **Kind:** record
 
-Represents the payload for an API call that updates a conversation's title. Use this record as the request DTO when an endpoint accepts a new Title for an existing conversation (e.g., via an HTTP PUT/PATCH body).
-
-## Remarks
-This is a lightweight positional record used as an API contract/DTO. Being a record, it provides value-based equality, a concise deconstruct pattern, and (in modern C#) init-only semantics for its generated property. The type intentionally contains only the data needed to perform the update — validation (length, emptiness, allowed characters, etc.) and authorization should be handled by the caller or by pipeline components (model validators, filters) rather than by the DTO itself.
-
-## Example
 ```csharp
-// JSON body sent by a client
-// { "title": "New conversation title" }
-
-// Typical controller action binding the request body
-[HttpPut("{id}")]
-public IActionResult UpdateConversation(Guid id, UpdateConversationRequest request)
-{
-    // request.Title contains the new title
-    // validate and apply the update through application services
-    return NoContent();
-}
-
-// Creating an instance in code
-var req = new UpdateConversationRequest("A better title");
-var (title) = req; // deconstructs the record
+public record UpdateConversationRequest(string Title)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Title` | `string` | — |
+
+
+Represents the payload sent to update a conversation's title in the Gabriel API. This immutable, single-field record wraps the new title value as a value object suitable for serialization in the request body. Create a new instance with the desired title and pass it to the update operation when renaming a conversation.
+
+## Remarks
+Because it's a record, it provides value-based equality and immutability, which makes it safe to reuse and compare as a request payload. It encapsulates the update of a conversation's title into a focused contract, decoupled from other conversation properties, which simplifies API surface and validation.
+
 ## Notes
-- The record contains no built-in validation; callers must validate Title (null/empty checks, length limits, sanitization) before applying changes.
-- As a positional record the property is generated with init semantics and the type uses value equality — two instances with the same Title are considered equal.
-- If the project does not enable C# nullable reference types, Title may be null at runtime even though the signature declares a non-nullable string.
+- The Title parameter is required; the positional constructor enforces providing a non-null string for the new title.
+- The record is immutable; to change the title, instantiate a new UpdateConversationRequest rather than mutating an existing instance.

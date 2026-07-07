@@ -3,35 +3,17 @@
 > **File:** `src/api/Gabriel.Core/Configuration/BraveSearchOptions.cs`  
 > **Kind:** class
 
-BraveSearchOptions provides typed configuration for the Brave Search integration and is intended to be bound from configuration (e.g., appsettings, environment variables, or user-secrets). Use this when wiring up the Brave search client so callers can read the base API URL, subscription token, and request timeout from configuration rather than hard-coding them.
-
-## Remarks
-This class is a small POCO used as a config section (the SectionName constant is the expected configuration path: "Tools:Web:Brave"). It centralizes defaults useful for the Brave Search client: a sensible BaseUrl that already targets the Brave web search endpoint, a default timeout in seconds, and an ApiKey that, when left empty, explicitly marks the integration as unconfigured so code can disable the feature instead of throwing.
-
-## Example
 ```csharp
-// In Program.cs or equivalent during startup
-var braveSection = configuration.GetSection(BraveSearchOptions.SectionName);
-var braveOptions = braveSection.Get<BraveSearchOptions>();
-
-if (!braveOptions.IsConfigured)
-{
-    // Feature disabled or return a friendly error to callers
-    return;
-}
-
-// Create an HttpClient configured from the options
-var client = new HttpClient
-{
-    BaseAddress = new Uri(braveOptions.BaseUrl),
-    Timeout = TimeSpan.FromSeconds(braveOptions.TimeoutSeconds)
-};
-
-// Note: add the subscription token to requests according to Brave's API docs.
+public class BraveSearchOptions : IConfigSection<BraveSearchOptions>
 ```
 
+
+BraveSearchOptions is a typed configuration container for the Brave Web Search integration. It binds to the Tools:Web:Brave configuration section and exposes BaseUrl, ApiKey, and TimeoutSeconds, plus a derived IsConfigured flag that indicates whether an API key has been supplied. Use this class to configure the Brave search provider from your configuration (environment variables, user secrets, appsettings.json, etc.). The BaseUrl must end with a trailing slash to ensure correct URL composition to /res/v1/web/search; if ApiKey is empty, the search tool will report unconfigured instead of attempting requests.
+
+## Remarks
+BraveSearchOptions participates in the application's configuration binding as a concrete [`IConfigSection<BraveSearchOptions>`](IConfigSection.cs.md). It centralizes Brave search settings, letting code read a single, strongly-typed object instead of scattering constants and strings. The static SectionName guides the binder to the Tools:Web:Brave section; the default values enable a safe, testable configuration out of the box.
+
 ## Notes
-- BaseUrl must end with a trailing slash so relative-path concatenation resolves correctly (the default already includes it).
-- An empty or whitespace ApiKey means the integration is treated as disabled (IsConfigured == false).
-- TimeoutSeconds is expressed in seconds and is applied directly to HttpClient.Timeout in typical usage.
-- Changing SectionName will affect where the runtime looks for configuration values; keep config keys in sync with this value.
+- Trailing slash in BaseUrl is required to form the correct endpoint; omitting it will cause the final request path to be misassembled.
+- ApiKey should be stored securely and supplied via environment variables or a secret store; avoid logging or emitting it.
+- IsConfigured is derived from ApiKey; avoid binding to this property or persisting a separate value.

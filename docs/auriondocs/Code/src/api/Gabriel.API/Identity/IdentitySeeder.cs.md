@@ -3,19 +3,24 @@
 > **File:** `src/api/Gabriel.API/Identity/IdentitySeeder.cs`  
 > **Kind:** class
 
-Creates a single initial user from configuration if one does not already exist. Use this at application startup (after EF migrations) when you want an idempotent, configuration-driven way to ensure an initial account is present (for local dev, testing, or first-time deployments) without embedding plaintext password logic into your startup code.
+```csharp
+public static class IdentitySeeder
+```
+
+
+IdentitySeeder is an idempotent startup helper that seeds a single Identity user after EF migrations when Auth.Seed is enabled and properly configured; it creates the user with the configured UserName, Email, and Password, hashing the password via Identity upon creation. If seeding is disabled, misconfigured, or the user already exists, the operation is a no-op with informative logging.
 
 ## Remarks
-This is a minimal, safety-minded seeder that relies on the application's configured ASP.NET Core Identity services. It reads AuthOptions.Seed from `IOptions<AuthOptions>`, short-circuits when seeding is disabled or misconfigured, and uses `UserManager<ApplicationUser>` to create the account so the registered PasswordHasher and Identity password policies are applied. Logging is used to surface why seeding was skipped or failed.
+IdentitySeeder encapsulates the bootstrapping of an Identity user and keeps seed data out of migrations and startup flow. It relies on DI services like `UserManager<ApplicationUser>` and ILogger to perform membership operations and to report status, ensuring the seed is applied exactly once in a predictable manner. This pattern is particularly useful for development and test environments where a known administrator or test account is required.
 
 ## Example
 ```csharp
-// In Program.cs or wherever you run startup tasks, after applying migrations:
+// Typical usage during application startup
 using var scope = app.Services.CreateScope();
-await IdentitySeeder.SeedAsync(scope.ServiceProvider, cancellationToken);
+await IdentitySeeder.SeedAsync(scope.ServiceProvider);
 ```
 
 ## Notes
-- The caller must ensure database migrations have run before invoking this seeder; it assumes the Users table exists.
-- If the configured password violates Identity password policy or the email/username uniqueness rules, creation will fail and be logged — the seeder does not retry or override policies.
-- The method accepts a CancellationToken but does not pass it to UserManager calls; cancellation is currently not observed by the internal Identity operations.
+- If Auth:Seed:Enabled is false, seeding is skipped (no-op).
+- If UserName or Password is blank, seeding is skipped with a warning.
+- If creation fails due to Identity errors (e.g., password policy or email/username conflicts), the detailed error messages are logged.

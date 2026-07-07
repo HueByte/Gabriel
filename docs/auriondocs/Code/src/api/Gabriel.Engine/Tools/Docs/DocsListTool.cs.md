@@ -3,22 +3,16 @@
 > **File:** `src/api/Gabriel.Engine/Tools/Docs/DocsListTool.cs`  
 > **Kind:** class
 
-Lists every page available in Gabriel's official internal documentation and returns a human-readable catalog grouped by source. Reach for this tool when you need to discover which doc pages exist (so you can pass a specific path to docs_read); it prefers the LLM-native docs and surfaces the human-prose GitHub fallback.
-
-## Remarks
-This tool is a discovery helper used by agents or tooling to enumerate the canonical Gabriel documentation. It delegates the actual listing to an IDocsLookup implementation, then formats the results into a readable text block. Results are grouped by source with the LLM-native (`local-llm-native`) entries prioritized over the GitHub human-prose fallback, reflecting the intended consumption order when answering questions about Gabriel.
-
-## Example
 ```csharp
-// Typical usage inside an agent or higher-level orchestrator
-var tool = new DocsListTool(docsLookup); // docsLookup implements IDocsLookup
-string output = await tool.ExecuteAsync("{}", CancellationToken.None);
-// output is a plain text listing; pass any listed path to docs_read to fetch the page
-Console.WriteLine(output);
+public sealed class DocsListTool : ITool
 ```
 
+
+DocsListTool is a sealed utility that queries IDocsLookup to enumerate Gabriel's official internal documentation and returns a single, formatted index. It groups pages by their source (local LLM-native docs vs GitHub-hosted prose) and sorts each group by path, rendering a concise catalog that callers can pass to docs_read to fetch a specific page. The tool prioritizes LLM-native content as the primary source and uses GitHub entries only when coverage is lacking. It's intended for scenarios where an agent needs an up-to-date inventory of internal docs to drive questions about Gabriel’s architecture, agent loop, personality system, and internal APIs.
+
+## Remarks
+This abstraction centralizes doc discovery, keeping the catalog stable even as individual pages evolve. By separating discovery from retrieval, it enables both user-facing catalogs and automated workflows to reason about the full set of internal documentation. The source-grouping also makes clear when coverage comes from canonical self-docs versus human-authored prose.
+
 ## Notes
-- ExecuteAsync never throws for lookup errors: exceptions from the underlying IDocsLookup are caught and returned as an "Error: ..." string; callers should parse the result rather than expecting exceptions.
-- The ParametersJsonSchema is an empty object (no parameters expected); argumentsJson is ignored by the implementation.
-- Source ordering is controlled by SourcePriority: it recognizes `local-llm-native` (primary) and `github` (fallback); unknown sources are placed last.
-- Thread-safety depends on the provided IDocsLookup; DocsListTool itself holds only a reference and formats results, so it has no internal mutable state.
+- The output is a plain-text catalog; downstream consumers may parse lines starting with "-" to extract paths.
+- If listing fails, the method returns an error string rather than throwing; callers should handle gracefully and consider fallback strategies.

@@ -3,31 +3,32 @@
 > **File:** `src/api/Gabriel.Infrastructure/Persistence/Repositories/ConversationRepository.cs`  
 > **Kind:** class
 
-Provides data access for Conversation aggregates using an AppDbContext-backed EF Core repository. Use this class when you need to query, add, update or remove conversations and their messages while scoping queries to a specific user (and optionally a project); it does not commit changes — callers must save the DbContext.
+```csharp
+public class ConversationRepository : IConversationRepository
+```
+
+
+A concrete EF Core repository that implements IConversationRepository and provides CRUD-style access to Conversation and Message entities using an AppDbContext. Use this repository from application services when you need to load, add, update or remove conversations or their messages while keeping persistence concerns encapsulated.
 
 ## Remarks
-Implements the IConversationRepository abstraction over an AppDbContext to centralize commonly used queries and persistence operations for conversations and messages. Queries are consistently filtered by userId (and optionally projectId) to keep data scoped to the requesting user. Mutating methods (AddAsync, AddMessage, RemoveMessages, Update, Remove) only modify the EF change tracker; persisting those changes is left to the caller (for example via SaveChangesAsync) which keeps transaction and unit-of-work control outside the repository.
+This class sits at the persistence boundary and encapsulates common queries and mutations for conversations: fetching by id (optionally including messages), listing a user's conversations (optionally filtered by project), and adding/updating/removing entities. It intentionally performs only change tracking and query composition — it does not commit changes to the database itself, leaving transaction and save semantics to the caller or a surrounding unit-of-work.
 
 ## Example
 ```csharp
-// typical usage inside an application service
-public async Task CreateConversationExample(IConversationRepository repo, AppDbContext ctx, Guid userId, CancellationToken ct)
-{
-    var conversation = new Conversation { Id = Guid.NewGuid(), UserId = userId, Title = "New convo", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
-    await repo.AddAsync(conversation, ct);
-    // repository does not save; persist via DbContext
-    await ctx.SaveChangesAsync(ct);
-}
+// typical usage from an application service
+var conversation = await repo.GetByIdWithMessagesAsync(conversationId, userId, ct);
+if (conversation is null) throw new InvalidOperationException("Conversation not found");
 
-// fetching a conversation with its messages
-var convo = await repo.GetByIdWithMessagesAsync(conversationId, userId, ct);
-if (convo != null)
-{
-    // convo.Messages should be available (ordered by CreatedAt as requested by the query expression)
-}
+var message = new Message { ConversationId = conversation.Id, Content = "Hello", CreatedAt = DateTime.UtcNow };
+repo.AddMessage(message);
+conversation.UpdatedAt = DateTime.UtcNow;
+repo.Update(conversation);
+
+// Persist changes via the DbContext or unit-of-work that manages transactions
+await dbContext.SaveChangesAsync(ct);
 ```
 
 ## Notes
-- The repository methods do not call SaveChanges/SaveChangesAsync — callers must persist the DbContext to commit changes.
-- Queries are explicitly filtered by userId to enforce data scoping; ensure the correct userId is provided to avoid empty results.
-- GetByIdWithMessagesAsync includes the Messages navigation and specifies an ordering by CreatedAt in the Include expression; depending on EF Core version/provider, the ordering inside Include may not always be preserved by the provider and you may need to explicitly order the loaded collection after materialization if deterministic ordering is required.
+- The repository methods (AddAsync, AddMessage, Update, Remove, RemoveMessages) only mutate the DbContext's change tracker; callers must call SaveChanges/SaveChangesAsync (or use a unit-of-work) to persist changes.
+- GetByIdWithMessagesAsync includes the Messages navigation and applies an OrderBy on CreatedAt in the query. Depending on EF Core version and how the results are materialized, callers who require a guaranteed ordering in-memory should explicitly order the Messages collection after materialization to avoid relying on provider-specific behavior.
+- AddAsync returns a Task because it delegates to EF Core's AddAsync; the method does not return the added entity or an EntityEntry — callers should rely on the supplied entity instance which will be tracked after the call.

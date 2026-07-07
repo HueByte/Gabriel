@@ -18,159 +18,146 @@
 ---
 
 ## Props
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** interface
 
-Props describes the properties accepted by the Markdown component: the text to render and an optional streaming flag used to indicate that the parent typewriter is still revealing characters. Set streaming=true while the component receives per-tick/partial updates so the renderer can temporarily disable expensive plugins (syntax highlighting, KaTeX) and the mermaid renderer; omit it for static or historical messages.
+```typescript
+interface Props
+```
+
+
+Props defines the inputs for the Markdown renderer component used in the web UI. The text prop is the Markdown content to render. The optional streaming flag signals that a parent typewriter is revealing characters; when streaming is true, the renderer disables the expensive plugins (highlight, katex) and the Mermaid renderer while the text mutates per-tick, and these features snap back once streaming ends. Non-streaming callers (history messages) can omit this flag.
 
 ## Remarks
-This small flag exists to avoid running costly renderers on every intermediate frame when text is being streamed in (for example, by a typewriter-like animator). It lets the Markdown component operate in a lightweight "streaming" mode during mutation and immediately re-enable full rendering once streaming finishes, preventing jank and excessive CPU work while preserving the final rendered output.
+This abstraction centralizes the rendering behavior that depends on whether content is being streamed in real time versus rendered statically. By encapsulating this concern behind a simple flag, the Markdown renderer can switch to a lightweight streaming mode during live typing, preserving responsiveness, while still supporting full-featured rendering for static content.
 
 ## Example
 ```typescript
-// While a typewriter is animating text:
-<Markdown text={currentPartial} streaming={true} />
-
-// For a finished/historical message (full, static text):
-<Markdown text={finalMessage} />
+// Most common usage
+<Markdown text={message.content} streaming={isStreaming} />
 ```
 
 ## Notes
-- streaming is optional; when omitted the component behaves as non-streaming (full plugins enabled).
-- Only set streaming while text is actively changing per-tick — leaving it true for static content will unnecessarily disable syntax highlighting and renderers.
-- If callers fail to set streaming during rapid updates, expensive plugins may run repeatedly and cause performance issues or flicker.
+- Undefined streaming is treated as false; pass streaming explicitly to enable streaming behavior.
+- If you toggle streaming rapidly, coordinate the timing in the parent to avoid visual flicker.
+- Do not mutate the text prop inside the Markdown renderer during streaming; rely on prop changes from the owner to drive updates.
 
 ---
 
 ## Inline
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
-> **Kind:** type
+> **Kind:** type alias
 
-Represents a discriminated union of inline content nodes used by the Markdown component. Each variant is identified by its `type` discriminant so callers should narrow on `node.type` to handle specific inline kinds. The provided snippet only exposes the `'text'` variant; consult the full type definition in source for all variants and their fields.
-
-## Remarks
-Models inline-level AST nodes (the pieces that appear inside block-level content) and exists to make rendering and transformations type-safe. Using a `type` discriminant allows switch statements and type guards to narrow the union cleanly, enabling exhaustiveness checks and clearer renderer implementations.
-
-## Example
 ```typescript
-function renderInline(node: Inline) {
-  switch (node.type) {
-    case 'text':
-      // node is narrowed to the 'text' variant here — render its fields (see full type for field names)
-      return <span>{/* node.text */}</span>;
-    // other cases for other inline variants...
-    default:
-      return null;
-  }
-}
+type Inline =
+  |
 ```
 
+
+Inline is a TypeScript discriminated union that encodes the various forms of inline content used by the Markdown renderer in Markdown.tsx. The union includes a text variant (type: 'text'), and is intended for developers who need to model, validate, or render inline markdown fragments in a type-safe way rather than juggling ad-hoc objects.
+
+## Remarks
+By centralizing inline shapes into a single type, the renderer can switch on the type field and render the corresponding React element. This abstraction isolates formatting concerns from layout, reduces runtime type errors, and makes it easier to evolve the inline model alongside the Markdown syntax.
+
 ## Notes
-- The source shown for this type is truncated; verify the full definition to see all variants and their properties before relying on specific fields.
-- Narrow on the `type` property rather than using unsafe casts; that preserves type safety and enables exhaustiveness checks.
-- When adding new variants, update renderers and switch statements to avoid unhandled cases.
+- If you extend Inline with new variants, ensure all render branches handling Inline are updated to avoid silent fallbacks.
+- Rely on the type discriminator for exhaustive handling in switch statements to prevent surprising fall-through at runtime.
 
 ---
 
 ## MarkdownImpl
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** function
 
-Renders Markdown content supplied via the text prop. Use this component when you need an in-place Markdown renderer in the web UI; pass streaming={true} to enable the component's streaming/incremental rendering mode (defaults to false).
+```typescript
+function MarkdownImpl(
+```
+
+
+MarkdownImpl renders Markdown text into React elements by taking the Markdown source from the text prop and producing UI content. The streaming flag toggles incremental rendering if supported by the underlying parser, enabling smoother feedback for long Markdown bodies.
 
 ## Remarks
-The source implementation for this symbol was not available in the provided snapshot; the function signature shows it accepts an object with text and an optional streaming boolean (default false). Conceptually this is a presentational Markdown renderer intended to be used wherever Markdown must be displayed in the app. The streaming flag exists to toggle between immediate full rendering and an incremental/streaming rendering strategy, but exact semantics are implementation-defined.
+MarkdownImpl centralizes Markdown parsing and rendering behind a stable, simple interface. It isolates Markdown concerns from content components, so other parts of the UI can render Markdown consistently regardless of the underlying parser. By providing a single integration point for typography and styling of Markdown content, it helps maintain a cohesive look-and-feel across the app.
 
 ## Example
 ```typescript
-// Render static markdown
-<MarkdownImpl text={"**Hello** _world_"} />
-
-// Use streaming mode (behaviour depends on implementation)
-<MarkdownImpl text={someLargeMarkdownString} streaming={true} />
+// Example usage
+<MarkdownImpl text={markdown} />
 ```
 
 ## Notes
-- The implementation body was not available; do not assume HTML sanitization or XSS protection is performed — sanitize input upstream if required.
-- The precise behaviour of streaming (how updates are applied, whether it accepts chunks, or how it handles partial markdown) is unspecified; review the implementation before relying on streaming for progressive rendering.
-- Treat this as a UI/rendering convenience; if you need server-side rendering, pre-processing, or special plugin support, prefer a dedicated renderer or confirm capabilities in the component source.
-
+- If the input might contain untrusted HTML, ensure the Markdown processor sanitizes HTML blocks to prevent XSS.
+- When streaming is enabled, rendering may occur in chunks; consumers should not rely on the initial render containing the full content.
+- Avoid re-parsing the same Markdown on every render; memoize text to improve performance.
 
 ---
 
 ## buildComponents
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** function
 
-Returns a set of React renderer overrides tailored for use with a markdown renderer (e.g. react-markdown). Use this when you need consistent rendering for links, horizontal rules, code blocks, fenced pre/code pairs, mermaid diagrams and an inline hex color chip enrichment — including special behavior while content is being streamed character-by-character.
+```typescript
+function buildComponents(streaming: boolean): Components
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `streaming` | `boolean` | — |
+
+**Returns:** `Components`
+
+
+Factory function that builds a Components map used by the Markdown renderer to customize how content is rendered in React. It accepts a streaming flag and returns renderers for anchors, horizontal rules, and code blocks, with special handling for mermaid diagrams, inline hex chips, and syntax-highlighted blocks; the streaming flag gates when mermaid diagrams are instantiated to avoid rendering incomplete diagrams during incremental reveals.
 
 ## Remarks
-The returned object implements custom components for anchor (<a>), horizontal rule (<hr>), <pre> blocks and <code> elements. Key responsibilities:
-- External links open in a new tab with safe rel attributes and a consistent CSS class.
-- <hr> receives a presentation class for styling.
-- <pre> unwraps fenced-code children when they contain a mermaid diagram so the diagram (rendered as an SVG) is not nested inside a <pre>; this unwrap only happens once streaming has finished.
-- <code> handles three cases: rendering a mermaid diagram (when not streaming), rendering an inline hex "chip" when a data-hex attribute is present, and falling back to a regular <code> with the provided className (used by syntax highlighters).
-
-The streaming boolean disables any expensive or stateful rendering (like mermaid.render) while content is progressively revealed, preventing repeated renders on incomplete sources.
+By centralizing the rendering logic, this function provides a single place to enforce consistent styling (e.g., md-link for anchors, md-hr for horizontal rules) while enabling dynamic rendering for advanced markdown features. The mermaid path is intentionally deferred until streaming has ceased to prevent partially rendered diagrams during live reveals, and the hex/code path adds lightweight inline visuals without altering the source content.
 
 ## Example
 ```typescript
-// Typical use with react-markdown
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
-
-// streaming might be true while content is being typed or revealed;
-// set to false after the full content is available so mermaid diagrams render.
-const markdownComponents = buildComponents(/* streaming */ false);
-
-function MarkdownView({ source }: { source: string }) {
-  return <ReactMarkdown components={markdownComponents}>{source}</ReactMarkdown>;
-}
+// Example usage: render mermaid after streaming ends
+const components = buildComponents(false);
+<ReactMarkdown components={components}>{markdown}</ReactMarkdown>
 ```
 
 ## Notes
-- Mermaid rendering only occurs when streaming is false; this avoids calling mermaid.render on partial source as it's typed/revealed.
-- The code strips a trailing newline from fenced mermaid code (replace(/\n$/, '')) before passing to the Mermaid renderer — that matters if exact source formatting is significant.
-- The inline hex chip requires a data-hex attribute (e.g. injected by a remark plugin). If that attribute is missing the inline code falls back to normal rendering.
-- The color swatch element is aria-hidden to avoid redundant information for assistive tech; the hex text remains visible.
-- The implementation assumes helpers (languageOf, isValidElement, Mermaid component) are available in scope; ensure those utilities/components are provided where this function is used.
+- Mermaid rendering occurs only when the code block language is mermaid and streaming is false; ensure your Mermaid blocks specify language-mermaid.
+- Inline hex chips rely on a data-hex attribute on the code wrapper; supply the hex value via rest props (data-hex) to render the swatch and text.
 
 
 ---
 
 ## expandText
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** function
 
-Splits a plain string into tokenized AST content by extracting two special inline token types: "galactic" segments delimited by the GAL_OPEN/GAL_CLOSE sentinels, and "hexChip" tokens matched by HEX_RE. Use this when you need the Markdown pipeline to recognize and convert those embedded sentinel-delimited pieces and hex-like tokens into the editor's RootContent nodes instead of treating them as plain text.
-
-## Remarks
-The function performs two sequential passes over the input text. First it scans for GAL_OPEN/GAL_CLOSE pairs and produces Inline pieces of type 'galactic' for the enclosed content (with surrounding text preserved as 'text' pieces). A safety check avoids attempting that pass if the GAL_* sentinels are empty (an empty sentinel would cause an infinite loop because ''.indexOf('') returns 0). Second, it runs a global HEX_RE over the remaining text pieces to extract hex-like tokens (the regex is expected to capture a prefix and the hex payload); matches are emitted as 'hexChip' Inline pieces while non-matching substrings remain as 'text'. Finally, every Inline is converted to a RootContent node via toAstNode.
-
-## Example
 ```typescript
-// given GAL_OPEN, GAL_CLOSE and HEX_RE configured elsewhere
-const src = `begin ${GAL_OPEN}secret-token${GAL_CLOSE} middle 0xDEADBEEF end`;
-const astNodes = expandText(src);
-// astNodes will contain RootContent nodes corresponding to:
-// [{type: 'text', value: 'begin '}, {type: 'galactic', value: 'secret-token'},
-//  {type: 'text', value: ' middle '}, {type: 'hexChip', value: 'DEADBEEF'}, {type: 'text', value: ' end'}]
+function expandText(value: string): RootContent[]
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `value` | `string` | — |
+
+**Returns:** `RootContent[]`
+
+
+Converts a plain string into a RootContent array by desugaring literal text into segments and turning embedded markers into semantic nodes. It walks the input in two passes: first, it splits on galactic markers delimited by GAL_OPEN and GAL_CLOSE (when configured), emitting galactic nodes for the content between the markers and preserving surrounding text as text nodes; second, it scans text fragments for hexadecimal chip patterns defined by HEX_RE and replaces each match with a hexChip node while keeping the surrounding text intact. The result is an AST-like sequence that downstream renderers can interpret as plain text, galactic tokens, or hex chips. A safety guard prevents galactic parsing if the sentinel values are empty, avoiding an infinite loop if these markers are stripped by tooling.
+
+## Remarks
+Why this exists: It centralizes the parsing logic for a Markdown-like input that mixes literal content with special inline tokens. By converting galactic markers and hex codes into dedicated node types, higher-level renderers can render or transform these tokens without re-scanning the raw string. It also isolates sentinel configuration (GAL_OPEN/GAL_CLOSE/HEX_RE) from the rest of the rendering pipeline, making it easier to swap how tokens are represented without touching consumer code.
+
 ## Notes
-- If GAL_OPEN or GAL_CLOSE is an empty string the function skips galactic extraction entirely; this guard prevents an infinite loop but means sentinel parsing silently becomes a no-op.
-- HEX_RE is treated as a global/iterative regex (the code resets HEX_RE.lastIndex = 0). Provide a regex with the expected capture groups (prefix then hex payload) or matches may produce incorrect start offsets.
-- The function returns RootContent nodes by mapping Inline pieces through toAstNode; callers that rely on Inline shapes should inspect the input before the final mapping or adapt to the RootContent output.
+- Be aware the galactic parsing is skipped when GAL_OPEN or GAL_CLOSE is empty; in that case the function only applies hex-chip extraction and text splitting.
+- Hex chip extraction uses HEX_RE with global flag; lastIndex is reset before each part to ensure correct multiple matches within the same text segment.
+- If a galactic block is opened but not closed (o !== -1 but c === -1), the code gracefully falls back to treating the remainder as text rather than looping forever.
 
 ---
 
 ## languageOf
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** function
 
@@ -187,151 +174,158 @@ function languageOf(className: string | undefined): string | null
 **Returns:** `string | null`
 
 
-Extracts a language identifier from an element class string by looking for a token of the form `language-<id>`. Returns the captured identifier when present, or `null` if the input is falsy or no `language-` token is found.
+Parses a CSS className string to extract a language hint for code blocks. It searches for a token of the form language-<tag> anywhere in the string (at the start or after whitespace) and returns the captured tag, such as 'js' or 'typescript'. If className is undefined or if no language- token is found, it returns null. This utility is typically used by the Markdown renderer to determine the language to apply syntax highlighting without requiring a separate metadata field.
 
 ## Remarks
-This small utility centralizes the logic for reading a syntax-highlighting language out of an HTML `class` attribute (for example, a `<code>` element rendered from Markdown). Keeping the regex here avoids duplicating parsing rules and makes it easy to adjust the token format in one place.
+By isolating the language extraction logic in a tiny helper, the rendering pipeline remains decoupled from how language hints are encoded in DOM classes. It centralizes the convention of embedding language information in class names, enabling multiple rendering paths (e.g., Markdown code blocks, fenced blocks) to share the same heuristic. The function is deliberately small and side-effect free.
 
 ## Example
 ```typescript
-languageOf("foo language-typescript bar"); // "typescript"
 languageOf("language-js"); // "js"
+languageOf("foo language-typescript bar"); // "typescript"
 languageOf(undefined); // null
-languageOf("my-language-js"); // null (no whitespace or start before `language-`)
 ```
 
 ## Notes
-- Returns `null` for falsy input (e.g., `undefined` or empty string).
-- The regex captures characters matching `[\w-]`, so the identifier may include letters, digits, underscore and hyphens; matching is case-sensitive and only succeeds when `language-` appears at the start or immediately after whitespace.
-- The function returns the raw captured identifier and does not validate it against a list of known languages; if multiple `language-` tokens exist, the first match is returned.
+- Returns null for falsy input or when the string doesn't contain a language- token.
+- If multiple language- tokens exist, only the first match is returned.
+
 
 ---
 
 ## remarkInlineEnrichments
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** function
 
-Replaces plain text nodes in a remark (mdast) tree with the nodes returned by expandText, allowing inline textual tokens to be transformed into richer phrasing nodes. It skips text that is inside code or inlineCode nodes and performs the replacement in-place, returning control information to the visitor so traversal continues after the newly inserted nodes.
+```typescript
+function remarkInlineEnrichments()
+```
+
+
+remarkInlineEnrichments is a Remark plugin that, during AST traversal, expands text nodes into richer inline content by calling the expandText helper and splicing the resulting nodes into the tree. It mutates the AST in place and avoids altering code blocks or inline code, so only plain text fragments are enriched.
 
 ## Remarks
-This is a small remark/unified plugin factory: calling remarkInlineEnrichments() returns a transformer that visits every text node and delegates conversion to expandText. It exists to centralize inline enrichment logic (mentions, emojis, inline links, or other token-to-node expansion) at the AST level so downstream remark plugins or renderers see structured phrasing nodes instead of raw strings.
+This abstraction centralizes the inline enrichment logic for Markdown by operating over the text nodes in the syntax tree, allowing downstream renderers to see richer inline structures without manually manipulating each node type. It cleanly separates the enrichment policy from the traversal mechanics and ensures code integrity by skipping code-like parents.
 
 ## Example
-```typescript
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import remarkHtml from 'remark-html';
-import remarkInlineEnrichments from './Markdown';
+```ts
+import { remark } from 'remark';
+import { remarkInlineEnrichments } from './Markdown';
 
-const result = unified()
-  .use(remarkParse)
-  .use(remarkInlineEnrichments)
-  .use(remarkHtml)
-  .processSync('Hello @alice and :smile:')
-  .toString();
-
-console.log(String(result));
+const processor = remark().use(remarkInlineEnrichments);
 ```
 
 ## Notes
-- The plugin mutates the mdast tree in-place by splicing replacement nodes into parent.children; callers should not rely on the original text node remaining unchanged.
-- expandText must return an array of mdast PhrasingContent nodes. If it returns a single plain text node, this plugin leaves the node as-is.
-- The transform deliberately skips text nodes whose parent is a code or inlineCode node to avoid altering code samples.
-- The visitor return value uses the [SKIP, nextIndex] convention to advance traversal past the newly inserted nodes; ensure the visitor utility in use supports that control return value.
+- It mutates the input AST in place; if you need immutability, clone the tree before applying this transformer.
+- It deliberately skips text nodes that live inside code blocks or inline code to avoid corrupting code syntax.
+- This plugin relies on expandText producing valid PhrasingContent[]; ensure that function handles edge cases for your enrichments.
 
 ---
 
 ## remarkUnliftEmptyOrderedList
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** function
 
-Replaces ordered-list nodes in the remark (mdast) tree where every list item is empty with a simple paragraph containing the list's start number and a trailing dot (e.g. "3."). Use this plugin when you want empty ordered lists preserved as a single-line marker instead of keeping an actual list node with empty items.
+```typescript
+function remarkUnliftEmptyOrderedList()
+```
+
+
+Removes an empty ordered list in a Markdown AST by replacing it with a paragraph that contains the list's starting index followed by a period (e.g., '1.'). Use this when normalizing MDASTs produced by Remark so downstream renderers don't have to deal with no-op ordered lists; it's implemented as a plugin factory that returns a transformer function.
 
 ## Remarks
-This is a small remark plugin that walks the AST and "unlifts" ordered list nodes that contain only empty items (either no children or paragraphs with zero children). It mutates the parent node array in-place, swapping the matching list node for a paragraph text node that shows the list start value and a period. The intent is to simplify rendering or downstream processing for intentionally empty ordered lists while preserving the declared start index.
+This abstraction centralizes the empty-list normalization logic as a small Remark plugin, keeping the transformation logic isolated from the rest of the pipeline. It traverses the MDAST, and when it finds an ordered list whose items are effectively empty, it replaces the list node with a paragraph containing the list's start value and a trailing dot. The traversal uses the SKIP control to advance safely after a replacement, preserving correct visitation semantics while mutating the tree in place.
 
 ## Example
 ```typescript
 import { remark } from 'remark';
-import { remarkUnliftEmptyOrderedList } from './Markdown';
+import remarkUnliftEmptyOrderedList from './path/to/remarkUnliftEmptyOrderedList';
 
 const processor = remark().use(remarkUnliftEmptyOrderedList);
-const out = processor.processSync('1.\n   \n2.\n   \n').toString();
-// The empty ordered list will be converted to a paragraph like "1." (or the list's start value)
+const input = '1.\n\n'; // an ordered list with empty items
+const output = processor.processSync(input).toString();
+// Output will contain a paragraph like '1.' instead of the empty list
 ```
 
 ## Notes
-- The plugin only targets ordered lists (node.ordered === true); unordered lists are ignored.
-- A list is considered empty only if every listItem has no children or only paragraph children with zero children; nested lists or other child node types prevent the replacement.
-- The implementation performs unchecked casts and mutates the tree in-place; downstream plugins expecting a List node may be affected.
+- The plugin mutates the MDAST in place; avoid reusing the original tree after processing.
+- It only affects ordered lists, and only when every item is effectively empty.
+- The replacement uses the list's start value when present, defaulting to 1 if undefined (producing '1.').
 
 ---
 
 ## toAstNode
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** function
 
-Converts a small Inline token into a Markdown AST (RootContent) node. Reach for this when transforming your custom inline token representation into nodes suitable for further remark/rehype processing or rendering (for example, turning parsed inline fragments into text, span-wrapped text, or inline code nodes).
+```typescript
+function toAstNode(inline: Inline): RootContent
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `inline` | `Inline` | — |
+
+**Returns:** `RootContent`
+
+
+ToAstNode maps an Inline value into a RootContent AST node used by the Markdown renderer in the web UI. It handles three cases: 'text' yields a plain text node; 'galactic' yields a text node augmented with a DOM-like span data (class 'gtw-galactic', data-galactic attribute) to enable galactic styling; any other inline variant is treated as an inlineCode node carrying the original value and a data-hex attribute for easy identification or testing. This centralizes the transformation from the semantic Inline type to the low-level renderable AST, ensuring consistent rendering behavior across the Markdown component.
 
 ## Remarks
-This function maps known Inline.type values to mdast-compatible nodes and attaches `data`/`h*` properties that downstream remark/rehype plugins can use when serializing to HTML. Specifically: `"text"` becomes a plain text node; `"galactic"` becomes a text node annotated with `data.hName = 'span'` and `hProperties` (so it will render as a <span class="gtw-galactic" data-galactic="true">...); any other inline type is emitted as an `inlineCode` node with a `data.hProperties['data-hex']` attribute. The implementation uses type assertions (`as unknown as RootContent`) to satisfy the expected return type.
+This function acts as an adaptor between the higher-level Inline domain and the concrete RootContent nodes consumed by the UI renderer. By encoding the galactic variant as a text node with a dedicated span wrapper, it keeps the AST shape stable while allowing specialized styling without introducing new node kinds. Centralizing this mapping reduces duplication and makes future rendering adjustments isolated to this function.
 
 ## Example
 ```typescript
-// Given Inline values
-const a: Inline = { type: 'text', value: 'hello' };
-const b: Inline = { type: 'galactic', value: 'azul' };
-const c: Inline = { type: 'hex', value: '#ffee00' };
+// Common cases
+toAstNode({ type: 'text', value: 'Hello' });
+// => { type: 'text', value: 'Hello' }
 
-console.log(toAstNode(a));
-// { type: 'text', value: 'hello' }
+toAstNode({ type: 'galactic', value: '银河' });
+// => { type: 'text', value: '银河', data: { hName: 'span', hProperties: { className: 'gtw-galactic', 'data-galactic': 'true' } } }
 
-console.log(toAstNode(b));
-// { type: 'text', value: 'azul', data: { hName: 'span', hProperties: { className: 'gtw-galactic', 'data-galactic': 'true' } } }
-
-console.log(toAstNode(c));
-// { type: 'inlineCode', value: '#ffee00', data: { hProperties: { 'data-hex': '#ffee00' } } }
+toAstNode({ type: 'inlineCode', value: 'x' });
+// => { type: 'inlineCode', value: 'x', data: { hProperties: { 'data-hex': 'x' } } }
 ```
 
 ## Notes
-- The function asserts the returned objects as `RootContent`; callers should ensure the Inline shape is valid because invalid shapes may only be caught at runtime.
-- The `galactic` branch intentionally produces a `text` node with `data.hName`/`hProperties` so that HTML output can be rendered as a styled <span>; it does not produce an explicit `element`/`html` node.
-- The produced `data.hProperties` entries are used by remark/rehype converters and may expect specific value types (e.g., className sometimes being an array); the function always sets string values here.
+- The galactic path adds a span-like wrapper with className 'gtw-galactic' and data-galactic flag, which affects rendering rather than the core text content.
+- The function uses a type assertion (as unknown as RootContent) for non-plain-text branches; downstream consumers should rely on the exposed data shape rather than type alone.
+- The data-hex attribute preserves the input value for potential tooling or styling needs without altering the visible text.
 
 ---
 
 ## toGalactic
-
 > **File:** `src/webapp/src/components/Markdown.tsx`  
 > **Kind:** function
 
-Converts an input string into its "Galactic" representation by replacing each character with the value found in the global GAL_MAP using an uppercase lookup; when a character has no mapping the original character is preserved. Use this when rendering or displaying text with a custom character-mapping (glyph) layer rather than when performing locale-sensitive or multi-character text transformations.
+```typescript
+export function toGalactic(s: string): string
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `s` | `string` | — |
+
+**Returns:** `string`
+
+
+toGalactic converts an input string into its galactic representation by replacing each character with the value found in the global GAL_MAP. It looks up the uppercase form of every character, so the translation is effectively case-insensitive with respect to the mapping. Characters without a mapping are preserved in the output. This helper is handy when you need to render text using a custom symbol set without performing the mapping inline at each call.
 
 ## Remarks
-This is a simple, character-by-character transformation utility intended to be used in presentation/rendering code (for example, a Markdown renderer that wants to show text in a fanciful glyph set). The function looks up each character after calling toUpperCase() so mapping keys are expected to be uppercase; mapping values may be any string and are concatenated into the output.
+The lookup uses the character's uppercase form, so A and a map to the same galactic glyph when defined. The function returns a new string and does not mutate the input. GAL_MAP is expected to be a runtime global; ensure it is defined in the module where this function runs. Note that if a mapping yields an empty string, that character will be omitted from the result due to the nullish coalescing operator.
 
 ## Example
 ```typescript
-// Minimal example showing how to provide a GAL_MAP and call toGalactic
-const GAL_MAP: Record<string, string> = {
-  A: 'λ',
-  B: 'β',
-  C: '¢',
-  '!': '¡'
-};
-
-// assuming toGalactic is in scope
-const input = 'Abc!a';
-const output = toGalactic(input);
-// output will be: 'λβ¢¡λ' because characters are looked up using uppercase keys
+// Example assuming GAL_MAP maps A -> 'Λ' and B -> 'β'
+toGalactic("ABab!") // => "ΛβΛβ!"
 ```
 
 ## Notes
-- The function uppercases each character for the lookup; if you need locale-sensitive case handling use toLocaleUpperCase before calling or change the mapping strategy.  
-- If a mapping value is the empty string (''), that empty string will be used (effectively removing the character). Only null or undefined will trigger the fallback to the original input character because the code uses the nullish coalescing operator (??).  
-- For very large strings repeated '+' concatenation may be less efficient than building an array of pieces and joining them; for typical UI strings this implementation is sufficient.
+- If GAL_MAP contains an entry that maps a character to the empty string, that character will be removed from the output.
+- This function concatenates the result in a loop; for extremely long inputs you might consider a more efficient accumulation strategy, though modern engines perform well here.
 
 ---

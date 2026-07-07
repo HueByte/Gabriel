@@ -3,28 +3,31 @@
 > **File:** `src/api/Gabriel.Engine/Tools/ToolRegistry.cs`  
 > **Kind:** class
 
-A simple, in-memory registry of ITool instances that provides quick lookup by tool name and exposes a snapshot of all registered tools and their public descriptors. Use this when you need a read-oriented collection of tools built once (at construction) to perform case-insensitive name lookups or to enumerate tool metadata.
+```csharp
+public class ToolRegistry : IToolRegistry
+```
+
+
+ToolRegistry is an in-memory implementation of IToolRegistry that aggregates a set of ITool instances, exposes them as a read-only collection, supports fast, case-insensitive lookup by tool name, and can produce ToolDescriptor metadata for all registered tools. It builds an internal dictionary keyed by tool.Name using a case-insensitive comparer and stores the tools in All for enumeration.
 
 ## Remarks
-ToolRegistry takes an enumerable of ITool and captures it as a list at construction time, building an internal, case-insensitive dictionary keyed by each tool's Name. It purposefully provides a lightweight, read-focused abstraction: fast lookup via Find(name) and a way to produce ToolDescriptor objects for UI, discovery or API surface purposes via AsDescriptors(). This class is intended for scenarios where the set of tools is known at startup and does not need dynamic additions or removals.
+ToolRegistry centralizes access to tooling components without requiring callers to manage the lifetime or storage of ITool instances. It keeps the registry lightweight by materializing the input sequence into a list and deriving the lookup map from that snapshot. The AsDescriptors method provides a ready-made set of ToolDescriptor entries (name, description, and parameter schema) that editors or UIs can consume to present available tools to users.
 
 ## Example
 ```csharp
-var tools = new ITool[] { new EchoTool(), new SummarizeTool() };
+// Typical usage
+IEnumerable<ITool> tools = LoadTools();
 var registry = new ToolRegistry(tools);
 
-// Find by name (case-insensitive)
-var echo = registry.Find("echo");
-if (echo != null)
+var tool = registry.Find("deploy"); // case-insensitive
+if (tool != null)
 {
-    // use echo
+    // use tool
 }
 
-// Get descriptors for discovery/UI
-var descriptors = registry.AsDescriptors();
+IReadOnlyList<ToolDescriptor> descriptors = registry.AsDescriptors();
 ```
 
 ## Notes
-- Duplicate or null tool names in the provided sequence will cause ToDictionary to throw during construction; ensure tool.Name is non-null and unique (ignoring case).
-- Find performs a case-insensitive lookup (StringComparer.OrdinalIgnoreCase) so callers don't need to normalize name casing.
-- All is a snapshot taken at construction (All is an IReadOnlyList backed by the internal list); mutating the original enumerable after construction does not affect the registry.
+- Duplicate tool names differing only by case will cause an exception during construction when building _byName via ToDictionary with OrdinalIgnoreCase.
+- Find returns null if no matching tool exists; callers should guard accordingly.

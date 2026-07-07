@@ -10,56 +10,53 @@
 ---
 
 ## FrameLayers
-
 > **File:** `src/api/Gabriel.Engine/Sequence/FrameLayer.cs`  
 > **Kind:** class
 
-Provides helpers for mapping between absolute frame indices and logical frame layers. Use this when you need to determine which layer a given frame belongs to or to obtain the inclusive start/end frame indices for a particular layer. The class centralizes the layer sizing constants (FramesPerLayer = 16) and total layer count (LayerCount = 4).
-
-## Remarks
-FrameLayers encapsulates the simple convention that frames are grouped into fixed-size layers of 16 frames each. It exists to keep the mapping logic and size constants in one place so callers don't repeatedly hard-code division and offset arithmetic. The Of method performs integer division and casts the result to the FrameLayer enum, while Range computes the inclusive start and end indices for a layer.
-
-## Example
 ```csharp
-// Determine which layer contains frame 37
-var layer = FrameLayers.Of(37); // frame 37 -> layer (37 / 16) = 2
-
-// Get the start/end frames for that layer
-var (start, end) = FrameLayers.Range(layer); // start = 32, end = 47
-
-// Iterate all frames in a layer
-for (int i = start; i <= end; i++)
-{
-    // process frame i
-}
+public static class FrameLayers
 ```
 
+
+FrameLayers is a small static helper that partitions a linear sequence of frames into four fixed layers of sixteen frames each. It exposes FramesPerLayer and LayerCount, and provides Of(frameIndex) to determine the Layer for a given global frame index, and Range(layer) to compute the inclusive start and end frame indices for a specific Layer.
+
+## Remarks
+FrameLayers centralizes the notion of frame layering, removing magic numbers from clients and ensuring consistent layer-based calculations across the codebase. It serves as a clean boundary between raw frame indices and layer-based processing, making it easy to perform per-layer iterates or to compute per-layer bounds without duplicating arithmetic.
+
 ## Notes
-- The methods do not validate inputs: passing a negative frameIndex or an enum value outside the expected range may produce unexpected results because Of uses integer division and a direct cast to FrameLayer.
-- Range returns an inclusive end index (Start .. End). FramesPerLayer is 16, so End = Start + 15. If your code expects half-open ranges, adjust accordingly.
+- No input validation; negative or out-of-range frameIndex values can yield undefined FrameLayer values when casting, and Range may return invalid bounds for such inputs.
+- If the total number of frames changes, update FramesPerLayer and LayerCount accordingly, or else Range results may refer to non-existent frames.
 
 ---
 
 ## FrameLayer
-
 > **File:** `src/api/Gabriel.Engine/Sequence/FrameLayer.cs`  
 > **Kind:** enum
 
-Represents the four logical layers used to partition a 64-frame memory/sequence into groups of 16 frames each. Use this enum when you need to categorize a frame index by its intended persistence and update cadence: DnaCore (frames 0..15) is immutable identity data, StableTraits (16..31) holds long-term preferences, Context (32..47) stores medium-term accumulated reactions, and LiveState (48..63) contains the current emotional/stateful values.
+```csharp
+public enum FrameLayer
+{
+    DnaCore       = 0,
+    StableTraits  = 1,
+    Context       = 2,
+    LiveState     = 3,
+}
+```
+
+
+FrameLayer is an enum that partitions the 64-frame timeline into four conceptual layers: DnaCore for immutable identity, StableTraits for long-term preferences, Context for medium-term accumulated reactions, and LiveState for the current emotional state recalculated each turn. The layer corresponding to a given frame index is computed as (index / 16) cast to FrameLayer. This abstraction lets callers write layer-aware logic without referencing exact frame ranges, enabling clearer separation of concerns and efficient, layer-specific processing.
 
 ## Remarks
-This enum encodes a conceptual separation of memory/state into layers with different lifetimes and update frequencies. The design makes it easy to decide how and when to read, write, or decay values by layer instead of by individual frame indices; typical usage is to compute the layer from a numeric frame index and then apply layer-specific logic (persistence, update rate, serialization rules, etc.).
+FrameLayer serves as a lightweight categorization that underpins state management in the system. It clarifies responsibilities across components by ensuring operations target the correct abstraction (e.g., avoiding mutation of DnaCore during normal updates, isolating long-term drift from immediate state). It also supports optimizations by allowing batch work per layer.
 
 ## Example
 ```csharp
-int frameIndex = 37;
-if (frameIndex < 0 || frameIndex >= 64) throw new ArgumentOutOfRangeException(nameof(frameIndex));
-FrameLayer layer = (FrameLayer)(frameIndex / 16); // integer division yields 2 -> FrameLayer.Context
+int frameIndex = 33;
+FrameLayer layer = (FrameLayer)(frameIndex / 16); // Context
 ```
 
 ## Notes
-- The enum values are simple integers (0..3) and are not bit flags.
-- Casting an integer outside 0..3 to this enum will produce an enum value with that underlying integer; validate frame indices (0..63) before casting.
-- Each layer covers exactly 16 frames; ranges in the code comments are inclusive (e.g., DnaCore = frames 0..15).
+- Out-of-range safety: valid frame indices are 0..63. Values outside map to an enum value outside the defined set; callers should clamp/validate before casting.
+
 
 ---

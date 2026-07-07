@@ -4,17 +4,17 @@
 
 ## Languages
 
-- **C#**: 192 files
-- **TypeScript (React)**: 32 files
+- **C#**: 200 files
+- **TypeScript (React)**: 31 files
 - **TypeScript**: 14 files
 - **JavaScript**: 5 files
 
 ## Statistics
 
-- **Files processed:** 243
-- **Lines of code:** 21,144
-- **Symbols documented:** 527
-- **Validation retries:** 62
+- **Files processed:** 250
+- **Lines of code:** 22,515
+- **Symbols documented:** 532
+- **Validation retries:** 140
 
 ## Documentation Index
 
@@ -258,6 +258,23 @@
 - [IToolRegistry](src/api/Gabriel.Engine/Tools/IToolRegistry.cs.md)
 - [ToolRegistry](src/api/Gabriel.Engine/Tools/ToolRegistry.cs.md)
 
+### src/api/Gabriel.Engine/Tools/Calc
+
+- [CalculateTool](src/api/Gabriel.Engine/Tools/Calc/CalculateTool.cs.md)
+
+### src/api/Gabriel.Engine/Tools/Codecs
+
+- [Base64Tool](src/api/Gabriel.Engine/Tools/Codecs/Base64Tool.cs.md)
+- [HashTool](src/api/Gabriel.Engine/Tools/Codecs/HashTool.cs.md)
+
+### src/api/Gabriel.Engine/Tools/Colors
+
+- [ColorConvertTool](src/api/Gabriel.Engine/Tools/Colors/ColorConvertTool.cs.md)
+
+### src/api/Gabriel.Engine/Tools/Data
+
+- [JsonFormatTool](src/api/Gabriel.Engine/Tools/Data/JsonFormatTool.cs.md)
+
 ### src/api/Gabriel.Engine/Tools/Docs
 
 - [DocsListTool](src/api/Gabriel.Engine/Tools/Docs/DocsListTool.cs.md)
@@ -279,10 +296,19 @@
 - [MemoryRemoveTool](src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.cs.md)
 - [MemorySaveTool](src/api/Gabriel.Engine/Tools/Memory/MemorySaveTool.cs.md)
 
+### src/api/Gabriel.Engine/Tools/Numbers
+
+- [BaseConvertTool](src/api/Gabriel.Engine/Tools/Numbers/BaseConvertTool.cs.md)
+
 ### src/api/Gabriel.Engine/Tools/Projects
 
 - [ListProjectFilesTool](src/api/Gabriel.Engine/Tools/Projects/ListProjectFilesTool.cs.md)
 - [ReadProjectFileTool](src/api/Gabriel.Engine/Tools/Projects/ReadProjectFileTool.cs.md)
+
+### src/api/Gabriel.Engine/Tools/Strings
+
+- [TextStatsTool](src/api/Gabriel.Engine/Tools/Strings/TextStatsTool.cs.md)
+- [TextTransformTool](src/api/Gabriel.Engine/Tools/Strings/TextTransformTool.cs.md)
 
 ### src/api/Gabriel.Engine/Tools/Web
 
@@ -382,7 +408,6 @@
 - [CompactingOverlay](src/webapp/src/components/CompactingOverlay.tsx.md)
 - [ContextStats](src/webapp/src/components/ContextStats.tsx.md)
 - [GabrielSequenceView](src/webapp/src/components/GabrielSequenceView.tsx.md)
-- [GalacticTypewriter](src/webapp/src/components/GalacticTypewriter.tsx.md)
 - [Markdown](src/webapp/src/components/Markdown.tsx.md)
 - [MemoryList](src/webapp/src/components/MemoryList.tsx.md)
 - [MemoryQuickSave](src/webapp/src/components/MemoryQuickSave.tsx.md)

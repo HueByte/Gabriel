@@ -3,30 +3,47 @@
 > **File:** `src/api/Gabriel.Core/Personality/ConversationState.cs`  
 > **Kind:** record
 
-Represents per-conversation behavioral state used by the dialogue system to adapt prompts and post-process responses. Use this record when reading or persisting conversation-level signals (turn count, mood, token statistics, recent topics and user-style flags); the state is updated by the conversation updater and consumed by the system prompt builder and response post-processor.
+```csharp
+public sealed record ConversationState
+{
+    public int TurnCount { get; init; }
+    public Mood Mood { get; init; } = Mood.Neutral;
+
+    public float AvgUserTokenCount { get; init; }
+    public int LastUserTokenCount { get; init; }
+
+    public IReadOnlyList<string> RecentTopics { get; init; } = Array.Empty<string>();
+    public DateTimeOffset LastMessageAt { get; init; }
+    public int ConsecutiveShortMessages { get; init; }
+
+    public bool UserUsesEmoji { get; init; }
+    public bool UserUsesLowercase { get; init; }
+
+    public bool UserAskedForDetail { get; init; }
+
+    public static ConversationState Initial() => new()
+    {
+        LastMessageAt = DateTimeOffset.UtcNow,
+    };
+}
+```
+
+
+ConversationState is the per-conversation, immutable snapshot of the session's behavioral state. It is maintained by IConversationStateUpdater and read by ISystemPromptBuilder and IResponsePostProcessor to tailor prompts, responses, and behavior to the current dialogue (mood, topics, and user style). The state is persisted as JSON on Conversation.StateJson so Entity Framework does not require a separate table, and it serves as the foundation for the planned emotion engine (Phase 10), where Mood and user-style flags will influence avatar reactions.
 
 ## Remarks
-This record is the in-memory shape for the conversation's behavioral metadata and is persisted as JSON on Conversation.StateJson so Entity Framework does not require a dedicated table. It is intentionally lightweight and immutable: an IConversationStateUpdater produces new instances (via record "with" expressions) and downstream components (ISystemPromptBuilder, IResponsePostProcessor) read the values to alter prompt construction and response length/format. The type is the foundation for future features (the emotion engine) and carries sticky style flags that survive across messages until intentionally reset.
+This design centralizes transient, session-scoped signals in a single immutable record, decoupling state management from the prompt-building and post-processing logic. It enables future enhancements without changing the public interface or persistence shape, and it provides a stable contract for components that need to read or extend conversation behavior across turns.
 
 ## Example
 ```csharp
-// Create initial state and update a few fields as responses are generated
-var state = ConversationState.Initial();
-
-// after processing a user message
-var updated = state with
-{
-    TurnCount = state.TurnCount + 1,
-    LastMessageAt = DateTimeOffset.UtcNow,
-    LastUserTokenCount = 42,
-    AvgUserTokenCount = 40.5f, // typically computed by the updater using an EMA
-    UserUsesEmoji = true,      // once set, remains true until explicitly reset
-    UserAskedForDetail = true, // read by post-processor to raise response length cap
+var initial = ConversationState.Initial();
+var next = initial with {
+    TurnCount = initial.TurnCount + 1,
+    LastMessageAt = DateTimeOffset.UtcNow
 };
 ```
 
 ## Notes
-- The record is immutable; updates must produce a new instance (use the C# "with" expression).
-- Initial() sets LastMessageAt to DateTimeOffset.UtcNow, which can introduce non-determinism in tests if not mocked.
-- AvgUserTokenCount is an exponential moving average maintained by the updater — it is a smoothed value, not a history of exact counts.
-- UserUsesEmoji and UserUsesLowercase are "sticky" flags: once true they stay true until a policy-driven reset or a fresh conversation.
+- ConversationState is immutable; updates are performed by creating a new instance (e.g., via the with-expression).
+- AvgUserTokenCount is an EMA-based metric; update with a proper smoothing factor to avoid abrupt shifts.
+- LastMessageAt is UTC-based and used to reason about recency; ensure consistent timezone handling when persisting.

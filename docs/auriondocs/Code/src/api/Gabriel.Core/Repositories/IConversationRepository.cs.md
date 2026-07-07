@@ -3,30 +3,30 @@
 > **File:** `src/api/Gabriel.Core/Repositories/IConversationRepository.cs`  
 > **Kind:** interface
 
-An abstraction for storing and retrieving Conversation and Message entities with enforced user-scoped reads and EF-friendly write operations. Use this repository when you need to query or modify conversations belonging to a specific user (reads require an explicit userId) while relying on the persistence layer (EF) to track ownership and perform actual database commits.
+```csharp
+public interface IConversationRepository
+```
+
+
+IConversationRepository provides tenant-scoped data access for Conversation aggregates, exposing read, list, and write operations to create, update, and delete conversations and their messages. It enforces ownership boundaries by requiring user context on reads, and it centralizes persistence concerns behind a repository boundary rather than exposing raw EF calls.
 
 ## Remarks
-This interface centralizes conversation-related data access and encodes two important conventions: read operations are user-scoped (every read requires the caller to supply the owner userId so the repository refuses to return cross-tenant data), while write operations do not accept a userId because ownership is stored on the entity and tracked by the ORM. Message deletion is exposed as an explicit method to ensure the EF change tracker marks rows for deletion reliably (instead of depending solely on orphan-removal semantics which can vary across EF versions/configurations).
+By centralizing data access, this interface enforces the ownership model at the boundary between domain logic and persistence. The separate GetByIdAsync and GetByIdWithMessagesAsync methods make it explicit whether message history is loaded with the conversation. AddAsync persists new Conversation entities, while AddMessage supports inserting a Message tied to an existing Conversation. RemoveMessages provides explicit deletion semantics to ensure the EF change tracker marks removals reliably across provider configurations.
 
 ## Example
 ```csharp
-// Typical read: always include the owner userId to avoid leaking another user's data
-var conversation = await conversationRepo.GetByIdAsync(conversationId, currentUserId, ct);
-if (conversation == null) return NotFound();
+// Example: load a conversation with its messages for the current user
+var convo = await repo.GetByIdWithMessagesAsync(convoId, userId, ct);
 
-// Add a new message to an existing, user-scoped conversation
-var message = new Message { ConversationId = conversation.Id, Text = "Hello", CreatedAt = DateTime.UtcNow };
-conversationRepo.AddMessage(message);
+// Example: list conversations for a user (optionally filtered by project)
+var list = await repo.ListAsync(userId, projectId, ct);
 
-// Remove messages explicitly so EF marks them for deletion
-conversationRepo.RemoveMessages(conversation.Messages.Where(m => m.IsFlagged));
-
-// Persist changes via the surrounding unit-of-work / DbContext
-// await unitOfWork.SaveChangesAsync(ct); // not part of this interface
+// Example: create and persist a new conversation (ownership modeled on the entity itself)
+var newConvo = new Conversation { /* initialize properties, including ownership */ };
+await repo.AddAsync(newConvo, ct);
 ```
 
 ## Notes
-- All read APIs require the caller to pass the user's Guid; failing to do so may return null even if the conversation exists for another user.
-- AddAsync / AddMessage / Update / Remove are write-intent operations; they modify the tracked model but do not themselves commit to the database — call SaveChanges on your DbContext or unit-of-work to persist.
-- Prefer RemoveMessages when deleting child Message entities to avoid relying on EF orphan-removal behavior that can be brittle across versions/configurations.
-- ListAsync treats a null projectId as "all projects"; pass a concrete projectId to filter to a single project.
+- Reads are tenant-scoped; always supply userId to prevent cross-tenant data exposure.
+- Update/Remove typically require the entity to have been loaded via a user-scoped read to ensure ownership is respected.
+- RemoveMessages expects the exact set of messages to delete; use carefully to avoid unintended deletions.

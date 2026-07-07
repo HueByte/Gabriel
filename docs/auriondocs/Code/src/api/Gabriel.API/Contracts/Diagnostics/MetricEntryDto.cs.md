@@ -10,66 +10,65 @@
 ---
 
 ## MetricEntriesResponse
-
 > **File:** `src/api/Gabriel.API/Contracts/Diagnostics/MetricEntryDto.cs`  
 > **Kind:** record
 
-Represents the wire response for the GET /diagnostics/metrics endpoint. Contains the returned metric rows (Entries) and an integer Count associated with the response. Entries contains up to the requested limit of most-recent rows that match the requested system (exact match or prefix), ordered newest first.
-
-## Remarks
-This record is a compact DTO used at the API boundary to return metric data. It groups the set of MetricEntryDto objects together with a numeric count so clients can consume both the payload and a simple numeric summary in a single response.
-
-## Example
 ```csharp
-// Server-side: build and return up to `limit` most-recent metric entries
-var entries = new List<MetricEntryDto>
-{
-    // ... populate MetricEntryDto instances ...
-};
-var response = new MetricEntriesResponse(entries, entries.Count);
-return Ok(response);
+public sealed record MetricEntriesResponse(
+    IReadOnlyList<MetricEntryDto> Entries,
+    int Count)
 ```
 
-## Notes
-- Entries are ordered newest-first and will contain at most the configured `limit` items; the list may be shorter when fewer matching rows exist.
-- The semantic meaning of Count is not fully specified in source comments — callers should confirm whether it represents the number of entries returned (Entries.Count) or the total number of matching rows across all pages for this query.
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Entries` | `IReadOnlyList<MetricEntryDto>` | — |
+| `Count` | `int` | — |
+
+
+Represents the response payload for the diagnostics metrics endpoint (GET /diagnostics/metrics). It conveys a set of recent metric entries for the requested system (matched exactly or by prefix) and a Count of how many entries are included, with the newest entries first.
+
+## Remarks
+MetricEntriesResponse is a minimal, transport-focused contract used by the diagnostics metrics API. As a sealed, immutable record, it provides a stable data container that can be serialized across the wire without side effects. It couples Entries (a read-only list of MetricEntryDto) with Count, offering both the actual entries and a quick indicator of how many items were returned for the request.
 
 ---
 
 ## MetricEntryDto
-
 > **File:** `src/api/Gabriel.API/Contracts/Diagnostics/MetricEntryDto.cs`  
 > **Kind:** record
 
-A simple, immutable data transfer object that represents one row in the generic metric event log. Use this record when transporting or persisting a single metric event emitted by a subsystem; the Metric property carries the metric payload as raw JSON so the originating subsystem can define its own schema.
+```csharp
+public sealed record MetricEntryDto(
+    Guid Id,
+    string System,
+    JsonElement Metric,
+    DateTimeOffset CreatedAt)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Id` | `Guid` | — |
+| `System` | `string` | — |
+| `Metric` | `JsonElement` | — |
+| `CreatedAt` | `DateTimeOffset` | — |
+
+
+MetricEntryDto represents a single row in the generic metric event log. As a sealed record, it provides a lightweight, immutable carrier for the identifying Id, the originating System, the raw Metric payload, and the CreatedAt timestamp. The Metric payload is stored as a JsonElement to keep the metric shape opaque and schema-agnostic, enabling consumers to re-deserialize into their own domain types or defer schema decisions to their caller.
 
 ## Remarks
-This type exists to provide a stable wire shape for metric events across different subsystems. It treats the metric payload as an opaque JSON value (JsonElement) rather than a typed object so producers and consumers can agree on their own JSON schemas without introducing a shared CLR type. Equality and immutability come from being a C# record, making it suitable for use in logging, persistence, and message passing scenarios.
+This abstraction decouples the transport contract from the metric data shape, allowing diverse subsystems to emit metrics without forcing a shared schema. The record semantics offer value-based equality and convenient deconstruction, which simplifies mapping and projection of metric rows in consumer code.
 
 ## Example
 ```csharp
-using System.Text.Json;
-
-// Constructing a MetricEntryDto from a JSON string
-var json = "{ \"count\": 42, \"unit\": \"requests\" }";
-using var doc = JsonDocument.Parse(json);
-var entry = new MetricEntryDto(
-    Id: Guid.NewGuid(),
-    System: "orders-service",
-    Metric: doc.RootElement,
-    CreatedAt: DateTimeOffset.UtcNow);
-
-// Consuming the metric payload (read as JsonElement)
-if (entry.Metric.TryGetProperty("count", out var countProp))
-{
-    int count = countProp.GetInt32();
-    // ...
-}
+// Rehydrate the opaque metric payload into a known type when needed
+MyMetricDto? payload = JsonSerializer.Deserialize<MyMetricDto>(entry.Metric.GetRawText());
 ```
 
 ## Notes
-- JsonElement can be tied to the lifetime of a JsonDocument when obtained via JsonDocument.Parse; do not dispose the JsonDocument while the JsonElement is still in use. If you need a long-lived, independent representation, consider storing the raw JSON string alongside or serializing the JsonElement immediately.
-- The Metric property is intentionally opaque — consumers must know the expected JSON schema for a given producer/System value before attempting to deserialize into a typed object.
-- The record is immutable and its equality semantics include all properties (Id, System, Metric, CreatedAt).
+- JsonElement is a struct that references an underlying JsonDocument; preserve the underlying document (or copy the payload via GetRawText) if you plan to access the JSON beyond the immediate call.
+- Deserialization requires a concrete target type that matches the payload shape; when in doubt, treat Metric as opaque and operate on GetRawText()/JsonElement APIs, or deserialize into a domain-specific DTO when a schema is known.
 
 ---

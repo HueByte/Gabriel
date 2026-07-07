@@ -3,26 +3,17 @@
 > **File:** `src/api/Gabriel.Infrastructure/Identity/ApplicationUser.cs`  
 > **Kind:** class
 
-Represents an application user record persisted by ASP.NET Core Identity using a Guid primary key. In addition to the standard Identity fields, this type stores per-user preferences for a chat provider and a provider-specific model identifier; set these when a user should override the global provider/model defaults for their agent interactions.
-
-## Remarks
-Placed in the Infrastructure layer because Identity is a persistence concern while the Core domain only references users by their Guid id. PreferredProvider maps to an IChatProvider.Name (for example "grok") and PreferredModel is the provider's wire-level model identifier (for example "grok-4-latest"). Both properties are nullable: when unset the system falls back to the active default model from configuration. Values are persisted as plain strings — the model catalog/service is responsible for handling stale or unknown identifiers and performing any fallback behavior.
-
-## Example
 ```csharp
-// Create a user and set per-user model preferences. Persist using your Identity UserManager/DbContext.
-var user = new ApplicationUser
-{
-    Id = Guid.NewGuid(),
-    UserName = "alice@example.com",
-    PreferredProvider = "grok",
-    PreferredModel = "grok-4-latest"
-};
-
-// e.g. await userManager.CreateAsync(user, "Secret123!");
+public class ApplicationUser : IdentityUser<Guid>
 ```
 
+
+ApplicationUser represents a persistence-backed user identity with a Guid key, extending `IdentityUser<Guid>` so the domain can reference users by ID consistently. It adds per-user model selection via nullable PreferredProvider and PreferredModel, enabling runtime customization while Core remains agnostic to specific providers or models.
+
+## Remarks
+ApplicationUser serves as a thin persistence contract for user preferences. By storing the selected provider and model as plain strings, the system can reference a central catalog and gracefully fall back to the default active model when a user has not chosen one. This design keeps identity concerns in Infrastructure and prevents Core from needing knowledge of provider specifics, while still allowing per-user customization.
+
 ## Notes
-- Both PreferredProvider and PreferredModel are nullable — code that selects a provider/model should treat null as "use configured default."  
-- These properties are stored as plain strings and are not validated against available providers/models here; lookups and fallbacks happen at provider/catalog runtime.  
-- The class inherits `IdentityUser<Guid>`, so the primary key is a Guid to align with the domain's identifier strategy.
+- When PreferredProvider or PreferredModel is null, the system falls back to the default active provider/model as determined by configuration (Providers:*:Models with IsActive = true).
+- Because these properties are plain strings, validate against the model catalog to avoid stale references; changes to provider names or model identifiers should align with catalog data.
+- There is no strict foreign-key constraint here by design, which keeps identity/persistence decoupled from provider-specific details.

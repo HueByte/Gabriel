@@ -8,22 +8,12 @@ public static class DependencyInjection
 ```
 
 
-DependencyInjection is the composition root for Gabriel.Engine. Its AddEngineServices extension wires the engine's configuration, services, and tooling into the DI container, centralizing startup bindings for agents, prompts, metrics, and tools. Use it during application startup to ensure the engine components are available to agents and tools in a consistent, testable way while infrastructure concerns are wired separately.
+DependencyInjection is a static helper that wires the Gabriel engine’s services into the host application's DI container. AddEngineServices reads configuration sections into option objects and registers the engine's core components—agent service, tool registry, token estimator, metric recorder, per-request tool context, prompt system, Gabriel sequence, and the tool set—each with appropriate lifetimes. This centralizes all infrastructure bindings so a host can enable the engine with a single, repeatable call during startup.
 
 ## Remarks
-- All engine-related services are registered with appropriate lifetimes: singletons cover stateless registries and configuration-driven components, while scoped services (like IToolExecutionContext and IGabrielSequenceService) support per-turn work.
-- Centralizing bindings here enforces a clear separation between engine concerns and infrastructure wiring, making it easier to swap implementations (for testing or customization) without touching call sites.
-- Infrastructure providers (e.g., web search, docs lookup) are wired by Gabriel.Infrastructure.AddInfrastructure elsewhere, keeping engine wiring decoupled from infrastructure concerns.
-
-## Example
-```csharp
-// Startup-level wiring
-public void ConfigureServices(IServiceCollection services)
-{
-    services.AddEngineServices(Configuration);
-}
-```
+This extension encapsulates complex DI wiring behind a single, reusable bootstrap point, reducing boilerplate and ensuring consistent discovery and lifetime boundaries for engine parts. It wires together per-turn state (IToolExecutionContext), global registries (IPromptRegistry, ISystemPromptBuilder, IResponsePostProcessor), and the tool ecosystem (ITool implementations resolved via ToolRegistry). Note that the metric recorder is registered as a singleton but writes via a scoped repository by creating a scope on each operation, so instrumented code should execute within a proper DI scope.
 
 ## Notes
-- Tools registered here are scoped; avoid capturing scoped services in singletons.
-- Ensure infrastructure bindings are configured (AddInfrastructure) so tools that depend on external providers resolve correctly.
+- Tools are registered as scoped ITool instances, which means they are created per DI scope (e.g., per request). Consume them inside a scope.
+- The invocation relies on infrastructure providers registered elsewhere (Gabriel.Infrastructure.AddInfrastructure) to supply concrete tooling like WebSearch or DocsLookup.
+- This method should be called during startup to ensure all engine services are available to agents and tools.

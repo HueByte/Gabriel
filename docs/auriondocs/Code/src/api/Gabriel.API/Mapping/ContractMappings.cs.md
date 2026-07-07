@@ -8,24 +8,27 @@ internal static class ContractMappings
 ```
 
 
-Converts domain model objects used by the Gabriel API into their corresponding API contract response DTOs. Use these extension methods when preparing data to send to clients so mapping rules (which include filtering of tool messages, variant selection, and sibling ordering) remain consistent across endpoints.
+ContractMappings provides a concise, centralized set of extension methods that translate domain models into API response DTOs. It handles Projects, ProjectFiles, Conversations, and ContextMetrics by applying a consistent shape, loading related data only when requested, and computing derived fields that the client relies on (for example, the conversation mode name, whether a project is default, and the effective avatar seed).
 
 ## Remarks
-This static helper centralizes mapping logic for Projects, ProjectFiles, Conversations and related types so all endpoints produce the same JSON shape and apply the same filtering rules. Conversation mapping contains non-trivial logic: it optionally omits messages, computes project-related avatar/seed values when a Project is provided, filters tool messages to only those referenced by active assistant variants, and precomputes per-variant sibling lists ordered by CreatedAt so the client can render variant pickers without additional API calls.
+
+By encapsulating this mapping in one place, the domain models remain decoupled from API payloads, and the API surface remains stable even as the internal domain evolves. The ToResponse methods compute derived values (modeName, projectIsDefault, effectiveSeed) and apply filtering rules to messages to match the UI's expectations (e.g., including only active variants and qualifying tool messages). For conversations, the mapping also precomputes per-variant sibling lists to enable a reliable, index-stable variant picker in the client.
 
 ## Example
+
 ```csharp
-// Include files when serializing a project
-var projectResponse = project.ToResponse(includeFiles: true);
+// Minimal example: map a project including its files
+var projectDto = project.ToResponse(includeFiles: true);
+```
 
-// Produce a conversation response including messages and using project metadata
-var conversationResponse = conversation.ToResponse(includeMessages: true, project: project);
-
-// Produce a lightweight conversation listing row (no messages)
-var listRow = conversation.ToResponse(includeMessages: false);
+```csharp
+// Map a conversation with its messages for a given project
+var convDto = conversation.ToResponse(includeMessages: true, project: someProject);
 ```
 
 ## Notes
-- Tool call filtering expects Message.ToolCallsJson to be a JSON array of objects each containing an "id" property; messages for tools are included only if their toolCallId is referenced by an active assistant variant.
-- String matching for tool-call ids uses StringComparer.Ordinal (ordinal, case-sensitive).
-- Sibling lists are grouped by VariantGroupId and ordered by CreatedAt; indexes are stable only if CreatedAt values are stable and comparable.
+
+- ToolMessages: Only tool messages with a non-null ToolCallId that are part of an active tool call are included; ToolCallsJson is parsed to extract IDs. If ToolCallsJson is invalid, this will throw.
+- IncludeFiles: When includeFiles is false, the returned ProjectResponse omits the Files collection entirely (null). This reduces payload but requires the caller to re-fetch if needed.
+- Performance: For conversations with many messages, the mapping builds per-variant sibling lists and filters the messages; this is intended to keep UI behavior consistent but may be non-trivial for large histories.
+- Nulls: Some derived fields (like projectIsDefault, effectiveSeed) are nullable depending on whether a project is supplied.

@@ -3,26 +3,28 @@
 > **File:** `src/api/Gabriel.Engine/Tools/Memory/MemoryRemoveTool.cs`  
 > **Kind:** class
 
-Deletes a previously-saved memory entry by its kebab-case name. Use this tool when an agent (or developer) needs to remove a memory that was stored with memory_save; choose scope="user" to remove a global user-scoped memory or scope="project" to remove a memory associated with the current project. The tool returns a human-readable string indicating success, failure, or any validation/error condition.
+```csharp
+public sealed class MemoryRemoveTool : ITool
+```
+
+
+MemoryRemoveTool deletes a saved memory entry by its kebab-case name. When a user asks to forget something or when a saved memory is found to be stale, use this tool to remove it. It supports two scopes: user (memories that apply across every project) and project (memories saved for the current project). For project-scoped deletions, the tool reads the current conversation's project context and then delegates the removal to the memory store. The call returns a friendly message indicating whether a memory was removed or none was found.
 
 ## Remarks
-MemoryRemoveTool is a thin wrapper around IMemoryService for the specific delete-by-name scenario exposed to the agent tooling system. It performs argument JSON deserialization and validation, enforces the required scope semantics (project scope requires the execution context to be attached to a project), and converts the boolean removal result into a user-friendly message. It intentionally returns error/result messages as plain strings (rather than throwing) so the calling agent can surface those messages directly.
+MemoryRemoveTool encapsulates the deletion of memories behind a simple, scope-aware interface. By decoupling the memory store (IMemoryService) from how the command is invoked (ITool), it enables forgetting to be driven by higher-level user intents while preserving project scoping rules via the execution context. This separation also ensures error conditions (such as attempting project-scoped removal when no project is attached) are surfaced as clear, actionable messages rather than exceptions.
 
 ## Example
 ```csharp
-// Call ExecuteAsync with JSON matching the ParametersJsonSchema.
-var tool = new MemoryRemoveTool(memoriesService, executionContext);
-string argsJson = "{ \"scope\": \"user\", \"name\": \"favorite-editor\" }";
-string result = await tool.ExecuteAsync(argsJson, CancellationToken.None);
-// result will be one of:
-// "Removed user-scope memory 'favorite-editor'."
-// "No user-scope memory found named 'favorite-editor'."
-// or an error string for invalid input or missing project context.
+// Remove a user-scoped memory named "my-memory"
+var json = "{\"scope\":\"user\",\"name\":\"my-memory\"}";
+var result = await memoryRemoveTool.ExecuteAsync(json, CancellationToken.None);
+
+// Remove a project-scoped memory named "weekly-standup" (requires an attached project in context)
+var json2 = "{\"scope\":\"project\",\"name\":\"weekly-standup\"}";
+var result2 = await memoryRemoveTool.ExecuteAsync(json2, cancellationToken);
 ```
 
 ## Notes
-- The "name" must be provided (non-empty); the tool will return "Error: name is required." for blank names.
-- Using scope="project" requires an attached project (ItoolExecutionContext.ProjectId). If absent, the tool returns an explanatory error string rather than attempting deletion.
-- Scope comparison is case-insensitive (e.g. "Project" or "project" are accepted).
-- The tool deserializes arguments using System.Text.Json with Web defaults; malformed JSON results in an error message containing the serializer exception text.
-- The method returns readable status messages rather than structured results; callers that need machine-readable responses should parse or wrap these messages appropriately.
+- The command takes two JSON properties: scope ("user" or "project") and name (the kebab-case slug of the entry to remove).
+- If scope is "project" but the current conversation isn’t attached to a project, the tool returns an error message instead of performing deletion.
+- A non-empty name is required; empty or whitespace-only values yield an error response.

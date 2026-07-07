@@ -3,29 +3,28 @@
 > **File:** `src/api/Gabriel.Core/Exceptions/NotFoundException.cs`  
 > **Kind:** class
 
-Thrown when a requested aggregate or resource cannot be found. Use this exception from application or domain logic to indicate a missing entity; API layers or middleware can map it to an HTTP 404 response.
+```csharp
+public class NotFoundException : Exception
+```
+
+
+Thrown when a requested aggregate is missing; this exception signals a not-found condition in the domain and is intended to translate to an HTTP 404 in API responses. Throw it during lookups when a concrete entity cannot be located, instead of returning null or a generic error, so upper layers can consistently map the outcome to a not-found response. It also carries contextual data—Resource and Key—that identify what was missed.
 
 ## Remarks
-Holds the resource name and the lookup key so callers, loggers, and error handlers can produce consistent messages and structured diagnostics. The exception message is pre-formatted from the Resource and Key properties, and the properties are read-only so handlers can rely on them without further inspection.
+NotFoundException serves as a domain-level signal that a particular resource was not found, decoupling not-found handling from transport concerns. By carrying Resource and Key, it provides actionable context for logs and clients while enabling centralized exception handling to translate the condition to a 404 consistently across endpoints.
 
 ## Example
 ```csharp
-// In a service method
-if (user == null)
-    throw new NotFoundException("User", userId);
+public Order GetOrder(string orderId)
+{
+    var order = _orderRepository.Find(orderId);
+    if (order == null)
+        throw new NotFoundException("Order", orderId);
 
-// In ASP.NET Core middleware or controller advice
-try
-{
-    // call into service
-}
-catch (NotFoundException ex)
-{
-    // translate to 404 with a helpful message or structured body
-    return Results.NotFound(new { resource = ex.Resource, key = ex.Key, message = ex.Message });
+    return order;
 }
 ```
 
 ## Notes
-- The exception formats the message using the Key object's string representation; if Key is null the interpolated value becomes an empty string.
-- There is no constructor overload for inner exceptions or a deserialization constructor; add or wrap if you need to preserve an inner exception or support binary serialization.
+- The exception's message is constructed from Resource and Key (e.g. "Order with key '123' was not found."); be mindful of leaking sensitive information in logs or API responses by sanitizing the Key where appropriate.
+- Use NotFoundException strictly for missing-resource scenarios; for permissions or other failures, prefer a different exception type and HTTP semantics.

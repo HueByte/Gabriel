@@ -3,20 +3,8 @@
 > **File:** `prototype/run.js`  
 > **Kind:** file
 
-A small orchestration script that regenerates the frames file and then plays it. Run this when you want a fresh frames.json produced by generate.js (optionally passing a pattern name) and immediately execute play.js to play the generated frames.
+
+Runs two Node.js scripts in sequence to regenerate and play a frames sequence. It first executes generate.js with an optional patternName argument to create a fresh frames.json, then executes play.js to play the generated frames. If either step exits with a non-zero status, run terminates with that status, ensuring a failure at generation or playback stops the workflow.
 
 ## Remarks
-This script delegates work to two sibling scripts in the same directory: generate.js and play.js. It runs them synchronously using child_process.spawnSync and propagates any non-zero exit code from the children to the current process, so callers can rely on its exit status to detect failures. Standard input/output/stderr are inherited, so both scripts write directly to the terminal.
-
-## Example
-```javascript
-// regenerate frames for the "spiral" pattern then play the result
-// run from the repository (or the directory containing prototype/)
-// shell:
-//   node prototype/run.js spiral
-```
-
-## Notes
-- Only generate.js receives any CLI arguments you pass to run.js; play.js is invoked without arguments.
-- The script uses synchronous child processes (spawnSync) and will block until each child completes; its exit code mirrors the first non-zero child exit status.
-- Because stdio is inherited, output from the child scripts appears directly in the caller's terminal (no buffering by this wrapper).
+Acts as a small orchestration utility that binds generation and playback into a single command. By using `__dirname` to locate the scripts and `spawnSync` with `stdio: 'inherit'`, it preserves the user’s console I/O and ensures sequential progression. This separation allows developers to reuse `generate.js` and `play.js` independently while offering a convenient default workflow.

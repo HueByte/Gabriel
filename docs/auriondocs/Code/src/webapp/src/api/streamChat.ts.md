@@ -14,104 +14,105 @@
 ---
 
 ## StreamChatOptions
-
 > **File:** `src/webapp/src/api/streamChat.ts`  
 > **Kind:** interface
 
-A small options bag for stream-based chat requests that allows the caller to provide an AbortSignal to cancel the underlying request or stream. Use this when you need to be able to abort or time out an in-progress streaming chat operation from the caller side.
+```typescript
+export interface StreamChatOptions
+```
+
+
+StreamChatOptions defines a small, cancellable configuration contract for stream chat operations. It currently exposes an optional signal property (AbortSignal) that enables callers to cancel in-flight operations via an AbortController.
 
 ## Remarks
-StreamChatOptions is intentionally minimal: it exists to surface cancellation control (AbortSignal) to the streaming chat API without coupling the API to a specific cancellation implementation. Callers typically create an AbortController and pass its signal here so the stream can be terminated early.
+By encapsulating cancellation behind this interface, the API surface remains focused on chat semantics while reusing standard browser and Node cancellation patterns. Implementations should listen to the AbortSignal and terminate any ongoing work promptly, then release resources. This approach also makes cancellation composable with other APIs that accept AbortSignal, allowing a single controller to govern multiple related operations.
 
 ## Example
 ```typescript
-// create a controller and start the streaming chat request
 const controller = new AbortController();
 const options: StreamChatOptions = { signal: controller.signal };
 
-// start streaming (pseudo call — replace with actual API function)
-const stream = await streamChat(prompt, options);
+// Example usage: a chat API that accepts StreamChatOptions
+await startStreamChatConnection(options);
 
-// later, cancel the stream if needed
 controller.abort();
 ```
 
 ## Notes
-- Aborting the provided signal will typically stop the underlying fetch/stream; ensure any cleanup logic on the consumer side handles partial data.
-- Do not reuse the same AbortSignal across unrelated requests if you need independent cancellation; aborting it cancels all consumers sharing that signal.
-- AbortSignal is a Web API (also available in modern Node.js). In environments without AbortController/AbortSignal, provide a compatible polyfill or guard usage.
+- Some API calls may ignore the signal; always verify the specific API supports cancellation.
+- Aborting usually raises a cancellation error; handle AbortError and perform any necessary cleanup.
+- If signal is omitted, the operation will run to completion unless another cancellation mechanism is triggered.
 
 ---
 
 ## AgentEvent
-
 > **File:** `src/webapp/src/api/streamChat.ts`  
-> **Kind:** type
+> **Kind:** type alias
 
-Represents events emitted by the server during a streamed chat turn. Consumers of the chat stream should inspect AgentEvent values to react to lifecycle milestones; in particular the 'userMessagePersisted' variant is emitted as the first event of every send-driven turn and carries the real database id for the just-persisted user message so a client can replace its optimistic local id without performing a follow-up GET.
+```typescript
+export type AgentEvent =
+  
+  
+  
+  
+  |
+```
+
+
+AgentEvent is a TypeScript type alias that models the events emitted by the streaming chat API during a send-driven turn. It is a discriminated union where the first and primary variant signals the persistence of the user's message and provides the real database identifier, enabling the client to reconcile its optimistic UI state with the server state without an extra fetch.
 
 ## Remarks
-This union exists to make server-driven lifecycle signals explicit to stream consumers. By sending a dedicated 'userMessagePersisted' event at the start of a send-driven turn the server enables clients to reconcile optimistic UI state (temporary message ids) with canonical ids immediately, reducing round-trips and avoiding extra GETs. It is intentionally emitted only for send-driven turns (not for regenerate flows), so clients should not rely on this event during regeneration.
+AgentEvent serves as the outbound contract for streaming updates related to a user’s message lifecycle. It isolates the moment when the server has committed a user message from other progress updates, allowing the UI to replace temporary identifiers (like tmp-xxxxx) with the server-assigned real IDs in a single, deterministic step. This avoids an unnecessary follow-up GET of the conversation and helps keep the client state in sync with the backend as messages are processed.
 
 ## Example
 ```typescript
-function handleAgentEvent(event: AgentEvent) {
-  if (event.type === 'userMessagePersisted') {
-    // The event includes the persisted message's DB id; use that value to
-    // replace the client's optimistic id without issuing another GET.
-    // Access the concrete id field here according to the server's payload.
+function handleEvent(e: AgentEvent) {
+  if (e.type === 'userMessagePersisted') {
+    // Reconcile the client's optimistic message entry with the server-provided real ID
+    // (exact field names depend on the concrete payload shape)
   }
 }
 ```
 
 ## Notes
-- Emitted only for send-driven turns (not for regenerate); make no assumptions that it will appear during a regenerate flow.
-- Because this event is sent first for a send-driven turn, handle it before processing later events in the same turn to avoid temporary-id mismatches.
+- The exact payload shape carried by userMessagePersisted (beyond carrying the real DB id) is not fully visible in the snippet; inspect the full type definition to rely on the correct property names.
+- Since AgentEvent is a discriminated union, handle all variants explicitly (or provide a safe default) to avoid runtime surprises when new events are added.
+- This event marks the first signal in a send-driven turn; design UI state updates to wait for this acknowledgement before assuming server-side persistence guarantees for the new message.
 
 ---
 
 ## doFetch
-
 > **File:** `src/webapp/src/api/streamChat.ts`  
 > **Kind:** function
 
-Sends a POST request to the given URL, optionally JSON-encoding the provided body, including credentials (cookies), and requesting an SSE-compatible response via the Accept header. Use this when initiating server-sent event streams or other POST-based streaming endpoints where cookies must be sent even if the API and webapp might end up on different origins.
-
-## Remarks
-This helper centralizes the fetch configuration required for streaming endpoints: it forces method to POST, sets credentials: 'include' so browser cookies travel with the request (avoiding stale-cookie 401s in cross-origin deployments), and sets Accept: 'text/event-stream' so the server can return an SSE stream. It only attaches a Content-Type header and JSON-encodes the body when the caller passes a non-null body value; callers should pass null to indicate an intentional no-body request.
-
-## Example
 ```typescript
-const controller = new AbortController();
-
-// Start a streaming POST with a JSON body
-doFetch('/api/stream', { prompt: 'Hello' }, controller.signal)
-  .then(res => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    // Read streamed bytes from res.body (ReadableStream) or handle SSE server-side framing
-    const reader = res.body?.getReader();
-    // ...consume the stream
-  })
-  .catch(err => {
-    if (err.name === 'AbortError') console.log('Fetch aborted');
-    else console.error(err);
-  });
-
-// Omit body entirely (regen/no-body) – pass null to avoid sending Content-Type
-doFetch('/api/stream', null);
+function doFetch(url: string, body: unknown, signal?: AbortSignal): Promise<Response>
 ```
 
-## Notes
-- Pass null to indicate "no body"; the function uses a strict null check so other falsy values (e.g. undefined) will cause a Content-Type header to be sent even if JSON.stringify results in undefined.
-- JSON.stringify may throw for objects with circular references; handle or sanitize input before calling.
-- The function always uses POST; it is not suitable for GET requests.
-- Because credentials are included, cookies will be sent to the target origin—ensure this is intended and secure for your deployment.
+**Parameters:**
 
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `url` | `string` | — |
+| `body` | `unknown` | — |
+| `signal` | `AbortSignal` | — |
+
+**Returns:** `Promise<Response>`
+
+
+doFetch is a small, opinionated wrapper around fetch that performs a POST with an optional JSON body while reliably carrying cookies across origins and requesting an SSE stream. Use it when you need to start a server-sent events workflow that relies on cookie-based authentication and a JSON payload, rather than duplicating the boilerplate headers and body handling every time.
+
+## Remarks
+It centralizes the cross-origin cookie handshake and the streaming-oriented headers, so callers don't have to repeat credentials and Content-Type logic. It isolates the decision to use 'application/json' only when a body is provided and to request text/event-stream, making future changes (e.g., switching to a different payload strategy) easier to apply in one place. In the bigger picture, it complements other API helpers by standardizing the startup of streaming requests that need authentication cookies.
+
+## Notes
+- Not a stream parser: the function returns a Response; you must read the body yourself (e.g., via resp.body.getReader() or resp.text()) to handle the SSE.
+- Ensure body is JSON-serializable; non-serializable values may cause JSON.stringify to throw.
+- Cross-origin usage requires server-side support for credentials (Access-Control-Allow-Credentials) and the appropriate origin; otherwise the request may fail with an auth error.
 
 ---
 
 ## streamChat
-
 > **File:** `src/webapp/src/api/streamChat.ts`  
 > **Kind:** function
 
@@ -123,76 +124,69 @@ export function streamChat(
 ```
 
 
-Sends the provided content for the conversation identified by conversationId and allows the caller to supply an AbortSignal to cancel the operation. Reach for streamChat when you need to initiate a chat-related request scoped to a specific conversation and optionally make that request abortable from the caller.
+Streams a chat message into the specified conversation by delivering the content progressively as it becomes available. Use this when you want real-time feedback or long-form messages to render incrementally, rather than waiting for the complete payload before showing anything to the user.
 
 ## Remarks
-This API surface centralizes chat requests that are tied to a conversation id. The only explicit option exposed is an AbortSignal (via StreamChatOptions.signal), so callers are expected to manage cancellation and timeouts using AbortController.
-
-## Example
-```typescript
-// Start a chat request and cancel it after 5 seconds
-const controller = new AbortController();
-streamChat("conversation-123", "Hello, are you there?", { signal: controller.signal });
-setTimeout(() => controller.abort(), 5000);
-```
+streamChat serves as a higher-level abstraction over the underlying streaming transport used by the web app. It encapsulates the interaction with the chat backend behind a stable API, allowing UI components to render as content arrives. The optional StreamChatOptions parameter configures streaming behavior (for example, chunking strategy or callbacks) without leaking transport details to callers. This separation helps keep the chat rendering responsive and consistent across different backends.
 
 ## Notes
-- Passing an already-aborted signal will typically cause an immediate cancellation; create a fresh AbortController per logical operation.
-- Aborting the signal requests cancellation on the client side; the server may still observe or finish processing the request depending on how the underlying implementation handles AbortSignal.
-
+- Streaming implies partial, ordered delivery; don't assume the entire message is available in a single payload.
+- Handle mid-stream errors and cancellation gracefully to avoid leaving the UI in an inconsistent state.
 
 ---
 
 ## streamRegenerate
-
 > **File:** `src/webapp/src/api/streamChat.ts`  
 > **Kind:** function
 
-Requests regeneration of a specific message (messageId) within a conversation (conversationId). Use this when you need to re-run or refresh the content for an existing message—typically to ask the chat backend to recreate or update a previously generated assistant message. An optional StreamChatOptions object can carry an AbortSignal to cancel the operation.
+```typescript
+export function streamRegenerate(
+  conversationId: string,
+  messageId: string,
+  opts: StreamChatOptions =
+```
+
+
+Initiates a regeneration of the streaming reply for a specific message within a conversation, allowing a fresh stream to be produced for that message. Provide the conversationId, the target messageId, and optional StreamChatOptions to tailor the streaming session; use this when you want to refresh or redo a previously streamed reply without altering the original message structure.
 
 ## Remarks
-This helper centralizes the client-side initiation of a "regenerate" operation for a Stream-based chat flow and exposes cancellation via AbortSignal. It is intended to be used alongside other stream* helpers in the same module so callers can follow the same consumption and error-handling patterns established by the surrounding API utilities.
+streamRegenerate encapsulates the regeneration workflow behind a simple API boundary. It enables UI layers to request a new stream without implementing back-end regeneration logic themselves, and it relies on the StreamChatOptions type to influence the streaming behavior without exposing internal details.
 
 ## Example
 ```typescript
-// Start a regeneration and allow cancelling it via AbortController
-const controller = new AbortController();
-const opts = { signal: controller.signal };
-// Call the helper (how the result is consumed depends on this project's streaming conventions)
-streamRegenerate('conversation-123', 'message-456', opts);
-// Cancel if needed
-controller.abort();
+streamRegenerate("conversation-42", "message-7", { /* options */ });
 ```
 
-## Notes
-- Ensure the messageId belongs to the provided conversationId; mismatched IDs will likely result in an error from the server.
-- Provide an AbortSignal when you need the ability to cancel network activity; aborting cancels the client-side request but may not undo any server-side changes already committed.
-- The concrete shape of the returned/streamed data and how to consume it is defined by this module's streaming conventions; consult the surrounding stream* helpers or implementation for exact consumption patterns.
 
 ---
 
 ## streamSse
-
 > **File:** `src/webapp/src/api/streamChat.ts`  
 > **Kind:** function
 
-Creates an async generator that opens a Server‑Sent Events (SSE) stream to the given URL and yields each message or chunk produced by the server as it arrives. Reach for this when you need to consume a streaming HTTP response incrementally (for example, processing partial results from a chat/model endpoint) instead of waiting for a single completed response.
+```typescript
+async function* streamSse(
+  url: string,
+  body: unknown,
+  opts: StreamChatOptions =
+```
+
+
+streamSse is an async generator that streams server-sent events from the given URL by sending the provided payload. It yields each event as it arrives, enabling consumers to process a live stream of messages or updates (for example, real-time chat) rather than awaiting a single response.
 
 ## Remarks
-This function provides a low‑level streaming primitive: it hides the mechanics of establishing and reading an SSE connection and exposes an async iterable to the caller. Higher‑level utilities can be built on top of it to aggregate events into messages, handle reconnection logic, or transform streamed payloads.
+Encapsulates the SSE transport lifecycle and keeps transport concerns separate from business logic. By taking a StreamChatOptions, it centralizes streaming configuration (headers, credentials, and other transport-level settings) so higher-level chat code can subscribe to events without managing the low-level fetch/stream boilerplate.
 
 ## Example
 ```typescript
-// Consume the stream incrementally
-for await (const event of streamSse(endpointUrl, { prompt: 'Hello' })) {
-  // `event` is a server-provided chunk/message — handle or accumulate as needed
+// Example usage: consume a live stream of events
+for await (const event of streamSse('https://api.example.com/stream', { roomId: 'room-123' }, { headers: { Authorization: 'Bearer token' } })) {
   console.log('received event:', event);
 }
 ```
 
 ## Notes
-- The stream does not start until the returned async generator is consumed (e.g. with `for await...of` or by calling `.next()`).
-- Network or parsing errors that occur while reading the stream will be thrown from the iterator; wrap iteration in try/catch to handle failures and do any cleanup.
-- Each yielded value corresponds to one server-sent message/chunk — do not assume they represent complete logical messages unless the server guarantees that boundary.
+- Cancellation: break the loop to stop streaming and release resources.
+- Error handling: wrap in try/catch to handle errors emitted by the async iterator.
 
 ---

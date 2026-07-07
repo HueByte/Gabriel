@@ -3,22 +3,25 @@
 > **File:** `src/api/Gabriel.API/Contracts/Sequence/SequenceCatalogResponse.cs`  
 > **Kind:** record
 
-Returns the available identifiers for avatar skin patterns and palettes that the API exposes to clients. Use this response when presenting a picker UI or validating a client's selection; clients receive these string identifiers and send back the chosen identifier in project or conversation PATCH requests.
-
-## Remarks
-This record intentionally exposes plain string identifier lists (Patterns and Palettes) rather than enums so the catalog can evolve without requiring client regeneration. The server treats these lists as the authoritative catalog and validates incoming selections against them before persisting.
-
-## Example
 ```csharp
-var response = new SequenceCatalogResponse(
-    Patterns: new[] { "striped", "dotted", "solid" },
-    Palettes: new[] { "summer", "monochrome", "neon" }
-);
-
-return Ok(response); // returned from a controller action to populate a client picker
+public record SequenceCatalogResponse(
+    IReadOnlyList<string> Patterns,
+    IReadOnlyList<string> Palettes)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| [`Patterns`](../../../Gabriel.Engine/Sequence/Patterns.cs.md) | `IReadOnlyList<string>` | — |
+| `Palettes` | `IReadOnlyList<string>` | — |
+
+
+SequenceCatalogResponse is a simple data transfer contract that exposes the authoritative lists of selectable avatar skin options. It provides two separate read-only collections: one for available pattern identifiers and one for available palette identifiers. Clients fetch this object to render the skin-picker UI and present valid options to users, while PATCH requests carry the chosen pattern and palette back to the server for validation and persistence on the entity. By using distinct string arrays rather than enums, the catalog can grow over time without forcing client regeneration, preserving backward compatibility as new identifiers are added.
+
+## Remarks
+The separation into two string lists decouples the client from a fixed, compile-time enum, enabling dynamic catalog updates driven by the server. This design ensures that validation and storage of a user’s selection occur against a single, authoritative source of truth and minimizes client-side coupling to server-side catalog evolution.
+
 ## Notes
-- The strings are identifiers/keys, not localized display names; the client should map them to user-facing labels or images.
-- The record holds `IReadOnlyList<T>`, but the underlying collection can still be mutable if a mutable list is passed; prefer immutable/read-only collections when constructing this record to prevent accidental mutation.
-- Clients must not assume semantic meaning or ordering in the lists — treat them as an authoritative set for validation only.
+- Return lists should be non-null (preferably empty) to simplify client handling and avoid null checks.
+- The client must treat these lists as the authoritative source for valid identifiers when showcasing options and validating PATCH payloads; changes to the catalog are reflected only when this symbol is refreshed from the API.

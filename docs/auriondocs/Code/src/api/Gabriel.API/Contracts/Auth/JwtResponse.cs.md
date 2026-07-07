@@ -3,26 +3,48 @@
 > **File:** `src/api/Gabriel.API/Contracts/Auth/JwtResponse.cs`  
 > **Kind:** record
 
-A small immutable DTO returned by the authentication endpoints when issuing tokens. Use this type to receive both the short-lived signed access token (JWT) and the longer-lived opaque refresh token together with their expiration timestamps — for example, as the response body from POST /api/auth/jwt and POST /api/auth/jwt/refresh.
+```csharp
+public record JwtResponse(
+    string AccessToken,
+    DateTimeOffset AccessExpiresAt,
+    string RefreshToken,
+    DateTimeOffset RefreshExpiresAt)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `AccessToken` | `string` | — |
+| `AccessExpiresAt` | `DateTimeOffset` | — |
+| [`RefreshToken`](../../../Gabriel.Core/Identity/RefreshToken.cs.md) | `string` | — |
+| `RefreshExpiresAt` | `DateTimeOffset` | — |
+
+
+JwtResponse models the authentication response returned by POST /api/auth/jwt and POST /api/auth/jwt/refresh. It carries the short-lived access token (a signed JWT) and its expiration, plus a refresh token (an opaque high-entropy string) and its expiration, enabling the client to authorize requests and to obtain new tokens when the access token expires.
 
 ## Remarks
-This record cleanly separates the two-token model: an access token meant for frequent use and inspection (it is a JWT and can be decoded for claims), and a refresh token meant only for exchanging for new access tokens. The API rotates the refresh token on each refresh call, so clients must replace their stored refresh token with the returned value. Treat refresh tokens as high-value secrets and store them accordingly (server-side or a secure client-side store).
+JwtResponse is a simple, immutable data contract that represents tokens exchanged during login and refresh flows. The access token is intended for bearer authentication and can be decoded to inspect claims, while the refresh token should be stored securely and rotated on every refresh to mitigate replay risks.
 
 ## Example
 ```csharp
-// Deserialize a JwtResponse from an HTTP response (System.Text.Json)
-using var response = await httpClient.PostAsync("/api/auth/jwt", content);
-response.EnsureSuccessStatusCode();
-var jwtResponse = await JsonSerializer.DeserializeAsync<JwtResponse>(await response.Content.ReadAsStreamAsync());
+// Example: after a successful login
+JwtResponse tokens = await httpClient.PostAsJsonAsync("/api/auth/jwt", credentials)
+                                   .ContinueWith(t => t.Result.Content.ReadFromJsonAsync<JwtResponse>())
+                                   .Unwrap();
 
-// Use the access token for an authorized request
-httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwtResponse.AccessToken);
+// Use the access token for authenticated requests
+httpClient.DefaultRequestHeaders.Authorization =
+    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokens.AccessToken);
 
-// When access token is expired or close to expiry, exchange the refresh token
-// and replace stored refresh token with jwtResponse.RefreshToken from the refresh response.
+// Refresh when the access token expires
+JwtResponse refreshed = await httpClient.PostAsJsonAsync("/jwt/refresh",
+                                new { RefreshToken = tokens.RefreshToken })
+                                      .ContinueWith(t => t.Result.Content.ReadFromJsonAsync<JwtResponse>())
+                                      .Unwrap();
 ```
 
 ## Notes
-- Do not log token values or include them in unsecured storage or URLs.
-- Account for clock skew when comparing AccessExpiresAt/RefreshExpiresAt to DateTimeOffset.UtcNow.
-- Because refresh tokens are rotated on refresh, always update the stored refresh token atomically after a successful refresh call; losing the new token may require re-authentication.
+- Do not log or expose AccessToken or RefreshToken; treat tokens as sensitive information.
+- AccessToken is short-lived; the refresh token is rotated on every refresh call to reduce replay risk; store the refresh token securely.
+- If tokens are compromised, revoke and reissue tokens through the server-side authentication flow.

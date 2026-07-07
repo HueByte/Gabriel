@@ -8,12 +8,31 @@ public sealed partial class ColorConvertTool : ITool
 ```
 
 
-Convert a color between hex, rgb(), and hsl() notations. A pure function with no I/O or dependencies, it centralizes the parsing and color-model conversions so callers don’t reimplement RGB↔HSL math or hex formatting. It accepts hex forms (#rgb, #rgba, #rrggbb, #rrggbbaa), rgb()/rgba(), or hsl()/hsla(), preserves the alpha channel, and either returns all three representations when 'to' is omitted or a single target notation when 'to' is provided. Not intended for named colors like 'red'.
+Converts a color value between hex, rgb(), and hsl() notations (alpha preserved). Reach for this tool whenever you need a correct, tested conversion between those textual color formats instead of hand-implementing channel math or ad-hoc parsing; it accepts hex (#rgb, #rgba, #rrggbb, #rrggbbaa), rgb()/rgba(), and hsl()/hsla() inputs and can return a single requested notation or all three.
 
 ## Remarks
-Color conversion logic is isolated behind a stable API, reducing duplication and subtle bugs across tools that consume color data. Because the function is pure, the same input yields the same output with no side effects, which makes it straightforward to unit-test and reason about. It reports issues as textual errors (e.g., invalid JSON or unsupported 'to') rather than throwing exceptions, which is convenient for scripting and CLI-like usage.
+This class centralizes the fiddly parsing and channel-math for RGB↔HSL and provides a pure, deterministic conversion surface with no I/O. It validates input JSON and the color string (including a 200-character max), normalizes the optional `to` target to one of "hex", "rgb", or "hsl", and preserves any alpha channel found in the source. When executed via ExecuteAsync it catches parsing/validation errors (ColorException) and returns an error message string rather than throwing, and the method returns a completed Task (Task.FromResult) for immediate results.
+
+## Example
+```csharp
+// Request all three formats
+var argsAll = "{ \"value\": \"#ff8800\" }";
+var allResult = await tool.ExecuteAsync(argsAll, CancellationToken.None);
+// allResult => "hex: #ff8800\nrgb: rgb(255, 136, 0)\nhsl: hsl(30, 100%, 50%)"
+
+// Request a single target format
+var argsHex = "{ \"value\": \"rgb(255, 136, 0)\", \"to\": \"hex\" }";
+var hexResult = await tool.ExecuteAsync(argsHex, CancellationToken.None);
+// hexResult => "rgb(255, 136, 0) → #ff8800"
+
+// Invalid input returns an error string (not an exception) from ExecuteAsync
+var bad = "{ \"value\": \"not-a-color\" }";
+var err = await tool.ExecuteAsync(bad, CancellationToken.None);
+// err => "Error: ..."
+```
 
 ## Notes
-- Preserves alpha channel across conversions; an input with alpha (#rrggbbaa or rgba) yields outputs that also reflect alpha.
-- Invalid inputs produce an error string starting with 'Error:' rather than throwing; callers should check for this pattern.
-- Validation enforces a maximum value length of 200 characters and requires a non-empty 'value' string.
+- The JSON argument must include a string property `value`; missing or non-string `value` yields a ColorException (reported as an "Error: ..." string by ExecuteAsync).
+- `to` is optional; when present it must be the string "hex", "rgb", or "hsl" (case-insensitive). Any other value triggers validation failure.
+- `value` is limited to 200 characters (MaxValueLength) to guard against excessively long inputs.
+- Named CSS colors (e.g. "red") are not supported; only hex, rgb(a), and hsl(a) textual forms are recognized.

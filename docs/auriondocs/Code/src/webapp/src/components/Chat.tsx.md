@@ -30,178 +30,151 @@
 ---
 
 ## ChatProps
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** interface
 
-Defines the properties accepted by the Chat component — use this interface when rendering or wrapping the Chat component so the parent can supply conversation identity, avatar determinism, optional palette overrides, and lifecycle callbacks (conversation loaded/missing, busy state, and message-sent notifications).
+```typescript
+interface ChatProps
+```
+
+
+ChatProps defines the props contract for the Chat component. It bundles the per-conversation identity (conversationId), a deterministic avatar appearance (avatarSeed) and an optional color override (paletteStops) to align the indicator with the active Gabriel Sequence, plus optional callbacks to surface key events to the parent (onMessageSent, onBusyChange, onConversationLoaded, onConversationMissing). Use this interface whenever you render Chat.tsx to ensure consistent visuals and to translate user actions and conversation state into the surrounding app state.
 
 ## Remarks
-ChatProps centralizes the inputs and callbacks a parent needs to coordinate a single conversation view. It keeps UI concerns (conversationId, avatarSeed, optional paletteStops) separate from lifecycle/interaction concerns (onConversationLoaded, onConversationMissing, onMessageSent, onBusyChange). Notably, avatarSeed is used to produce a deterministic thinking-pulse animation and paletteStops — when provided by the server — will override the seed-derived colors so the indicator reflects server-driven visuals.
+ChatProps acts as a lightweight boundary between the UI layer and the data/flow logic of a conversation. It preserves determinism in the avatar visuals through avatarSeed, enabling the same thinking-pulse pattern to render across renders and tab switches. PaletteStops let the parent drive color theming to match the actual conversation, while the callbacks decouple the Chat component from navigation and data-fetch concerns, reducing duplication and improving testability.
 
 ## Example
 ```typescript
-import React from 'react';
-import Chat from './Chat';
-import { useNavigate } from 'react-router-dom';
+import type { ChatProps } from './Chat';
+const exampleProps: ChatProps = {
+  conversationId: 'conv-123',
+  avatarSeed: 42,
+  paletteStops: null,
+  onMessageSent: () => { /* handle post-send */ },
+  onBusyChange: (busy) => console.log('Chat busy:', busy),
+  onConversationLoaded: (conv) => { console.log('Conversation loaded', conv); },
+  onConversationMissing: () => { console.log('Conversation was deleted'); },
+};
 
-function ConversationPage({ id }: { id: string }) {
-  const navigate = useNavigate();
-
-  return (
-    <Chat
-      conversationId={id}
-      avatarSeed={42}
-      paletteStops={null}
-      onConversationLoaded={(conv) => {
-        // pick up server-provided avatar seed or other metadata
-        console.log('conversation loaded', conv.id);
-      }}
-      onConversationMissing={() => {
-        // conversation deleted elsewhere — go back to list
-        navigate('/conversations');
-      }}
-      onBusyChange={(busy) => {
-        // reflect busy state in parent UI
-        console.log('chat busy?', busy);
-      }}
-      onMessageSent={() => {
-        // scroll, analytics, etc.
-        console.log('message sent');
-      }}
-    />
-  );
-}
+// Usage example
+// <Chat {...exampleProps} />
 ```
 
 ## Notes
-- paletteStops can be undefined or null; when absent the component falls back to an avatarSeed-derived palette.
-- onConversationLoaded is fired once per conversation switch when metadata becomes available — do not expect it to be called on every render.
-- onConversationMissing is specifically emitted when the initial history fetch returns a 404 (conversation deleted); handle navigation or cleanup accordingly.
+- paletteStops is optional and, if null or undefined, the avatar colors derive from avatarSeed with seed-based defaults.
+- avatarSeed should remain stable for a given conversation to preserve a deterministic visual rhythm.
+- onConversationLoaded fires when conversation metadata finishes loading after a switch; keep its handler idempotent and inexpensive.
 
 ---
 
 ## EntryActions
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** interface
 
-Represents the set of callbacks and a simple busy flag that a chat-entry component expects to receive from its parent. Use this interface when wiring per-message controls (delete, regenerate, switch variant, remember) so the entry UI can invoke standardized handlers and reflect an in-progress state.
-
-## Remarks
-This interface decouples entry-level UI from the implementation of those actions by centralizing the handler signatures. A parent controller (for example, a chat container) implements these callbacks and passes them down to each message/entry component, allowing consistent behavior, easier testing, and a single place to manage side effects and loading state.
-
-## Example
 ```typescript
-const actions: EntryActions = {
-  busy: false,
-  onDelete: (messageId) => {
-    // remove message with id
-  },
-  onRegenerate: (messageId) => {
-    // trigger message regeneration
-  },
-  onVariantSwitch: (targetId) => {
-    // switch the displayed variant for the message
-  },
-  onRemember: (messageId) => {
-    // mark message as remembered/saved
-  },
-};
-
-// Passing to a chat entry component
-// <ChatEntry id={msg.id} text={msg.text} actions={actions} />
+interface EntryActions
 ```
 
+
+EntryActions defines the per-entry action surface used by the chat UI. It exposes a busy flag and four callbacks for a specific message: onDelete(messageId), onRegenerate(messageId), onVariantSwitch(targetId), and onRemember(messageId). This interface is intended to be passed to components rendering per-message controls, enabling the UI to trigger business logic without depending on concrete implementations.
+
+## Remarks
+By encapsulating these actions behind a single interface, the UI remains decoupled from how deletion, regeneration, variant switching, or remembering are implemented. This makes components easily testable and swappable, as different environments can provide different action handlers while preserving the same contract. The targetId in onVariantSwitch signals that variant changes may refer to a different entity than the message itself, supporting multi-variant entries.
+
 ## Notes
-- All handlers expect a string identifier for the target message; callers should pass the correct message id.
-- The busy flag is a simple signal for the UI to disable controls — the parent must toggle it around async operations.
-- Consider memoizing these handlers (or the whole actions object) to avoid unnecessary re-renders of many entry components.
+- busy should gate interactions; disable controls while an operation is in progress to avoid race conditions.
+- Callbacks return void; side effects are handled by the implementation. If asynchronous behavior is required, manage it outside this interface.
+- Ensure IDs (messageId/targetId) align with the app's identity model to prevent referencing non-existent entities.
 
 ---
 
 ## ChatEntry
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
-> **Kind:** type
+> **Kind:** type alias
 
-Represents a single entry in the chat stream as a discriminated union. The union is discriminated by a literal `kind` field; the visible source shows at least a `kind: 'text'` variant. Use this type when consuming or rendering chat items and branch on `kind` to access variant-specific properties safely.
-
-## Remarks
-This type centralizes all possible chat entry shapes (messages, system notices, attachments, etc.) behind a single type so consumers can handle them via exhaustive narrowing. It enforces type-safe access to variant-specific fields and makes adding new entry kinds explicit — callers will get a type error if they forget to handle a new variant.
-
-## Example
 ```typescript
-function renderChatEntry(entry: ChatEntry) {
-  switch (entry.kind) {
-    case 'text':
-      // entry is narrowed to the 'text' variant here — access text-specific fields safely
-      return <div>{/* render text entry fields here */}</div>;
-    default:
-      // Exhaustiveness check: if a new variant is added, this will error at compile time
-      const _exhaustiveCheck: never = entry;
-      return null;
-  }
-}
+type ChatEntry =
+  |
 ```
 
+
+ChatEntry is a TypeScript discriminated union that models a single item in the chat feed used by the chat UI. It uses a kind field to differentiate variants, starting with the text variant { kind: 'text', ... } which represents plain text messages. This design enables rendering code to safely pattern-match on the entry’s kind and access the appropriate payload for each variant, while allowing the set of supported entry types to grow without breaking existing code.
+
+## Remarks
+By encoding all chat entry kinds as a discriminated union, Chat.tsx can render different visuals for text messages, system notices, or media entries in a type-safe way. It decouples payload structure from presentation; rendering can switch on kind and read only the fields guaranteed by that variant. As new kinds are introduced, the compiler can help surface missing handling paths, guiding UI evolution.
+
 ## Notes
-- The provided source is truncated; only the `kind: 'text'` branch is visible. Confirm the full type to learn all variants and their fields before accessing them. 
-- Always narrow on `kind` (or use type guards) before reading variant-specific properties. 
-- Use an exhaustive switch (or similar) to ensure new variants are handled at compile time.
+- When adding new variants, update all pattern matches to handle the new kind; prefer exhaustive switches to catch omissions at compile time.
+- Fields specific to a variant may be optional; always narrow to the variant before accessing them.
+- Be mindful of runtime data that may not conform to the expected payload; validate or provide fallback rendering.
 
 ---
 
 ## VariantMeta
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
-> **Kind:** type
+> **Kind:** type alias
 
-Small type describing metadata for a variant. It contains a single property, `variantGroupId` (string), which identifies the group or family the variant belongs to; use this type when a variant value needs to carry its group identifier.
+```typescript
+type VariantMeta =
+```
+
+
+VariantMeta is a TypeScript type that describes the metadata for a single variant within a variant group. It carries a single field, variantGroupId: string, which links the variant to its group and enables UI logic to group, filter, or reason about variants by their group.
+
+## Remarks
+VariantMeta serves as a lightweight contract that keeps variant-related data decoupled from presentation concerns. By standardizing how a variant references its group, components and utilities can reason about grouping, validation, and rendering consistently across the Chat UI.
+
+## Example
+```typescript
+const meta: VariantMeta = { variantGroupId: "theme" };
+
+const metas: VariantMeta[] = [
+  { variantGroupId: "theme" },
+  { variantGroupId: "layout" }
+];
+```
+
+## Notes
+- VariantMeta is a plain object type; at runtime there is no corresponding value beyond what you create.
+- If you introduce additional metadata about variants, prefer extending this type or composing with other types rather than mutating its shape.
 
 ---
 
 ## Chat
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Renders a chat user interface for a specific conversation and exposes callbacks so a parent can react to important events. Use this component when you want an encapsulated chat view that is tied to a conversation identifier and needs configurable visuals (avatar seed and palette) plus hooks for message, loading and busy-state events.
+```typescript
+export function Chat(
+```
+
+
+Chat is a React functional component that renders a chat interface bound to a single conversation identified by conversationId. It coordinates the presentation and lifecycle of that conversation and exposes callbacks for outbound messages and lifecycle changes, allowing a parent to react to user actions and data availability without embedding lower-level logic.
 
 ## Remarks
-This component centralizes presentation and interaction for a single conversation: the parent supplies the conversationId and visual parameters, and receives lifecycle and interaction callbacks (message sent, busy state changes, conversation loaded/missing). Exposing these events keeps side effects and navigation in the parent while the Chat component focuses on UI and local behavior.
+Chat acts as a small orchestration layer around a conversation UI: it selects which conversation to display, emits onMessageSent when the user sends a message, and reports its busy state and data readiness via onBusyChange, onConversationLoaded, and onConversationMissing. The avatarSeed prop enables deterministic avatar generation for participants, while paletteStops provides theming hints that the component can apply without requiring external styling. This separation keeps the chat UI focused on interaction while letting the parent coordinate broader app state.
 
 ## Example
 ```typescript
 <Chat
-  conversationId="conversation-123"
-  avatarSeed={42}
-  paletteStops={["#0f172a", "#3b82f6", "#06b6d4"]}
-  onMessageSent={(message) => {
-    // persist message or update store
-    console.log('message sent', message);
-  }}
-  onBusyChange={(isBusy) => {
-    // show/hide global loading indicator
-    setGlobalLoading(isBusy);
-  }}
-  onConversationLoaded={(conversation) => {
-    // navigate or update state based on loaded conversation
-  }}
-  onConversationMissing={() => {
-    // show not-found UI or redirect
-  }}
+  conversationId="conv-123"
+  avatarSeed="seed-001"
+  paletteStops={["#ff7a7a", "#7a7aff", "#7affc4"]}
+  onMessageSent={(message) => console.log("Message sent:", message)}
+  onBusyChange={(busy) => console.debug("Busy:", busy)}
+  onConversationLoaded={() => console.log("Conversation loaded")} 
+  onConversationMissing={() => console.warn("Conversation missing")} 
 />
 ```
 
 ## Notes
-- Prefer passing stable (memoized) callback functions to avoid unnecessary re-renders of the Chat component.
-- Keep visual props (avatarSeed, paletteStops) stable when you want consistent appearance across renders; changing them will typically alter avatar generation or theming.
+- Changing conversationId switches the displayed conversation; callers should account for any UI transitions or cleanup needed when the target conversation changes.
+- avatarSeed should remain stable for the same participants to keep avatars consistent across renders.
+- Callbacks may be invoked asynchronously; avoid assuming synchronous execution when updating surrounding UI state.
 
 ---
 
 ## Reasoning
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
@@ -210,20 +183,27 @@ function Reasoning(
 ```
 
 
-A function declared with a single destructured parameter exposing properties `content` and `streaming`. The provided source is only the declaration fragment, so the implementation, return type, and exact prop types are not available in the snippet; callers should consult the full source to confirm behavior before using it.
+Reasoning renders the model's reasoning content within the chat UI by taking a content payload and a streaming flag. It is a small, focused React component that you reach for when you want to present the underlying chain-of-thought behind an answer, either all at once or progressively as data becomes available.
 
 ## Remarks
-This symbol appears in Chat.tsx and is therefore part of the chat UI codepath; it likely centralizes logic for handling or rendering "reasoning" output produced by the system and may behave differently when the `streaming` prop indicates incremental output. Because the body is not present in the snippet, do not assume whether it returns JSX (a React component), a plain string/value, or has side effects — verify in the full file.
+This abstraction separates the presentation of reasoning from the higher-level chat orchestration and model results. It enables a consistent, testable styling for reasoning output and supports a streaming UX to reduce perceived latency.
+
+## Example
+```typescript
+// Full reasoning displayed at once
+<Reasoning content='The steps: A -> B -> C' streaming={false} />
+
+// Streaming reasoning as steps arrive
+<Reasoning content={steps} streaming={true} />
+```
 
 ## Notes
-- The implementation/body was not included in the snippet; behavior and return type are unknown.
-- Confirm the expected types for `content` (e.g., string, React.ReactNode, or structured data) and for `streaming` (likely a boolean) in the actual source before integrating.
-- If this is a UI component that renders streaming content, ensure callers handle incremental updates and re-renders appropriately.
+- React escapes strings by default, so content is rendered safely as text. If you pass raw HTML or JSX, sanitize or pass React nodes instead of strings.
+- If streaming is enabled, ensure the parent provides content in a way that represents incremental updates to avoid jarring UI changes.
 
 ---
 
 ## Thought
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
@@ -232,20 +212,23 @@ function Thought(
 ```
 
 
-A presentational React component named `Thought` that destructures a single `content` prop from its arguments. The implementation body is not present in the provided source, so the exact rendering, returned JSX, and side effects are unknown; based on the filename (`Chat.tsx`) and the symbol name, this component is intended to render a single chat message or "thought".
+Thought is a small, presentational React component used inside the chat UI to render a short, introspective snippet of text. It accepts a single prop, content, and renders that content with a distinct styling that sets it apart from regular chat messages. Use Thought when you want to display a user’s internal reflection or a system-generated thought fragment in the conversation flow, without plumbing it through the standard message rendering logic.
 
 ## Remarks
-This symbol likely exists to encapsulate rendering and styling for an individual chat entry, keeping message-specific markup, formatting, and interaction (e.g., reactions, timestamps) isolated from the higher-level chat container. Placing per-message rendering in a small component helps the chat UI stay modular and makes it easier to change presentation without touching chat list management logic.
+Thought serves as a UI primitive that encapsulates styling concerns for a 'thought' state. By isolating this presentation in its own component, the chat UI can consistently render thoughts across different contexts (e.g., user thinking, AI deliberation) and swap themes without touching the message components.
+
+## Example
+```typescript
+<Thought content="I need to fetch the latest data before replying." />
+```
 
 ## Notes
-- The implementation is missing/truncated in the provided source; the exact output (HTML structure, CSS classes, event handlers) cannot be determined from the signature alone.
-- The type and shape of `content` are not specified; it could be a string, a ReactNode, or a structured object. Consumers should confirm the prop type or add TypeScript typings before use.
-- If `content` is rendered as HTML or inserted into the DOM, ensure proper sanitization to avoid XSS vulnerabilities.
+- Content is rendered as provided; React escapes strings by default, so plain text is safe from HTML injection. If you pass React nodes, ensure they conform to the design system.
+- As a presentational primitive, Thought has no side effects and should be free of data-fetching logic; changes to its typography or colors should be centralized in the app theming.
 
 ---
 
 ## ToolResult
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
@@ -254,283 +237,277 @@ function ToolResult(
 ```
 
 
-A React functional component that renders the output of a tool inside the chat UI. The component accepts a prop named `content` (the source visible to the documentation generator shows the signature fragment `function ToolResult({ content }`), and is intended to be used whenever tool-generated output needs to be displayed as part of a chat message. The implementation details are not available in the provided excerpt, so callers should not assume formatting or sanitization behavior.
+ToolResult is a React functional component that renders the output produced by an interactive tool within the chat UI. It accepts a single prop, content, which provides the tool's result, enabling a consistent presentation of tool outputs across the chat interface rather than scattering raw values into messages.
 
 ## Remarks
-This component isolates presentation concerns for tool results from the rest of the chat message rendering. Centralizing tool-output rendering makes it easier to apply consistent styling, formatting, or accessibility behavior for all tool-generated content in the chat UI.
+ToolResult centralizes how tool outputs are displayed, allowing consistent styling and formatting across different tools. It isolates rendering concerns from chat orchestration, so new tools can be integrated without reworking the surrounding UI.
 
 ## Example
 ```typescript
-// Pass the tool output (string or node) to ToolResult when rendering a message
-<ToolResult content={toolOutput} />
+<ToolResult content="Calculation result: 42" />
 ```
 
 ## Notes
-- The full implementation and prop types are not present in the available source; confirm whether `content` expects a string, ReactNode, or a structured value before passing rich/HTML content.
-- Do not assume the component sanitizes HTML or untrusted input — if you may render HTML, sanitize it first or verify the component's behavior in the codebase.
-
+- If content may contain user-provided data, ensure that rendering is safe (avoid injecting raw HTML).
+- If you expect non-string content (e.g., React nodes or structured data), ensure the component type supports it or wrap it in a renderer.
 
 ---
 
 ## VariantPicker
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-A function-style React component signature that accepts a destructured props object with three properties: `variant`, `disabled`, and `onSwitch`. The implementation and explicit prop types are not present in the provided source, so only the intent inferred from the parameter names can be documented: use this component when you need a UI control to represent or change the active "variant" (for example, a mode, option, or conversation variant) and to notify the parent via a callback when the user switches.
-
-## Remarks
-This symbol centralizes variant-selection concerns behind a single component API so callers can render a single control and react to changes via `onSwitch`. The lack of implementation in the provided source means callers should consult the real implementation or type declarations to confirm exact prop shapes and callback signature before relying on runtime behaviour.
-
-## Example
 ```typescript
-// minimal usage example — adjust types to match the real implementation
-function Parent() {
-  const [variant, setVariant] = React.useState<string>('default');
-  const handleSwitch = (next: string) => setVariant(next);
-
-  return (
-    <VariantPicker
-      variant={variant}
-      disabled={false}
-      onSwitch={handleSwitch}
-    />
-  );
-}
+function VariantPicker(
 ```
 
+
+VariantPicker is a function component that renders a small UI control for selecting among predefined variants within the chat interface. It is a controlled component: the currently selected variant is read from the variant prop, and user-initiated changes are reported to the parent via the onSwitch callback. The disabled prop disables interaction when true. Use this symbol when you need a reusable, isolated variant-switching control rather than inlining variant logic in every caller.
+
+## Remarks
+VariantPicker encapsulates the presentational and event-bridge aspects of variant selection, allowing Chat.tsx to compose higher-level behavior without embedding switch logic. It assumes the parent owns the variant state and reacts to onSwitch to update it, enabling predictable, testable state management.
+
 ## Notes
-- The source provided is incomplete: the component body, return value, and prop types are missing. Verify the actual implementation for details such as the accepted type of `variant` and the exact signature of `onSwitch`.
-- Treat `onSwitch` as a callback that will be called when the active variant should change; confirm whether it receives the new variant, an event object, or nothing in the real implementation.
+- Treat variant as a controlled value; do not mutate it within VariantPicker. 
+- When disabled is true, ensure no interactions are possible and the UI communicates a non-interactive state (accessibility considerations encouraged).
+- Ensure onSwitch is called with the new variant value when the user selects a different option; avoid calling onSwitch if the selected option is unchanged.
 
 ---
 
 ## advance
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Advances the current variant selection to the next variant (wrapping to the first after the last) and notifies the consumer via onSwitch. Use this when you want a simple cyclic "next" action — for example as a click handler for a "next variant" control or as part of automated stepping logic.
+```typescript
+const advance = () =>
+```
+
+
+advance is a small navigation helper that moves to the next variant in a sequence and wraps back to the start when it reaches the end. It computes the next index as (variantIndex + 1) % variantCount and then calls onSwitch with the ID of the next variant from variantSiblingIds. Use this as a handler for a Next action in a variant viewer (for example, a button or keyboard shortcut) to cycle through available variants.
 
 ## Remarks
-This small helper captures the logic for moving from the current variant to the next one in the surrounding component's state. It computes the next index using modulo arithmetic so the selection wraps around from the final variant back to the first, then calls the onSwitch callback with the corresponding sibling id. Centralising this behaviour avoids duplicating wrap-around logic wherever a "next" action is needed.
+By centralizing the wrap-around logic, this function keeps navigation consistent across UI components and decouples the navigation decision from the rendering. It relies on the surrounding component to provide variantIndex, variantCount, and variantSiblingIds and to handle the actual switch via onSwitch.
 
 ## Example
 ```typescript
-// Typical use inside a React component (closure provides variantIndex, variantCount, variantSiblingIds, onSwitch)
-<button onClick={advance}>Next variant</button>
+// Typical usage inside a React component
+<button onClick={advance}>Next</button>
 ```
 
 ## Notes
-- If variantCount is 0 this function will compute NaN for the next index; ensure variantCount > 0 before calling.
-- The function assumes variantSiblingIds[next] exists; keep variantSiblingIds length in sync with variantCount to avoid undefined being passed to onSwitch.
-- Calling advance has a side-effect (it invokes onSwitch), so consumers should expect potential navigation or state changes as a result.
+- Ensure variantCount > 0 to avoid NaN and undefined lookups when computing the next index; consider disabling the control or guarding with a precondition.
+- Keep variantIndex and variantSiblingIds in sync with the actual list of variants to prevent out-of-bounds or undefined IDs being passed to onSwitch.
 
 ---
 
 ## applyAgentEvent
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Updates the chat entries state in response to streaming agent events (textDelta, reasoningDelta, toolCall, etc.). Use this when you receive incremental AgentEvent objects from the backend or model stream and need to merge those tokens into the React state-managed ChatEntry list so the UI can render streaming assistant output, interim reasoning, and tool interactions.
+```typescript
+function applyAgentEvent(
+  evt: import('../api/streamChat').AgentEvent,
+  setEntries: React.Dispatch<React.SetStateAction<ChatEntry[]>>,
+)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `evt` | `import('../api/streamChat').AgentEvent` | — |
+| `setEntries` | `React.Dispatch<React.SetStateAction<ChatEntry[]>>` | — |
+
+
+applyAgentEvent is a small state updater that translates agent events into chat entries for a streaming chat UI. It orchestrates how incoming streaming tokens (text and reasoning) and tool interactions are reflected in the UI, creating or mutating chat bubbles as tokens arrive and aligning the thinking/acting flow for the user.
 
 ## Remarks
-This function centralizes the logic for turning incremental agent events into stable ChatEntry rows. It preserves React-friendly immutable updates, keeps streaming bubbles using stable keys/ids so the same React instance continues to render while content grows, and converts transient streaming bubbles into final entry types (for example, reclassifying a trailing streaming assistant text as a collapsed `thought` when a tool is called). It relies on small helpers (for example, lastIndexWhere and toolCallEntry) to find or construct entries and expects the provided setEntries dispatcher from useState/useReducer.
+
+Centralizes the streaming UI semantics for agent interactions: textDelta appends or starts a new streaming assistant bubble, reasoningDelta maintains a single streaming reasoning entry ahead of the answer, and toolCall collapses the reasoning into a compact thought while inserting a tool call entry. This abstraction keeps the React state updates consistent across token streams, tool invocations, and tool results, so the chat UI can render a coherent, top-down narrative (thinking → answer) without scattering logic across multiple components.
 
 ## Example
 ```typescript
-// inside a React component that holds entries state
-const [entries, setEntries] = useState<ChatEntry[]>([]);
-
-// when receiving events from a WebSocket or model stream:
-function onAgentEvent(evt: AgentEvent) {
-  applyAgentEvent(evt, setEntries);
-}
+// Typical usage inside a chat handler that receives agent events
+applyAgentEvent(evt, setEntries);
 ```
 
 ## Notes
-- The function uses crypto.randomUUID() to create synthetic streaming ids; ensure the runtime environment supports it (modern browsers/node versions).
-- setEntries must be the React Dispatch returned by useState/useReducer; the function always updates state immutably via the updater form (prev => ...).
-- The implementation depends on helper utilities (e.g. lastIndexWhere, toolCallEntry). Those must be available in the same module scope to construct or find entries correctly.
-- Streaming entries are sometimes dropped if empty (e.g., an empty streaming assistant bubble before a tool call will be omitted).
+
+- Streaming bubbles are given synthetic IDs (e.g., streaming-<uuid>) and kept stable until a real DB id patches them later; this stabilizes React component identity during typing.
+- When a toolCall arrives, in-flight streaming reasoning is frozen and the trailing streaming text bubble may be reclassified as a collapsed thought to reflect the model's internal transition from thinking to action.
+- The code relies on a helper (lastIndexWhere) and crypto.randomUUID(); ensure the environment provides these APIs, or polyfills/polyfills provided by the project.
+
 
 ---
 
 ## hasActiveAssistantStream
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Returns true when the most recent chat entry is an assistant-produced text message that is currently streaming. Reach for this helper when the UI or control logic needs a quick check of whether the assistant is mid-stream (for example to show a streaming indicator, disable inputs, or decide whether to stop the stream).
-
-## Remarks
-This function performs a minimal, constant-time check against only the last element of the provided entries array — it treats the latest entry as the authoritative source of streaming state. It exists to keep streaming-related UI logic simple and cheap rather than scanning or inferring state from older entries.
-
-## Example
 ```typescript
-const entries: ChatEntry[] = [
-  { kind: 'text', role: 'user', streaming: false, text: 'Hello' },
-  { kind: 'text', role: 'assistant', streaming: true, text: 'Thinking...' }
-];
-
-if (hasActiveAssistantStream(entries)) {
-  // show streaming indicator, prevent new requests, etc.
-}
-
-// empty array -> false
-hasActiveAssistantStream([]); // false
+function hasActiveAssistantStream(entries: ChatEntry[]): boolean
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `entries` | `ChatEntry[]` | — |
+
+**Returns:** `boolean`
+
+
+This function checks the latest entry in a chat history to determine whether an assistant is currently streaming a reply. It returns true only if there is a last entry, that entry is a text message authored by the assistant, and its streaming flag is set. Use this predicate in the UI to decide whether to show a streaming indicator or to gate user input while the assistant is delivering a streamed response.
+
+## Remarks
+This small predicate centralizes the concept of an "active assistant stream" so multiple UI components share a single source of truth. By requiring kind === 'text' and role === 'assistant' in addition to streaming, it avoids false positives from other message types or roles. It relies on the chat history being updated in real time as streaming progresses; as a result, any mutation or reordering of entries should keep the last entry in sync to preserve correctness.
+
 ## Notes
-- The function only checks the last entry; a streaming flag on an earlier entry is ignored.
-- It assumes a non-null array is passed. Passing null or undefined will throw when accessing length.
-- The check is structural: it expects entries to have kind, role and streaming properties and tests kind === 'text', role === 'assistant', and a truthy streaming value.
+- Empty entries array yields false.
+- Only detects streaming on the last entry; if a previous entry was streaming but the last one is not, it returns false.
+- Relies on the ChatEntry shape (kind, role, streaming) remaining stable across updates.
 
 ---
 
 ## historyToEntries
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Converts an array of MessageResponse objects (the server/API message history) into an ordered list of ChatEntry objects suitable for rendering in the chat UI. Use this when you need to turn a persisted conversation history into the UI model; it preserves server-provided IDs as entry keys for stable history rendering.
+```typescript
+function historyToEntries(messages: MessageResponse[]): ChatEntry[]
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `messages` | `MessageResponse[]` | — |
+
+**Returns:** `ChatEntry[]`
+
+
+Converts an API-provided history (array of MessageResponse) into a render-friendly sequence of ChatEntry items, preserving order and categorizing content by role and type. It handles user text, assistant replies, streaming reasoning content, and tool interactions, emitting distinct entry kinds such as text, reasoning, thought, and tool results. In-flight entries are distinguished from history-loaded ones by using a special reasoning key (id-reasoning) so streaming content can render before final IDs are assigned.
 
 ## Remarks
-This function encodes the mapping rules the UI expects for historical messages: user messages become text entries, assistant messages may produce up to three kinds of entries (a reasoning block, a thought block or final text, and zero or more tool call entries), and tool messages become toolResult entries. The function intentionally sets key === id for history-loaded entries because those ids are stable database ids; the key/id separation is only relevant for in-flight optimistic entries whose id may be replaced later.
+This abstraction decouples the UI rendering model from the raw history payload, enabling progressive rendering of model thinking and tool interactions while keeping a stable display structure. The key/id strategy supports optimistic updates: historical entries use the real IDs (key = id), whereas in-flight entries derive a separate reasoning key to avoid clashing as IDs are patched. By emitting separate kinds for reasoning (reasoning), interim content (thought), and final user/assistant text (text), along with explicit tool-call entries, the UI can present a coherent, temporally ordered story of each turn, including any tool interactions.
 
 ## Example
-```typescript
-// Input: two messages from the API
+```ts
+// Example usage showing common case with reasoning and tool calls
 const messages: MessageResponse[] = [
-  { id: 'm1', role: 'user', content: 'Hi' },
+  { id: '1', role: 'user', content: 'What is the capital of France?' },
   {
-    id: 'm2',
+    id: '2',
     role: 'assistant',
-    reasoningContent: 'Considering tools...',
-    content: 'Result after thinking',
-    toolCalls: [{ id: 'tc1', name: 'search', input: 'x' }]
+    reasoningContent: 'Considering geography and political capitals...',
+    content: 'Paris is the capital of France.',
+    toolCalls: [{ name: 'lookup', arguments: { q: 'capital of France' } }]
   }
 ];
-
 const entries = historyToEntries(messages);
-/* entries will look like:
-[
-  { kind: 'text', key: 'm1', id: 'm1', role: 'user', content: 'Hi', variant: /*...*/ },
-  { kind: 'reasoning', key: 'm2-reasoning', id: 'm2-reasoning', content: 'Considering tools...' },
-  { kind: 'thought', key: 'm2', id: 'm2', content: 'Result after thinking' },
-  // plus one or more toolCall entries created by toolCallEntry(m2.id, tc1)
-]
-*/
 ```
 
 ## Notes
-- The mapping treats assistant content as a "thought" (internal reasoning) when the message has tool calls; without tool calls the assistant content becomes a regular assistant text entry.
-- For user and assistant entries the code requires m.content to be truthy; tool-result entries use a null-check (m.content != null), so empty-string content may still produce a toolResult.
-- System-role messages are intentionally ignored and do not produce ChatEntry items.
+- System messages are not rendered in the output; they are ignored by this transformer.
+- The function relies on helpers like variantMetaOf and toolCallEntry to enrich entries with variant metadata and to format tool-call results; ensure these helpers exist where this function is used.
+- Tool call results are emitted after the corresponding content for the same message, preserving the natural order of the user/assistant turn followed by any tool interactions.
 
 ---
 
 ## lastIndexWhere
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Returns the index of the last element in the given array that satisfies the provided predicate. Scans the array from end to start and returns the index of the first element (from the right) for which pred(element) is true; returns -1 if no element matches. Use this helper when you need the last matching index without allocating a reversed copy of the array.
+```typescript
+function lastIndexWhere<T>(arr: readonly T[], pred: (e: T) => boolean): number
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `arr` | `readonly T[]` | — |
+| `pred` | `(e: T) => boolean` | — |
+
+**Returns:** `number`
+
+
+Finds the index of the last element in a readonly array that satisfies the given predicate. It iterates from the end of the array toward the beginning, evaluating pred on each element until a match is found and returns that element's index. If no element matches, it returns -1.
 
 ## Remarks
-This is a small, allocation-free utility that performs a reverse linear scan. It accepts a readonly array and does not mutate it. The predicate receives only the element (not its index or the array), so callers that need position information should capture it differently or use a different helper.
+It encapsulates a reverse search, returning the index of the last element that satisfies the predicate. This is handy when you need the most recent match, rather than the first, without manually looping from the end. It complements other array utilities by providing a concise, reusable pattern for end-focused condition checks.
 
 ## Example
 ```typescript
-// Find the last even number
-const nums = [1, 3, 4, 6, 7];
-const lastEven = lastIndexWhere(nums, n => n % 2 === 0); // 3 (element 6)
-
-// Find the last message from a specific user
-type Message = { id: string; userId: string; text: string };
-const messages: readonly Message[] = [
-  { id: 'a', userId: 'u1', text: 'hi' },
-  { id: 'b', userId: 'u2', text: 'hello' },
-  { id: 'c', userId: 'u1', text: 'bye' }
-];
-const lastFromU1 = lastIndexWhere(messages, m => m.userId === 'u1'); // 2
+const values = [1, 3, 4, 6, 7];
+const lastEvenIndex = lastIndexWhere(values, v => v % 2 === 0); // 3
 ```
 
 ## Notes
-- Returns -1 when no element satisfies the predicate.
-- Time complexity is O(n) in the length of the array; the predicate may be invoked up to arr.length times.
-- The predicate is called with the element only; it does not receive the index or the array.
+- The predicate is invoked for each element starting from the end until a match is found; in the worst case, every element is evaluated. This means the function has O(n) time complexity.
+- The input array is treated as readonly and is not mutated by this operation.
 
 ---
 
 ## onKeyDown
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Handles keydown events for a chat textarea: when the Enter key is pressed without the Shift modifier it prevents the default newline behavior and triggers a send action. Use this handler to submit a message with Enter while preserving Shift+Enter for inserting line breaks.
+```typescript
+const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) =>
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `e` | `KeyboardEvent<HTMLTextAreaElement>` | — |
+
+
+Intercepts keydown events on the chat textarea to implement the common “press Enter to send” behavior. When Enter is pressed without Shift, it prevents the default newline action and calls send() to dispatch the current message; Shift+Enter remains usable for adding newlines.
 
 ## Remarks
-This function is a small helper used by a chat input component to centralize the Enter-to-send behavior. It deliberately calls send with the void operator (fire-and-forget) so the handler doesn't await the asynchronous send operation; error handling or UI state updates for the send operation should be implemented by the send function itself or its surrounding logic.
+Centralizing this UX behavior in a small handler keeps input concerns separate from sending logic, and makes the Enter-to-send rule explicit wherever the textarea is used. It provides a consistent, predictable experience for chat input, preventing accidental sends when a newline is intended (Shift+Enter). The void operator signals that the asynchronous result of send() is intentionally not awaited at this call site.
 
 ## Example
 ```typescript
-// inside a React component
-const send = async () => {
-  // perform send logic (POST, state updates, etc.)
-};
-
-return (
-  <textarea
-    onKeyDown={onKeyDown}
-    // other props: value, onChange, placeholder...
-  />
-);
+<textarea onKeyDown={onKeyDown} />
 ```
 
 ## Notes
-- Preventing the default behavior stops the textarea from inserting a newline when Enter is pressed without Shift.
-- Holding Shift while pressing Enter allows a newline to be inserted (the handler ignores Shift+Enter).
-- The handler uses `void send()` and does not await or handle errors; ensure send handles its own errors or that calling code manages send's lifecycle if you need feedback or retries.
-
+- If send() can fail, consider handling errors in send() or at the call site, since this handler discards the Promise.
+- Attach onKeyDown to the specific textarea to avoid interfering with other controls.
+- Be mindful that this only affects Enter without Shift; other keys are passed through to the textarea.
 
 ---
 
 ## onSubmit
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Prevents the browser's default form submission and triggers the component's send() action. Use when wiring a React form's onSubmit to run client-side submission logic instead of allowing a full-page navigation.
-
-## Remarks
-This handler intercepts the native submit event (via e.preventDefault()) and invokes send() to perform the actual submission work. The expression void send() intentionally discards the returned promise so the handler remains synchronous (not declared async) and avoids unawaited-promise lint errors. Choose this pattern when you do not need to await send() inside the event handler.
-
-## Example
 ```typescript
-// inside a React component
-const onSubmit = (e: FormEvent) => {
-  e.preventDefault();
-  void send();
-};
-
-return (
-  <form onSubmit={onSubmit}>
-    {/* form fields */}
-  </form>
-);
+const onSubmit = (e: FormEvent) =>
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `e` | `FormEvent` | — |
+
+
+onSubmit is a form submission handler that wires the form event to the chat message-sending flow. When the user submits the form, it prevents the browser’s default submission behavior (preventing a page reload) and then invokes send() to perform the actual sending operation. The explicit void before send() signals that the handler intentionally does not await or handle the promise returned by send(), making this a fire-and-forget interaction.
+
+## Remarks
+This function acts as the UI boundary between the form submission and the message-sending logic. Keeping e.preventDefault() here ensures the page stay intact, while delegating to send() encapsulates the transmission behavior. The void prefix expresses a fire-and-forget intent; if the UI needs to reflect send status or handle errors, consider awaiting send() and adding error handling at this level or higher.
+
 ## Notes
-- void send() drops the Promise: errors from send() will not be propagated to this handler. If you need to handle errors or await completion, make the handler async and use await send().
-- e.preventDefault() is required to stop the browser from performing a full-page form submit/navigation.
-- Ensure send is defined in the same component scope (and not a stale closure) before calling it.
+- If you care about success/failure feedback, remove the void and await the send() promise, adding appropriate error handling (e.g., try/catch) and UI updates.
+- Ensure this handler is attached to the form’s onSubmit prop so it’s invoked on submission (e.g., <form onSubmit={onSubmit}>).</n
 
 ---
 
 ## prettyArgs
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
@@ -547,160 +524,182 @@ function prettyArgs(json: string): string
 **Returns:** `string`
 
 
-Converts a JSON string into a normalized, display-friendly form and suppresses empty arguments.
-
-This helper returns an empty string for falsy inputs or the empty object literal "{}" so callers can avoid rendering empty argument lists. For non-empty input it attempts to parse the string as JSON and re-serializes it with JSON.stringify to produce a stable (compact) representation. If parsing fails the original input is returned unchanged.
+Parses a JSON string and re-serializes it to a canonical, compact JSON representation; if the input is empty or the literal '{}', it returns an empty string. If the string isn’t valid JSON, it returns the original input unchanged. Use prettyArgs in UI code (for example in Chat.tsx) when you want to normalize and safely display JSON arguments instead of showing raw, potentially noisy input.
 
 ## Remarks
-This exists primarily for UI display: it normalizes argument payloads so they appear as a single-line JSON string (without extra whitespace) and hides empty objects. It is not intended to pretty-print with indentation; instead it produces a compact, canonical JSON string when the input is valid JSON.
+Encapsulates a small formatting concern for JSON payloads behind a single function, making testing and maintenance easier and keeping UI rendering logic free of ad-hoc JSON handling. This centralization ensures consistent behavior when displaying or logging user-provided JSON in the chat UI, and isolates changes to formatting from the rest of the codebase.
 
 ## Example
 ```typescript
-prettyArgs(undefined); // ""
-prettyArgs(''); // ""
-prettyArgs('{}'); // ""
-prettyArgs('{"a": 1, "b": 2}'); // '{"a":1,"b":2}'
-prettyArgs('not json'); // 'not json'  (fallback — returns original input)
+// Common cases
+prettyArgs('{"b":2,"a":1}') // '{"b":2,"a":1}'
+prettyArgs('{}') // ''
+prettyArgs('not json') // 'not json'
 ```
 
 ## Notes
-- The function returns a compact (minified) JSON string, not a multi-line indented "pretty" format — the name can be misleading. 
-- Malformed JSON is silently passed through (the original string is returned); callers that require strict validation should parse separately.
-- The special-case for '{}' means an objectively empty object will be rendered as an empty string; this choice is deliberate for UI suppression but may be surprising in other contexts.
+- Returns '' for '{}' to signal "no args" rather than a value.
+- Non-JSON inputs are passed through unchanged, avoiding runtime errors at the call site.
+- The output is a compact JSON representation (whitespace is removed); this may affect the exact character sequence if the input order of keys differs.
 
 ---
 
 ## prev
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Selects the previous variant index (wrapping to the end when necessary) and invokes the component's onSwitch callback with the corresponding sibling id. Use this helper when you need a reusable "move to previous variant" action inside the Chat component (for example as an onClick handler or keyboard shortcut) instead of recomputing the wrapped index each time.
+```typescript
+const prev = () =>
+```
+
+
+prev is a navigation helper that computes the previous variant in a circular sequence and switches to it. It subtracts one from the current variantIndex, wraps around with a modulo against variantCount, and then invokes onSwitch with the id located at the resulting index in variantSiblingIds. This is typically used by a Previous button in a variant switcher to move backward through variants without hitting the beginning or end.
 
 ## Remarks
-This closure reads variantIndex, variantCount, variantSiblingIds and onSwitch from the surrounding scope and centralizes the wrap-around arithmetic: (variantIndex - 1 + variantCount) % variantCount ensures the index cycles correctly. It exists so UI handlers can simply call prev to perform consistent, cyclic navigation and trigger the same onSwitch side-effect.
+Encapsulates the wrap-around logic so UI controls can simply trigger prev without duplicating boundary checks. It relies on the alignment between variantIndex, variantCount, and variantSiblingIds to map an index to the corresponding variant id, keeping navigation concerns separate from presentation.
 
 ## Example
 ```typescript
-// inside the Chat component's render/return
-<button onClick={prev}>Previous</button>
+// In a React component
+return (
+  <button onClick={prev} aria-label="Previous variant">Prev</button>
+);
 ```
 
 ## Notes
-- variantCount must be a positive integer; if it is 0 the modulo operation yields NaN and indexing will fail.
-- Ensure variantSiblingIds contains at least variantCount entries — otherwise the indexed lookup may be undefined.
-- prev is a closure that uses captured values; if you memoize it (e.g. with useCallback) include the relevant dependencies so it uses up-to-date state.
-- onSwitch is invoked synchronously; any side-effects it performs will run immediately when prev is called.
+- variantCount must be > 0 to avoid a NaN/undefined target from modulo 0.
+- Assumes variantIndex is in [0, variantCount-1] and that variantSiblingIds has a valid entry for the computed index.
+- This function does not mutate state; it computes the target id and delegates to onSwitch.
 
 ---
 
 ## renderEntry
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Renders a ChatEntry into the appropriate React markup for the chat UI, including assistant/user text, streaming assistant behavior, tool calls/results, thoughts/reasoning, and the per-entry action controls. Use this when you need a single, central renderer that turns a ChatEntry + EntryActions into the correct DOM for display and user interaction rather than manually branching on entry kinds in multiple places.
+```typescript
+function renderEntry(e: ChatEntry, actions: EntryActions)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `e` | `ChatEntry` | — |
+| `actions` | `EntryActions` | — |
+
+
+Renders a ChatEntry inside the chat UI by selecting the appropriate presentation based on the entry's kind and state, and by wiring per-entry actions when appropriate. It handles text entries with live-assistant streaming versus static history, supports multi-variant assistant responses through a VariantPicker, and delegates rendering to specialized subcomponents for tool calls/results, thoughts, and reasoning; action buttons (regenerate, save as memory, delete) are exposed only for persisted messages and when the user's context permits.
 
 ## Remarks
-This function centralizes all presentation rules for different ChatEntry kinds (text, toolCall, toolResult, thought, reasoning, etc.) and the UI logic that surrounds persisted vs. streaming messages. It determines when to show action buttons (regenerate, remember, delete), when to render assistant text with streaming/typing affordances (StreamingText with animate/caret/galactic props), and how variant state affects the availability of regeneration and variant picking. Keeping this logic here ensures consistent behavior across the chat UI and isolates id/streaming/variant heuristics in one place.
+Centralizes the rendering logic for all ChatEntry variants, isolating presentation concerns from data handling. It coordinates with the Actions interface to reflect busy states, ensures synthetic IDs used for streaming or temporary entries do not leak into user interactions, and provides a consistent extension point for new entry kinds or interaction patterns.
 
 ## Notes
-- Streaming and animation semantics: StreamingText captures the animate prop at mount, so switching an entry from streaming → done after mount will not interrupt the typing loop; the initial animate value controls the first render only.
-- Persistence check relies on id prefixes: entries whose id starts with "tmp-" or "streaming-" are treated as non-persisted and will not show the action overlay; this is an important convention for correct button visibility.
-- Regenerate availability: the regenerate action is only enabled for assistant entries that are persisted and represent the latest variant (variantIndex === variantCount - 1). Calling regenerate on older variants is intentionally prevented.
-- UI disabling: action buttons use actions.busy to disable interaction; callers must set this flag while async operations are in progress to prevent concurrent actions.
-- Keys and role handling: the renderer uses e.key for React keys and differentiates assistant vs. user roles to choose between StreamingText and static rendering.
+- Buttons are disabled when actions.busy is true to prevent overlapping operations.
+- Streaming assistant messages use synthetic IDs (e.g., 'tmp-' or 'streaming-') to distinguish transient UI state from persisted messages.
+- VariantPicker is shown only when an entry reports multiple variants.
 
 ---
 
 ## send
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Sends the current trimmed input as a user message to the conversation streaming API, appending an optimistic user entry to the chat, and then consumes streaming events (assistant content, persistence notices, compacting signals, errors). Use this as the chat component's send handler so the optimistic UI, busy/abort lifecycle, stick-to-bottom behavior, and compacting overlays are handled consistently instead of calling the streaming API directly.
-
-## Remarks
-This function encapsulates several UI and networking concerns so the component can present low-latency optimistic updates while the server responds incrementally. It: creates a temporary optimistic user entry (tmp-UUID) that is patched when persistence events arrive; forces the chat to stick to the bottom so the new turn is visible during streaming; uses an AbortController stored in abortRef so the UI can cancel the stream; and listens for compacting events to show/hide a compacting overlay. It intentionally avoids refetching the entire conversation on success to prevent remounting streaming UI (typewriter) when ids are patched — callers should expect messagesRef to be stale immediately after a successful send.
-
-## Example
 ```typescript
-// Typical use inside a React component: call send from a button or Enter key handler.
-<button onClick={() => void send()}>Send</button>
-
-// Or from a keyboard handler
-const onKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    void send();
-  }
-};
+const send = async () =>
 ```
 
+
+Executes the send action for the chat input. It trims the input, exits early if the text is empty or a send is already in progress, and then inserts an optimistic user message. It starts a streaming session against the backend and applies incoming stream events to progressively render the agent's reply, patching temporary IDs with real database IDs as they arrive. It also respects UI state (busy/compacting, auto-scroll) and cleans up by clearing the in-flight abort controller and resetting state after completion or failure, avoiding a full refetch to preserve the typewriter reveal.
+
+## Remarks
+This function encapsulates optimistic UI updates with streaming results to keep the chat responsive while persisting the final persisted state in the background. It coordinates with stream events to patch temporary identifiers to real IDs and to reflect UI cues (like compacting) during the agent's reply. The design also relies on a ResizeObserver-driven layout sequence to ensure the newest content is scrolled into view after the turn begins. The AbortController integration provides a clear cancellation path for in-flight sends, which helps prevent leaks and inconsistent UI when navigation or rapid repeats occur.
+
 ## Notes
-- send enforces a single outstanding send via the busy check; calling it while busy is a no-op.
-- The function sets isAtBottomRef.current = true, so invoking send will scroll the view to the bottom on the next layout even if the user was reading older messages.
-- After a successful send the in-memory messagesRef may be stale (it reflects the conversation before this turn); handleRegenerate is expected to lazily refetch when it needs up-to-date state.
-- On network or streaming errors the code removes any assistant streaming placeholder entries and clears compacting/busy state; abortRef is cleared in finally so callers should not assume it remains set.
+- Temporary IDs: The user message is created with a temporary id (prefixed with tmp-); real IDs are applied later as persistence events arrive.
+- Cancellation and cleanup: The in-flight AbortController is stored in abortRef.current and reset in finally to avoid leaks; this path ensures the UI is left in a consistent state even on errors.
+- No automatic refetch: To preserve the typewriter-like reveal, the code avoids triggering a full GET fetch after streaming; downstream events patch IDs in place, which keeps the reveal smooth but may leave stale local state unless events arrive.
+
 
 ---
 
 ## toolCallEntry
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Creates a ChatEntry object representing a tool invocation that originated from a particular chat message. Use this when converting a MessageToolCall (the structured data for a tool call) into the ChatEntry shape consumed by the chat UI or storage layer so the call can be rendered/identified alongside other chat entries.
+```typescript
+function toolCallEntry(messageId: string, tc: MessageToolCall): ChatEntry
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `messageId` | `string` | — |
+| `tc` | [`MessageToolCall`](../../../api/Gabriel.API/Contracts/Messages/MessageResponse.cs.md) | — |
+
+**Returns:** `ChatEntry`
+
+
+Converts a MessageToolCall into a chat entry of kind toolCall by composing a unique key from the parent messageId and the tool call's own id, and by wiring the toolCallId, name, and serialized arguments into the ChatEntry. It is used when inserting a tool invocation into the chat timeline so the UI can render and interact with tool-based responses in a consistent structure.
 
 ## Remarks
-This helper centralizes the construction of a 'toolCall' ChatEntry so the id and key format is consistent across the codebase. It composes the entry id and key from the messageId and the tool call's id to provide a stable, message-scoped identifier for rendering and reconciliation.
+By isolating this mapping, the chat renderer can treat tool invocations generically alongside user and assistant messages. The function ensures a stable key for React lists (the key is messageId-call-id) and exposes the essential identifiers (toolCallId and name) to UI components and any reducers or middleware that need to react to tool usage.
 
 ## Example
 ```typescript
-const messageId = 'msg-123';
-const tc: MessageToolCall = {
-  id: '42',
-  name: 'translate',
-  argumentsJson: '{"text":"hello","target":"es"}'
-};
-
-const entry = toolCallEntry(messageId, tc);
-// entry => {
+// Concrete usage showing the most common case
+toolCallEntry('msg1', { id: 'tc42', name: 'Translate', argumentsJson: '{"text":"Hello"}' });
+// Returns
+// {
 //   kind: 'toolCall',
-//   key: 'msg-123-call-42',
-//   id: 'msg-123-call-42',
-//   toolCallId: '42',
-//   name: 'translate',
-//   argumentsJson: '{"text":"hello","target":"es"}'
+//   key: 'msg1-call-tc42',
+//   id: 'msg1-call-tc42',
+//   toolCallId: 'tc42',
+//   name: 'Translate',
+//   argumentsJson: '{"text":"Hello"}'
 // }
 ```
 
 ## Notes
-- The returned entry.key and entry.id are derived by concatenating messageId and tc.id; if multiple calls share the same messageId and tc.id they will produce identical keys/ids.
-- argumentsJson is forwarded as-is (no validation or parsing is performed by this function).
-- The function returns a plain object and does not deep-clone nested data referenced by argumentsJson.
+- argumentsJson must be a string containing valid JSON; passing a non-string or improperly escaped JSON can cause runtime errors.
+- The function relies on tc.id to generate the key; if id is missing or undefined, the resulting key/id may be invalid.
+- The returned value is a plain ChatEntry tailored for tool calls; avoid mutating its fields after creation to preserve identity semantics in rendering.
 
 ---
 
 ## variantMetaOf
-
 > **File:** `src/webapp/src/components/Chat.tsx`  
 > **Kind:** function
 
-Creates a VariantMeta object by projecting the variant-related fields from a MessageResponse. Use this when you need just the variant identification data (group id, index, count and sibling ids) rather than the entire message object — for example when passing only variant metadata to UI components or analytics code.
+```typescript
+function variantMetaOf(m: MessageResponse): VariantMeta
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `m` | [`MessageResponse`](../../../api/Gabriel.API/Contracts/Messages/MessageResponse.cs.md) | — |
+
+**Returns:** `VariantMeta`
+
+
+variantMetaOf extracts the variant-related metadata from a MessageResponse and returns a VariantMeta object containing the group ID, index, total count, and the list of sibling variant IDs. Use this helper when UI or logic needs a stable, simplified view of a message's variant information rather than reading those fields directly from MessageResponse.
 
 ## Remarks
-This small adapter centralizes the mapping from MessageResponse to VariantMeta so callers don't need to repeat the same field selection. It keeps variant-related concerns separate from the rest of the message payload and makes intent explicit when only variant metadata is required.
+Centralizes the mapping from MessageResponse to VariantMeta so consumers share the same shape and naming. If the MessageResponse structure changes, only this function may need updating while callers continue to rely on the consistent VariantMeta interface. It is a pure, side-effect-free mapper that is ideal for UI components that render variant navigation or indicators.
 
 ## Example
 ```typescript
-const message: MessageResponse = getMessageResponse();
-const meta = variantMetaOf(message);
-renderVariantControls(meta);
+const m: MessageResponse = fetchLatestMessage();
+const meta = variantMetaOf(m);
+// meta.variantGroupId, meta.variantIndex, meta.variantCount, meta.variantSiblingIds
 ```
 
 ## Notes
-- The returned object is a shallow projection: arrays (variantSiblingIds) and other reference types are not deep-cloned.
-- Fields may be undefined if the source MessageResponse does not include variant information; the function does not validate or normalize those values.
+- The function is pure: it does not mutate the input and simply returns a new object referencing the input's values.
+- The variantSiblingIds array is returned by reference; clone if you need an immutable copy.
+
 
 ---

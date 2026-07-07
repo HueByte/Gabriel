@@ -3,24 +3,34 @@
 > **File:** `src/api/Gabriel.Engine/Personality/IResponsePostProcessor.cs`  
 > **Kind:** interface
 
-Cleans a model-produced response before it is stored: strips residual assistant-style openers/closers and enforces a length cap (when provided via ConversationState) while intentionally preserving Markdown formatting. Use this when finalizing and persisting a message to the database, not when streaming live deltas to a client.
+```csharp
+public interface IResponsePostProcessor
+```
+
+
+This interface defines a contract for post-processing a model's raw text before it is persisted to the database. Implementations should remove residual AI boilerplate (common opener/closer phrases) and apply a length cap derived from the current ConversationState. Markdown is deliberately preserved to keep Discord-style formatting intact. In the runtime flow, the controller streams raw deltas to the client and defers cleaning until the final saved message is produced.
 
 ## Remarks
-This interface centralizes post-generation sanitization and length-policy enforcement so controllers and persistence layers remain agnostic of AI-specific cleanup rules. It supports a "stream raw, clean on save" workflow where clients may receive raw intermediate text but the canonical saved message is normalized and size-limited.
+The abstraction decouples content sanitation from transport and storage, enabling centralized, swap-friendly hygiene rules. By depending on ConversationState, implementations can adapt the maximum allowed length per conversation or user context, ensuring consistent policy without changing callers. It also provides a single point to evolve markdown-preserving cleanup strategies.
 
 ## Example
 ```csharp
-// In a controller or repository before saving the final message:
-string raw = aiModel.Generate(...);
-string cleaned = responsePostProcessor.Clean(raw, conversationState);
-messageRepository.Save(cleaned);
-
-// If ConversationState is not available, pass null. Behavior (default cap or no cap)
-// depends on the implementation.
-string cleanedWithoutState = responsePostProcessor.Clean(raw, null);
+public class SimpleResponsePostProcessor : IResponsePostProcessor
+{
+    public string Clean(string raw, ConversationState? state)
+    {
+        // Remove common AI boilerplate (opener/closer phrases)
+        var cleaned = RawCleaner.StripAiBoilerplate(raw);
+        // Cap length based on state or a sensible default
+        int cap = state?.MaxSavedLength ?? 2048;
+        if (cleaned.Length > cap)
+            cleaned = cleaned.Substring(0, cap);
+        return cleaned;
+    }
+}
 ```
 
 ## Notes
-- Markdown is preserved intentionally; do not perform additional escaping unless you intend to change presentation.
-- Implementations may apply different behavior when ConversationState is null (e.g., no cap vs. a default cap); provide state when deterministic length enforcement is required.
-- Truncation to enforce length limits can cut mid-markup and produce malformed Markdown; callers that require well-formed markup should validate or reformat after cleaning.
+- Implementations must gracefully handle a null ConversationState, falling back to sensible defaults.
+- Cleaning should be idempotent and predictable for the same input.
+- Be cautious not to remove user-provided content or meaningful information while stripping boilerplate; preserve intent and markdown formatting.

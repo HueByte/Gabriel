@@ -3,19 +3,16 @@
 > **File:** `src/api/Gabriel.Engine/Personality/Prompts/IPromptRegistry.cs`  
 > **Kind:** interface
 
-Provides read-only lookup of named prompt fragments that feed the system prompt. Use this interface when you need to retrieve a prompt template by key while keeping the storage mechanism (constants, embedded resources, or external files) decoupled from consumers; any placeholder substitution (for example `{name}`) is the caller's responsibility.
-
-## Remarks
-The interface exists to separate how prompt fragments are stored from how they are consumed so implementations can evolve without forcing changes across callers. It intentionally returns raw strings and exposes no parameters or formatting helpers — that keeps the registry simple and allows consumers to apply their preferred substitution or localization strategies.
-
-## Example
 ```csharp
-// Retrieve a fragment and perform simple token substitution
-string fragment = promptRegistry.Get("greeting"); // e.g. "Hello, {name}!"
-string rendered = fragment?.Replace("{name}", userName) ?? throw new InvalidOperationException("Missing prompt fragment: greeting");
+public interface IPromptRegistry
 ```
 
+
+Provides read-only access to named prompt fragments that feed the system prompt. By exposing Get(string key), the interface decouples the storage of those fragments from the consumers that compose the system prompt. Today fragments live as const strings in Fragments.* partials, but the shape is intentionally storage-agnostic to accommodate embedded resources or external markdown files if needed later. Fragments may contain placeholders (e.g. `{name}`); the responsibility for substituting those tokens lies with the caller, keeping the registry itself parameter-free and side-effect-free.
+
+## Remarks
+Architecturally, IPromptRegistry defines a clean boundary between what prompts exist and how they are retrieved. It enables swapping storage strategies without touching prompt-using code, facilitating testing with mock registries and future extensions to resource types (embedded, file-based, or remote). By treating prompt fragments as opaque strings retrieved by key, it avoids leaking storage details into consumers.
+
 ## Notes
-- Fragments may include placeholder tokens (e.g. `{name}`); callers must perform substitution.
-- IPromptRegistry provides read-only access only; it does not expose mutation operations.
-- The interface does not mandate behavior for missing keys (null vs. exception); callers should handle absent fragments according to the specific implementation in use.
+- Unknown-key behavior is not defined by the interface; implementations may throw, return an empty string, or provide a default. Callers should guard against missing keys and handle empty results gracefully.
+- This interface is intentionally read-only; to update prompts, swap the registry implementation or underlying storage rather than performing mutations at the consumer level.

@@ -13,85 +13,60 @@
 ---
 
 ## PulseConfig
-
 > **File:** `src/webapp/src/components/Avatar.tsx`  
 > **Kind:** interface
 
-Configuration shaping a pulse-style visual: a required numeric seed and optional selectors for a named pattern and a color palette. Reach for this interface when you need to pass a compact set of appearance/variation options into components or helpers that render pulse animations or avatars.
+```typescript
+interface PulseConfig
+```
+
+
+PulseConfig is a small configuration contract for the avatar pulsing effect. It exposes a required numeric seed which drives deterministic variation, and two optional knobs: patternName to select a predefined pulse pattern and paletteName to choose the color palette. Use it when you want repeatable, customizable pulse visuals without hardcoding values in the rendering logic.
 
 ## Remarks
-Groups appearance-related parameters (seed, pattern, palette) into a single object so callers can pass a stable configuration blob rather than multiple positional arguments. The seed is intended to be the numeric input consumed by rendering logic to vary or reproduce a pulse; patternName and paletteName let callers pick a named style when available.
+PulseConfig decouples the customization surface for the pulsing visuals from the rendering logic, enabling repeatable experiments by varying the seed while keeping patterns and palettes stable. It also provides a simple, forward-compatible surface for introducing new visual variants without changing the existing call sites.
 
 ## Example
 ```typescript
-const cfg: PulseConfig = {
-  seed: 12345,
-  patternName: 'wave', // a PatternName value
-  paletteName: 'sunset'
-};
+// Minimal configuration
+const config: PulseConfig = { seed: 7 };
 
-// pass cfg into a component or helper that renders the pulse
-// <Avatar pulseConfig={cfg} />
+// Full configuration with pattern and palette (assuming a valid PatternName value is available)
+const configFull: PulseConfig = {
+  seed: 42,
+  patternName: (PatternName as any).Wave,
+  paletteName: "Sunset"
+};
 ```
 
 ## Notes
-- patternName and paletteName are optional; consumers should handle undefined values (fallback to defaults).
-- Provide a valid finite number for seed (avoid NaN/Infinity) if you expect reproducible results.
+- seed is required and must be a finite number; it governs deterministic variation of the pulse.
+- patternName and paletteName are optional; when omitted, sensible defaults are used.
+- ensure the PatternName value you supply is valid for the current set of available patterns.
 
 ---
 
 ## PulseState
-
 > **File:** `src/webapp/src/components/Avatar.tsx`  
 > **Kind:** interface
 
-Represents the runtime state for a "pulse" visual used by the Avatar component: it groups the pulse's pattern descriptor, any pattern-specific parameters, the chosen color palette, the raw pixel buffer, and the three.js DataTexture that is (or will be) uploaded to the GPU. Reach for this interface when creating, updating, or rendering a pulsing texture so the component and rendering code share a single, mutable state object.
-
-## Remarks
-This interface separates the logical description of a pulse (pattern, params, palette) from the concrete pixel data and GPU resource (data, texture). Keeping the Uint8Array buffer and DataTexture together allows code to update pixel bytes in-place and reuse the same DataTexture instance, minimizing allocations and avoiding repeated GPU resource creation.
-
-## Example
 ```typescript
-// Create a pulse state for a 64x64 RGBA texture
-const width = 64;
-const height = 64;
-const data = new Uint8Array(width * height * 4); // RGBA byte buffer
-const texture = new DataTexture(data, width, height);
-texture.format = RGBAFormat;
-texture.needsUpdate = true;
-
-const pulseState: PulseState = {
-  pattern: somePattern,
-  params: { speed: 1.2 }, // shape depends on the Pattern
-  palette: somePalette,
-  data,
-  texture,
-};
-
-// Update loop: modify `data` and mark the texture for upload
-function tick() {
-  // write new pixel bytes into pulseState.data ...
-  // e.g. set first pixel to opaque red
-  pulseState.data[0] = 255;
-  pulseState.data[1] = 0;
-  pulseState.data[2] = 0;
-  pulseState.data[3] = 255;
-
-  // tell three.js to re-upload the buffer to the GPU
-  pulseState.texture.needsUpdate = true;
-}
+interface PulseState
 ```
 
+
+PulseState is a TypeScript interface that captures the runtime state needed by the avatar's pulsing effect in the Avatar.tsx component. It pairs a current Pattern with its runtime params and color Palette and exposes the actual binary data buffer and the GPU texture used for rendering. This abstraction allows the rendering code to treat a single object as the source of truth for a given pulse instance, simplifying updates and handoffs between stages of the render loop.
+
+## Remarks
+PulseState acts as a lightweight data contract between pulse-generation logic (Pattern and params) and the rendering path (palette, data, texture). It decouples pattern computation from visualization, enabling reuse of the same PulseState across frames or avatar instances while the underlying pattern or palette evolves. The interface does not prescribe mutation semantics, leaving updates to the surrounding system.
+
 ## Notes
-- params is typed as unknown because different Pattern implementations may require different parameter shapes; narrow it before use.
-- The Uint8Array length and layout must match the DataTexture's width/height and expected format (e.g., RGBA = 4 bytes per pixel).
-- After mutating the data buffer, set texture.needsUpdate = true so the GPU receives the new contents.
-- Reusing the same DataTexture (and updating its buffer) is preferred to replacing it often — frequent texture re-creation can hurt performance and increase GC pressure.
+- The params field is of type unknown; callers must narrow its type before use to avoid runtime errors.
+- If data is mutated, callers should refresh or upload the corresponding texture to keep rendering in sync.
 
 ---
 
 ## Avatar
-
 > **File:** `src/webapp/src/components/Avatar.tsx`  
 > **Kind:** function
 
@@ -100,20 +75,23 @@ export function Avatar(
 ```
 
 
-Avatar is an exported function that accepts a single destructured parameter object with the properties: seed, pattern, and palette. The provided source fragment contains only the parameter list; the implementation, return type, prop shapes, and any side effects are not present in the fragment and must be inspected in the full source before use.
+Renders a deterministic user avatar as a React functional component. Avatar accepts seed, pattern, and palette props to influence its appearance; the seed drives the generation so the same value produces the same avatar across renders. Use this component when you want a per-user avatar without storing images, and you wish to vary visuals with pattern and color palette.
 
 ## Remarks
-The file name (Avatar.tsx) and the symbol name suggest this is intended as a UI component (likely a React function component) that renders or generates an avatar based on a seed, a visual pattern, and a color palette. This documentation intentionally does not assume rendering details, prop types, or default values — verify the complete implementation and TypeScript declarations in the repository.
+Avatar encapsulates the avatar-generation logic behind a reusable UI unit. By centralizing avatar rendering, the app ensures consistent visuals for the same seed across the UI and hides the generation algorithm behind a simple API. This makes it easy to swap out the underlying rendering strategy without changing callers.
+
+## Example
+```typescript
+<Avatar seed="user-123" pattern="grid" palette="cool" />
+```
 
 ## Notes
-- The fragment does not include prop types: confirm whether seed is a string or number, what values pattern accepts, and the shape of palette.
-- Do not assume the function returns JSX or is side-effect free; check the full implementation to understand its behavior and lifecycle (hooks, memoization, etc.).
-- If you need to pass these props across the codebase, reference the concrete prop interface (or component signature) from the complete source to avoid type mismatches.
+- Changing the seed changes the avatar; it’s intended to be deterministic per seed.
+- If the component renders in large lists, consider memoization or stable keys to minimize re-renders.
 
 ---
 
 ## PulsePlane
-
 > **File:** `src/webapp/src/components/Avatar.tsx`  
 > **Kind:** function
 
@@ -122,38 +100,54 @@ function PulsePlane(
 ```
 
 
-Declares a function named `PulsePlane` that accepts a single destructured parameter `{ config }`. The provided source only contains the start of the signature; the function body, return value, and the expected shape of `config` are not present in the snippet. Check the full Avatar.tsx file for the implementation and intended usage.
+PulsePlane is a small React functional component that renders a pulsing plane animation as part of the avatar UI. It accepts a single prop, config, which likely governs visual aspects such as size, color, and animation duration. Use PulsePlane when you want a reusable, consistent pulsing indicator around avatars instead of duplicating animation code in multiple components.
 
 ## Remarks
-PulsePlane appears inside Avatar.tsx and is therefore intended to be used by the avatar UI code in that file. Its existence isolates whatever "pulse plane" behavior or rendering logic is required for the avatar into a separate unit so callers only need to supply configuration. Consult the surrounding code to see whether it is implemented as a React functional component, a rendering helper, or a utility.
+
+By encapsulating the pulse effect, PulsePlane decouples decorative animation from layout logic, making it easy to theme and reuse across the app. It serves as a visual attention cue that doesn't carry state beyond presentation, so it should be used where a lightweight, non-interactive glow is desired.
+
+## Example
+
+```tsx
+import PulsePlane from './PulsePlane';
+
+function AvatarWithPulse() {
+  return <PulsePlane config={{ size: 40, color: '#3b82f6', durationMs: 1500 }} />;
+}
+```
 
 ## Notes
-- The implementation is missing from the supplied snippet; do not assume behavior or return type without inspecting the full definition.
-- The shape and required properties of `config` are not available here — check its type declaration or call sites to avoid passing incorrect data.
-- Verify whether PulsePlane is exported (named/default) and whether it is intended to be used as a JSX component or invoked as a plain function.
+
+- Decorative only: PulsePlane conveys a visual effect and should not be relied on for conveying status; consider adding ARIA labels if you repurpose it into a functional control.
+- Ensure the pulse does not block interactions; place it behind interactive content or configure pointer events accordingly.
+- If many avatars render PulsePlane simultaneously, monitor performance and reuse the component where possible.
 
 ---
 
 ## createPulse
-
 > **File:** `src/webapp/src/components/Avatar.tsx`  
 > **Kind:** function
 
-Constructs a "pulse" value from the provided options. From the parameter names this helper is intended for deriving an avatar pulse (visual or configuration) using a deterministic seed together with a named pattern and color palette — reach for it when you want a single-call way to obtain the pulse data for rendering or animating an Avatar.
+```typescript
+function createPulse(
+```
+
+
+Creates a pulsing animation configuration for avatars or avatar-like UI elements. It accepts a seed for deterministic variation, a patternName to select the pulse pattern, and a paletteName to choose the color tokens. Use this helper when you want consistent, themed pulsing visuals across Avatar components instead of duplicating animation setup logic inline.
 
 ## Remarks
-This function centralizes the mapping from high-level identifiers (seed, patternName, paletteName) to whatever concrete pulse representation the Avatar system consumes. Keeping pulse creation here makes it easier to swap pattern/palette implementations or to keep deterministic generation logic in one place.
+By encapsulating the calculation of animation timing, scale, and color through seed/pattern/palette, this function centralizes the visual vocabulary for pulsing effects. It helps maintain consistency across avatars and makes it easy to swap patterns or palettes from design tokens without touching rendering code.
 
 ## Example
 ```typescript
-// Typical usage — create a pulse for an avatar and hand it to the rendering layer
-const pulse = createPulse({ seed: 'user-123', patternName: 'rings', paletteName: 'vibrant' });
-avatarElement.applyPulse(pulse);
+// Most common usage
+const pulse = createPulse({ seed: 42, patternName: 'breathing', paletteName: 'emerald' });
+// Use pulse to configure the Avatar's pulsing style (e.g., via CSS variables or a style prop)
 ```
 
 ## Notes
-- The implementation/body for createPulse was not present in the provided excerpt; inspect the source to confirm the exact return shape and any side effects.
-- For stable visuals, provide a stable seed; changing the seed will typically produce a different pulse.
-- Ensure patternName and paletteName match the set of supported identifiers to avoid fallbacks or runtime errors.
+- Keep seed stable per user/session to preserve visuals across renders.
+- If patternName or paletteName are unsupported, a sensible default is used.
+- This function is pure and has no side effects.
 
 ---

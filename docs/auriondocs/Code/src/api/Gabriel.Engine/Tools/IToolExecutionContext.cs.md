@@ -10,73 +10,50 @@
 ---
 
 ## IToolExecutionContext
-
 > **File:** `src/api/Gabriel.Engine/Tools/IToolExecutionContext.cs`  
 > **Kind:** interface
 
-A lightweight, per-turn context object that stores which conversation, user, and (optionally) project the agent is acting on. Tools that need to know the current conversation/user/project should read these values from this interface instead of requiring the model to supply them as JSON arguments; the AgentService sets the values once per turn and the context is registered with scoped lifetime so all tools invoked during the same HTTP request see the same values.
+```csharp
+public interface IToolExecutionContext
+```
+
+
+Represents a per-turn execution context used by tools to determine which conversation, user, and (optionally) project apply to the current operation. The agent populates this context once per turn, and tools read the values from this interface instead of threading identifiers through every JSON argument, which keeps tool calls lean and consistent across the turn. The interface exposes three nullable GUID properties—ConversationId, UserId, and ProjectId—and a Set method to initialize them for the active turn.
 
 ## Remarks
-This interface centralizes transient routing metadata for a single agent turn. By keeping conversation, user, and project identifiers out of tool JSON payloads it avoids trusting the model to provide correct routing information and keeps tool signatures simpler. The Scoped registration ensures the same values are visible across all tool invocations within the same request; callers must set the values at the start of the turn.
+This abstraction decouples tooling from transport payloads and hidden model state by providing a centralized, per-turn source of identity context. Since it is registered as Scoped, a single HTTP request shares the same context instance across all tools invoked during that turn, and AgentService is responsible for calling Set at the start of the turn to establish the identifiers. Consumers should rely on this context to reason about which conversation, user, and project they operate on, rather than reconstructing identity from each tool invocation.
 
 ## Example
 ```csharp
-// AgentService (or equivalent) sets the context once per turn:
-public void BeginTurn(Guid conversationId, Guid userId, Guid? projectId)
-{
-    _toolExecutionContext.Set(conversationId, userId, projectId);
-    // then invoke tools that will read from _toolExecutionContext
-}
-
-// A tool (or service used by a tool) reads the context via DI:
-public class MyTool
-{
-    private readonly IToolExecutionContext _ctx;
-
-    public MyTool(IToolExecutionContext ctx) => _ctx = ctx;
-
-    public void Execute()
-    {
-        var conversation = _ctx.ConversationId;
-        var user = _ctx.UserId;
-        var project = _ctx.ProjectId; // may be null
-        // act using these identifiers (or handle nulls as appropriate)
-    }
-}
+// Example usage: initialize the per-turn context at the start of handling a request/turn
+IToolExecutionContext context = /* resolved from DI container */;
+context.Set(conversationId, userId, projectId);
 ```
 
 ## Notes
-- ConversationId and UserId are nullable; callers should handle the case where Set was not called or values are absent.
-- The context is scoped to the request/turn lifetime — do not cache references and expect values to remain valid across turns.
-- The AgentService (or equivalent orchestrator) is responsible for calling Set before tools are invoked; calling Set multiple times will overwrite the previous values.
-- There is no built-in additional thread-safety guarantees beyond the DI scope; avoid sharing across unrelated threads.
+- The properties may be null before initialization; code that consumes them should guard with HasValue or similar null checks.
+- ProjectId is optional; some turns may not be associated with a project, so null is a valid value.
+- Do not rely on the context across turns; it is scoped to a single turn and should be initialized once per turn to avoid inconsistent state.
 
 ---
 
 ## ToolExecutionContext
-
 > **File:** `src/api/Gabriel.Engine/Tools/IToolExecutionContext.cs`  
 > **Kind:** class
 
-A small, mutable container that carries execution-scoped identifiers used by tools: ConversationId, UserId and an optional ProjectId. Instantiate the class and call Set(...) to populate these values before handing the context to components that consume IToolExecutionContext.
-
-## Remarks
-This class implements IToolExecutionContext and centralizes the common identifiers required during a tool's execution into a single object. It is sealed to keep the implementation simple and predictable; the Set method enforces that ConversationId and UserId are provided together while ProjectId remains optional.
-
-## Example
 ```csharp
-var ctx = new ToolExecutionContext();
-ctx.Set(conversationId: Guid.NewGuid(), userId: Guid.Parse("01234567-89ab-cdef-0123-456789abcdef"), projectId: null);
-
-// Consumers can read the values (they are nullable until Set is called)
-Guid? conversation = ctx.ConversationId;
-Guid? user = ctx.UserId;
-Guid? project = ctx.ProjectId;
+public sealed class ToolExecutionContext : IToolExecutionContext
 ```
 
+
+ToolExecutionContext is a sealed, concrete implementation of IToolExecutionContext that carries the identifiers necessary to describe a tool invocation: the conversation, the user initiating the interaction, and (optionally) the project under which the tool runs. ConversationId and UserId are nullable properties that get populated via the Set method, allowing the context to be created and then initialized at a later point. ProjectId is also nullable to accommodate tool executions that are not associated with a project. The Set method assigns the provided identifiers to the instance, enabling downstream components to access a consistent execution context for the duration of a tool run.
+
+## Remarks
+ToolExecutionContext serves as a portable bundle of identity information used by the tooling stack during a tool run. By centralizing ConversationId, UserId, and optional ProjectId, it avoids scattering identity data through multiple call sites and enables consistent correlation of actions with a specific conversation and user (and optionally a project) across components. The sealed design ensures the representation remains stable across the system, preventing extensions that could diverge semantics and preserving a single source of truth for execution context.
+
 ## Notes
-- ConversationId, UserId and ProjectId are nullable properties; they remain null until Set(...) is called. Check for null before use.
-- Calling Set(...) replaces any previously stored values.
-- The class does not perform synchronization; concurrent calls to Set or reads from multiple threads may require external synchronization.
+- Initialization occurs via Set; until then, ConversationId, UserId, and ProjectId are null.
+- No thread-safety guarantees; if a shared instance is used across concurrent tool invocations, external synchronization is required.
+- ProjectId is optional; expect it to be null for operations not tied to a project.
 
 ---

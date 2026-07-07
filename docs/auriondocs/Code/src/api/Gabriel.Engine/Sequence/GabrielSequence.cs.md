@@ -10,59 +10,90 @@
 ---
 
 ## GabrielSequence
-
 > **File:** `src/api/Gabriel.Engine/Sequence/GabrielSequence.cs`  
 > **Kind:** record
 
-Represents the canonical Gabriel Sequence: a runtime, in-memory container for the sequence's shared palette, 64 palette-indexed 16×16 frames, and associated metadata. Reach for this record when you need the generated sequence object attached to a Conversation (it is produced on-demand by the sequence generator) rather than a persisted image or rendered bytes.
+```csharp
+public sealed record GabrielSequence(
+    int Version,
+    Palette Palette,
+    IReadOnlyList<Frame> Frames,
+    SequenceMetadata Metadata)
+{
+    public const int FrameCount = 64;
+    public const int SchemaVersion = 1;
+
+    public Frame this[int index] => Frames[index];
+    public Frame this[FrameLayer layer, int frameInLayer]
+        => Frames[(int)layer * FrameLayers.FramesPerLayer + frameInLayer];
+}
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Version` | `int` | — |
+| `Palette` | `Palette` | — |
+| `Frames` | `IReadOnlyList<Frame>` | — |
+| `Metadata` | `SequenceMetadata` | — |
+
+
+GabrielSequence is an immutable record that encapsulates the data composing a canonical Gabriel animation sequence: a version, a shared Palette, a 64-frame collection, and associated metadata. It is the in-memory, render-ready representation used by the emotion engine; rendered bytes are not persisted. Sequences are generated on-demand from a seed and the ConversationState by IGabrielSequenceGenerator, with both inputs available on the Conversation entity. Frames can be accessed either by a flat index (0..63) via the single-parameter indexer, or by a (FrameLayer, frameInLayer) pair via the two-parameter indexer, which maps into the underlying Frames list using the layer offset (FrameLayers.FramesPerLayer).
 
 ## Remarks
-This record models the canonical, schema-versioned sequence; it intentionally does not persist rendered bytes — sequences are constructed from the conversation seed and state by IGabrielSequenceGenerator. Two constants surface important invariants: FrameCount (64) is the expected number of frames, and SchemaVersion identifies the sequence schema for compatibility checks. The two indexers provide convenient access either by flat frame index or by (layer, frame-in-layer) using FrameLayers.FramesPerLayer to map layers into the flat Frames list.
+GabrielSequence exists to separate the persistence model from the rendered output, enabling reproducible on-demand rendering while preserving a simple, immutable representation. The explicit FrameCount and SchemaVersion document expectations for downstream components and serializers, and the two indexers provide convenient access patterns: a straightforward, linear read by index for sequence-wide operations, and a layer-aware read for scenarios that align with the frame-layer organization of the source media. This separation also makes equality comparisons meaningful for caching or deduplication since the sequence’s content is the combination of Version, Palette, Frames, and Metadata.
 
 ## Example
 ```csharp
-// Access by flat index
-var firstFrame = sequence[0];
-
-// Access by layer + frame-in-layer
-FrameLayer layer = /* obtain or compute layer */ (FrameLayer)1;
-int frameInLayer = 3;
-var frame = sequence[layer, frameInLayer];
+GabrielSequence seq = GetGabrielSequence(seed, convState);
+Frame first = seq[0];
+FrameLayer layer = default; // choose appropriate layer depending on usage
+Frame firstInLayer = seq[layer, 0];
 ```
 
 ## Notes
-- The Frames list is expected to contain exactly FrameCount (64) entries; callers should validate this when constructing or consuming sequences.
-- Both indexers will throw the usual collection index errors if an out-of-range index or frameInLayer is supplied; ensure indices are validated before access.
-- The two-argument indexer computes the flat index as (int)layer * FrameLayers.FramesPerLayer + frameInLayer, so correct FrameLayers.FramesPerLayer values are required for proper mapping.
+- Rendered bytes are not persisted; regenerating frames requires access to the seed and ConversationState used by the generator.
+- Access by layer assumes a consistent organization of frames per layer (FrameLayers.FramesPerLayer); changing that constant would affect indexing.
+- GabrielSequence is a record, so it is immutable; to reflect changes you would construct a new instance with updated data.
 
 ---
 
 ## SequenceMetadata
-
 > **File:** `src/api/Gabriel.Engine/Sequence/GabrielSequence.cs`  
 > **Kind:** record
 
-A small immutable container holding provenance and debugging information for a generated sequence. Use this to record the deterministic seed used during generation, the timestamp when the sequence was produced, and an optional short human‑readable summary of the live state that drove the generation (useful for observation, debugging and replay).
-
-## Remarks
-This record exists to make sequence generation reproducible and inspectable. The Seed captures the source of randomness so the same sequence can be re-generated when needed; GeneratedAt timestamps the exact generation moment (including offset) for audit and ordering; StateSummary provides a compact, human-friendly description of the live state that influenced generation and is intended for debugging and for any observation-style passes by other systems.
-
-## Example
 ```csharp
-var meta = new SequenceMetadata(
-    Seed: 1234567890L,
-    GeneratedAt: DateTimeOffset.UtcNow,
-    StateSummary: "playful, short-message rhythm, 4 turns in"
-);
-
-// Records are immutable and support value equality and with-expressions:
-var later = meta with { GeneratedAt = DateTimeOffset.UtcNow.AddSeconds(30) };
+public sealed record SequenceMetadata(
+    long Seed,
+    DateTimeOffset GeneratedAt,
+    
+    
+    
+    string? StateSummary)
 ```
 
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Seed` | `long` | — |
+| `GeneratedAt` | `DateTimeOffset` | — |
+| `StateSummary` | `string?` | — |
+
+
+SequenceMetadata is a compact, immutable record that captures the metadata produced alongside a generated sequence. It records the Seed used to drive generation, the precise GeneratedAt timestamp, and an optional human-readable StateSummary describing the live state that influenced the result. Use this type when you need reproducibility, debugging context, or to provide contextual notes for the observation pass during AI-assisted analysis.
+
+## Remarks
+
+By encapsulating seed, time, and an optional state summary, SequenceMetadata serves as a stable contract between the generation logic and tooling that inspects or replays sequences. As a value-based record, it participates in equality checks naturally and can be serialized alongside outputs. The presence of Seed and GeneratedAt enables deterministic replay and traceability across components in Gabriel.Engine’s sequence pipeline, while StateSummary offers debugging breadcrumbs without encoding the entire live state.
+
+It can be attached to generated outputs to preserve provenance across storage or transport.
+
 ## Notes
-- StateSummary is nullable; prefer supplying a short summary when available to aid debugging and human inspection.
-- GeneratedAt is a DateTimeOffset so the offset is preserved; using UTC (DateTimeOffset.UtcNow) avoids ambiguity across systems.
-- Seed is a long and may be used to re-seed any PRNG for deterministic replay; semantics of negativity depend on the consumer.
-- This is an immutable record: instances compare by value and can be copied with the with expression.
+
+- StateSummary may be null — guard against null before using it.
+- Seed and GeneratedAt are provenance data; preserve them when passing results through layers.
+- SequenceMetadata is immutable (record); to "modify" values you must construct a new instance.
 
 ---

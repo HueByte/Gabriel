@@ -12,134 +12,183 @@
 ---
 
 ## ModelDto
-
 > **File:** `src/api/Gabriel.API/Contracts/Models/ModelDto.cs`  
 > **Kind:** record
 
-Represents the wire-format metadata for a single model returned by the /api/models endpoint. Contains identification (provider and model name), the model's context window size, optional per-model compaction threshold, pricing expressed per 1,000,000 tokens for input/output and cache operations, and two boolean flags intended for client UI (default and currently selected model).
+```csharp
+public sealed record ModelDto(
+    string Provider,
+    string Name,
+    int ContextWindowTokens,
+    
+    
+    
+    double? CompactThreshold,
+    decimal InputPricePerMTokens,
+    decimal OutputPricePerMTokens,
+    decimal CacheReadPricePerMTokens,
+    decimal CacheWritePricePerMTokens,
+    bool IsDefault,
+    bool IsSelected)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Provider` | `string` | — |
+| [`Name`](../../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+| `ContextWindowTokens` | `int` | — |
+| `CompactThreshold` | `double?` | — |
+| `InputPricePerMTokens` | `decimal` | — |
+| `OutputPricePerMTokens` | `decimal` | — |
+| `CacheReadPricePerMTokens` | `decimal` | — |
+| `CacheWritePricePerMTokens` | `decimal` | — |
+| `IsDefault` | `bool` | — |
+| `IsSelected` | `bool` | — |
+
+
+ModelDto is a data carrier that represents one model entry from the /api/models response, including per‑million-token pricing and an optional per‑model CompactThreshold. Use it when listing or pricing models returned by the API and when a per-model override should govern behavior instead of the global AgentOptions, while also tracking the provider, identity, context window, and selection state.
 
 ## Remarks
-This DTO is designed for use by API responses and client UIs that need to display model choices and compute cost estimates. The nullable CompactThreshold allows a model to override the global AgentOptions.CompactThreshold when a model requires a different rolling-compact trigger (for example, to account for tiered pricing). Cache read/write prices are kept at 0 when a provider does not expose caching pricing information.
+ModelDto decouples API shape from internal pricing and UI logic by encapsulating all relevant metadata for a model in a single, immutable record. It enables consumers to surface model options, compare costs, and respect per-model overrides without scattering token pricing logic across callers. The nullable CompactThreshold allows providers with tiered pricing to express a model-specific trigger while falling back to a global threshold when not set.
 
 ## Example
 ```csharp
-// Example: model with no per-model compact override
-var modelA = new ModelDto(
-    Provider: "openai",
-    Name: "gpt-4o",
+var dto = new ModelDto(
+    Provider: "OpenAI",
+    Name: "gpt-4",
     ContextWindowTokens: 8192,
-    CompactThreshold: null,              // use global AgentOptions.CompactThreshold
-    InputPricePerMTokens: 0.12m,
-    OutputPricePerMTokens: 0.18m,
-    CacheReadPricePerMTokens: 0m,        // provider doesn't charge for cache reads (or not exposed)
-    CacheWritePricePerMTokens: 0.01m,
+    CompactThreshold: 0.18,
+    InputPricePerMTokens: 0.03m,
+    OutputPricePerMTokens: 0.02m,
+    CacheReadPricePerMTokens: 0.0m,
+    CacheWritePricePerMTokens: 0.0m,
     IsDefault: true,
-    IsSelected: false
-);
-
-// Example: model with per-model compact override (trigger at 18% of context window)
-var modelB = new ModelDto(
-    Provider: "acme",
-    Name: "acme-large",
-    ContextWindowTokens: 32768,
-    CompactThreshold: 0.18,              // trigger compaction at 18% of the context window
-    InputPricePerMTokens: 0.05m,
-    OutputPricePerMTokens: 0.05m,
-    CacheReadPricePerMTokens: 0m,
-    CacheWritePricePerMTokens: 0m,
-    IsDefault: false,
-    IsSelected: true
-);
+    IsSelected: false);
 ```
 
 ## Notes
-- CompactThreshold is a fraction (e.g., 0.18 means 18% of the context window). A null value means the system should fall back to the global AgentOptions.CompactThreshold.
-- All price fields are expressed as cost per 1,000,000 tokens (per-million tokens) and use decimal to avoid floating-point rounding issues.
-- CacheReadPricePerMTokens and CacheWritePricePerMTokens may be zero when a provider does not expose caching pricing; treat zero as "no charge or not provided."
+- CompactThreshold being null means the global AgentOptions.CompactThreshold is used; callers should resolve this default before computing triggers.
+- Cache pricing fields are zero when the provider does not expose caching pricing; rely on API documentation for availability.
+- Prices are per-million tokens (MTokens); multiply accordingly for your usage.
 
 ---
 
 ## ModelsResponse
-
 > **File:** `src/api/Gabriel.API/Contracts/Models/ModelDto.cs`  
 > **Kind:** record
 
-A DTO returned by GET /api/models that lists every model the service catalog exposes and indicates which model the agent will currently use for the requesting user. Use this record when responding to clients that need both the full catalog of available models and the currently selected (or default) model for that user.
+```csharp
+public sealed record ModelsResponse(
+    IReadOnlyList<ModelDto> AvailableModels,
+    SelectedModelDto Selected)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `AvailableModels` | `IReadOnlyList<ModelDto>` | — |
+| `Selected` | `SelectedModelDto` | — |
+
+
+ModelsResponse defines the API payload returned by GET /api/models. It carries two essential pieces of information: AvailableModels, the complete list of model options exposed by the catalog; and Selected, the model the agent will currently use for the user (defaulting to the configured value if the user hasn’t explicitly chosen one yet). As an immutable sealed record, it provides a stable, single-communication contract that couples the catalog with the user’s active choice.
 
 ## Remarks
-This record bundles two concerns that clients commonly need together: the complete set of available models (the catalog) and the single model that the agent will actually use for the user. The Selected property echoes the agent's current choice (it will be the configured default if the user has not made a selection), while AvailableModels is the authoritative list of what the catalog exposes.
+
+This abstraction cleanly separates the catalog of available models from the per-user selection, enabling independent evolution of the model catalog and the selection logic. It provides a stable contract for clients to render both the full option set and the current selection in a single response, reducing round-trips and keeping UI concerns aligned with the server state.
 
 ## Example
-```csharp
-// Prepare data (ModelDto and SelectedModelDto instances assumed available)
-IReadOnlyList<ModelDto> available = new List<ModelDto> { modelDtoA, modelDtoB };
-SelectedModelDto selected = userSelectedModel ?? defaultSelectedModel;
 
-var response = new ModelsResponse(available, selected);
-// return response from a controller action as the API payload
+```csharp
+// Typical usage in an API controller
+var allModels = _catalogService.GetAllModels();       // IReadOnlyList<ModelDto>
+var selection = _userContext.GetSelectedModel(userId); // SelectedModelDto
+var response = new ModelsResponse(allModels, selection);
+return Ok(response);
 ```
 
 ## Notes
-- IReadOnlyList is a read-only view but does not guarantee the underlying collection is immutable; pass an immutable collection or a defensive copy if callers must not see later mutations.
-- Selected reflects the agent's current choice for that user — it may represent a system/config default when the user has not picked a model.
+
+- Ensure AvailableModels is a non-null read-only collection to preserve immutability from the API surface.
+- Selected should always reflect the user’s current choice, or the configured default when none is set.
+- The shape of this payload is part of the public API contract; avoid changing property names or types in a backward-incompatible way.
 
 ---
 
 ## SelectedModelDto
-
 > **File:** `src/api/Gabriel.API/Contracts/Models/ModelDto.cs`  
 > **Kind:** record
 
-Represents a selected model by its provider and model name. Use this lightweight DTO when you need to identify or transfer which provider/model combination is chosen (for example in API requests, responses, or internal contract boundaries).
+```csharp
+public sealed record SelectedModelDto(string Provider, string Name)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Provider` | `string` | — |
+| [`Name`](../../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+
+
+SelectedModelDto is a compact, immutable data transfer object that carries the essential details of a model selection: the provider that supplies the model and the model's name. Implemented as a sealed positional record, it provides value-based equality and concise construction, making it ideal for API contracts and boundaries where a consumer selects a specific model.
 
 ## Remarks
-This is a sealed positional record so the compiler generates immutable properties (Provider and Name), value-based equality, Deconstruct, and support for with-expressions. Being a record makes it convenient for comparisons and creating modified copies without mutating the original object; sealing prevents inheritance and keeps the shape stable for consumers.
+As a record, it gains built-in value equality, deconstruction support, and non-destructive copy via with-expressions. Being sealed communicates that this type is a simple data container not intended for inheritance. Its two properties, Provider and Name, form the complete identity of the selection and are typically serialized in API payloads.
 
 ## Example
 ```csharp
-// create
-var sel = new SelectedModelDto("openai", "gpt-4o");
+// Common usage: create and inspect a selection
+var selection = new SelectedModelDto("ProviderA", "ModelX");
+Console.WriteLine($"{selection.Provider} - {selection.Name}");
 
-// deconstruct
-var (provider, name) = sel;
-
-// create a modified copy
-var other = sel with { Name = "gpt-4o-mini" };
+// Create a modified copy
+var updated = selection with { Name = "ModelY" };
 ```
 
 ## Notes
-- Equality is value-based: two instances with identical Provider and Name compare equal.
-- Properties are init-only (immutable after construction); use the with-expression to create modified copies.
-- If this DTO is serialized to JSON, ensure the serializer's naming policy matches the API contract (property names are "Provider" and "Name" by default).
+- Properties are init-only; instances are immutable after creation.
+- Use with-expressions for creating a modified copy without mutating the original.
+- JSON serialization uses the property names Provider and Name by default; customize with serialization attributes if needed.
+
 
 ---
 
 ## SetActiveModelRequest
-
 > **File:** `src/api/Gabriel.API/Contracts/Models/ModelDto.cs`  
 > **Kind:** record
 
-Represents the request body for the PUT /api/models/active endpoint; used to set a preferred model by provider/name or to clear the preference. Both Provider and Name are nullable — passing null for both clears the stored preference and causes the system to fall back to the configured default.
+```csharp
+public sealed record SetActiveModelRequest(string? Provider, string? Name)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `Provider` | `string?` | — |
+| [`Name`](../../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string?` | — |
+
+
+SetActiveModelRequest is the API surface for selecting the active model via PUT /api/models/active. It carries an optional Provider and Name; specify both to activate a particular model, or pass null for both to clear the preference and fall back to the config default.
 
 ## Remarks
-This is a small immutable DTO used only as the API payload for updating the active model preference. It intentionally allows null values so callers can explicitly clear the preference (null/null) rather than supplying an empty string.
+This symbol exists as a lightweight DTO that encodes the client's intent to select or reset the active model. Representing the provider/name pair as a single immutable record makes the contract easy to reason about and ensures value-based equality for caching or testing scenarios. It sits at the boundary between HTTP payloads and domain configuration, enabling callers to override defaults in a controlled, explicit way.
 
 ## Example
 ```csharp
-// Set a specific model
-var req = new SetActiveModelRequest("openai", "gpt-4");
-var json = System.Text.Json.JsonSerializer.Serialize(req);
-await httpClient.PutAsync("/api/models/active", new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+// Typical usage: specify a provider and model
+var request = new SetActiveModelRequest("ProviderX", "ModelY");
 
-// Clear the preference (revert to config default)
-var clearReq = new SetActiveModelRequest(null, null);
-var clearJson = System.Text.Json.JsonSerializer.Serialize(clearReq);
-await httpClient.PutAsync("/api/models/active", new StringContent(clearJson, System.Text.Encoding.UTF8, "application/json"));
+// Clear the active model preference and fall back to config default
+var clearRequest = new SetActiveModelRequest(null, null);
 ```
 
 ## Notes
-- Passing Provider = null and Name = null explicitly clears any stored preference; do not rely on empty strings to have the same effect.
-- This record is immutable; use the constructor or the "with" expression to create modified copies if needed.
-- When serializing to JSON, serializer settings that omit null values will exclude those properties from the payload — ensure the receiving endpoint treats omitted fields as intended.
+- Nullability semantics are explicit for the all-null clear case; partial nulls are not defined by this contract.
+- When using a serializer, ensure null values are preserved if you rely on the clear behavior; some serializers omit nulls by default, which can prevent the server from recognizing the clear action.
+
 
 ---

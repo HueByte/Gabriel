@@ -3,34 +3,17 @@
 > **File:** `src/api/Gabriel.Infrastructure/Persistence/UnitOfWork.cs`  
 > **Kind:** class
 
-A thin adapter that implements IUnitOfWork by delegating SaveChangesAsync to an injected AppDbContext. Use this when application code (services, handlers, or repositories) should depend on an abstraction for committing EF Core changes rather than on DbContext directly, enabling easier testing and separation of concerns.
-
-## Remarks
-This class exists primarily to hide the concrete DbContext behind an interface so higher-level code can request IUnitOfWork in its constructor and remain decoupled from EF Core. It performs no additional orchestration: it does not start or manage database transactions, track repositories, or wrap SaveChanges in retries — it simply forwards the call to AppDbContext.SaveChangesAsync.
-
-## Example
 ```csharp
-// Typical usage via dependency injection in a service
-public class UserService
-{
-    private readonly IUnitOfWork _uow;
-    private readonly IUserRepository _users;
-
-    public UserService(IUnitOfWork uow, IUserRepository users)
-    {
-        _uow = uow;
-        _users = users;
-    }
-
-    public async Task CreateUserAsync(User user, CancellationToken ct = default)
-    {
-        _users.Add(user);
-        await _uow.SaveChangesAsync(ct);
-    }
-}
+public class UnitOfWork : IUnitOfWork
 ```
 
+
+UnitOfWork is a minimal implementation of IUnitOfWork that wraps AppDbContext and delegates persistence to EF Core. It exposes a single asynchronous SaveChangesAsync operation, which commits all tracked changes to the database, enabling callers to coordinate multiple repository operations within a single unit of work without depending directly on the DbContext.
+
+## Remarks
+By depending on IUnitOfWork instead of the EF Core DbContext, services can be tested with mocks or stubs and the underlying persistence mechanism can be swapped in the future without touching higher layers. This class does not implement explicit transaction management; it relies on AppDbContext.SaveChangesAsync to perform the commit within the surrounding DI scope. The lifetime of the DbContext is managed by the DI container, so disposal is handled at the appropriate scope boundary.
+
 ## Notes
-- This implementation does not provide transactional guarantees beyond what AppDbContext offers; if you need an explicit transaction scope, begin one on the DbContext before calling SaveChangesAsync.
-- AppDbContext (and therefore this UnitOfWork) is not thread-safe — do not reuse the same instance concurrently across threads.
-- The provided CancellationToken is forwarded straight to DbContext.SaveChangesAsync.
+- No explicit transaction management is implemented here; SaveChangesAsync commits changes in a single database transaction per call (as provided by the DbContext).
+- This is a thin wrapper; it does not expose repository methods or read/query capabilities. If you need richer data access patterns, introduce dedicated repositories or extend the abstraction.
+- Ensure AppDbContext is registered with a compatible lifetime so the UnitOfWork and context share a consistent scope (avoiding multiple contexts or disposed instances).

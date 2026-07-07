@@ -3,30 +3,36 @@
 > **File:** `src/api/Gabriel.Core/Identity/RefreshToken.cs`  
 > **Kind:** class
 
-Represents a server-side persisted refresh token for a user and encapsulates lifecycle state used by a token-rotation policy (creation time, expiry, revocation and replacement). Reach for this type when you need a durable record of a refresh token in your database — the class expects callers to store only a hash of the token (not the plaintext) and to manage rotation/revocation via the provided methods.
+```csharp
+public class RefreshToken
+```
+
+
+Represents a server-side, persisted refresh token and encapsulates its lifecycle (creation time, expiration, revocation and replacement). Reach for this type when you need a single authoritative record for a user's refresh token in the database — the class stores only a token hash (the plaintext token is returned to clients only at issuance) and exposes simple methods and properties used by token rotation and revocation logic.
 
 ## Remarks
-This class models the security-minded server record for refresh tokens: the plaintext token is produced only at issuance and never stored; instead a TokenHash (typically a SHA-256 hash) is persisted. It centralizes status checks (IsActive/IsRevoked/IsExpired) and small lifecycle transitions — Revoke() marks the token as revoked and MarkReplacedBy(...) records a replacement token and also revokes the original if it wasn't already. The rotation comment in the source indicates that a higher-level JwtTokenService is expected to issue replacement tokens and revoke an entire token family when reuse of a replaced token is detected.
+This entity is designed to support a rotation-first refresh policy: each successful refresh issues a new token and the previous token is marked as replaced. The class stores a TokenHash (the source comments indicate a SHA-256 hash is expected) rather than the plaintext token so a database leak does not immediately expose active sessions. The private parameterless constructor exists to allow persistence frameworks/ORMs to materialize instances while the static Create factory enforces required fields when creating a new token from application code.
 
 ## Example
 ```csharp
-// Create a new record (tokenHash should be a hashed value, e.g. SHA-256 hex)
-var token = RefreshToken.Create(userId: userId, tokenHash: hashedToken, lifetime: TimeSpan.FromDays(30));
+// Create a new refresh token record for a user
+var lifetime = TimeSpan.FromDays(30);
+var tokenHash = ComputeSha256Hash(plaintextToken);
+var refreshToken = RefreshToken.Create(userId, tokenHash, lifetime);
 
-// Persist `token` to the DB. Later, check status:
-if (token.IsActive)
-{
-    // issue access token, etc.
-}
+// Check status
+if (refreshToken.IsActive) { /* allow refresh */ }
 
-// When rotating tokens: record the replacement and persist the change
-token.MarkReplacedBy(replacementId);
-// Or revoke explicitly if a compromise is detected
-token.Revoke();
+// Revoke explicitly (idempotent)
+refreshToken.Revoke();
+
+// Mark that this token was replaced by another token
+refreshToken.MarkReplacedBy(replacementTokenId);
 ```
 
 ## Notes
-- Create validates inputs and throws ArgumentException when userId is Guid.Empty or tokenHash is null/whitespace.
-- MarkReplacedBy throws if given Guid.Empty and will set RevokedAt if it wasn't already set; Revoke is idempotent (sets RevokedAt only if null).
-- Time-based checks use DateTimeOffset.UtcNow; tests or special hosting scenarios may need to account for this time source.
-- The class does not enforce that TokenHash is SHA-256 — the comment documents the intended usage but callers are responsible for providing the hashed value.
+- Create throws ArgumentException if userId is Guid.Empty or tokenHash is null/whitespace.
+- MarkReplacedBy throws ArgumentException if replacementId is Guid.Empty.
+- Revoke and MarkReplacedBy set RevokedAt only if it was previously null, so repeated calls are safe (idempotent for the timestamping).
+- IsActive and IsExpired use DateTimeOffset.UtcNow for comparisons; tests that assert time-dependent behavior should control or mock the clock.
+- The class does not validate the hashing algorithm or format of TokenHash — callers are responsible for producing a secure (e.g. SHA-256) hash before calling Create.

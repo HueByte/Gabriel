@@ -3,27 +3,32 @@
 > **File:** `src/api/Gabriel.Engine/Tools/Files/GrepTool.cs`  
 > **Kind:** class
 
-Search file contents under a resolved root using a .NET regular expression (or a literal string when literal=true). Use this tool when you need a ripgrep-style quick content search across a workspace or project from the agent environment — it walks files matching a glob, applies common noisy-directory excludes, skips binary files, and returns matches in `path:line:content` form with optional surrounding context.
+```csharp
+public sealed class GrepTool : ITool
+```
+
+
+Search file contents under a resolved root using a regular expression or a literal string. GrepTool walks files matched by a glob, skips binary files and common noisy directories by default, and emits ripgrep-style hits (path:line:content) with optional context lines — use it when you need a safe, configurable in-process content search within the agent's workspace.
 
 ## Remarks
-GrepTool wraps a file-walking, pattern-matching workflow and delegates path resolution to an IAgentPathResolver (so callers can request host vs. project roots). It enforces safety limits to avoid pathological scans: per-file and global byte caps, a cap on the number of reported matches, and a maximum displayed line length. The tool accepts a JSON-encoded argument object (see ParametersJsonSchema) and returns a single string result; parsing or resolution failures are returned as an "Error: ..." string for the caller to surface.
+GrepTool implements ITool and delegates root resolution to an IAgentPathResolver (the `mode`/`root_path` parameters control how the root is resolved). It exposes a JSON parameters schema that controls pattern vs. literal matching, globbing, context lines, case sensitivity, per-run match limits and directory exclusions. The implementation purposely enforces per-file and global byte caps and a hard maximum on reported matches to avoid consuming excessive CPU or memory when scanning large trees or binary blobs.
 
 ## Example
 ```csharp
-// Example usage: call the tool with a JSON args object and await the result.
-// Note: in real code the IAgentPathResolver would be provided by the host.
-var argsJson = @"{ 
-  \"pattern\": ""TODO\"",
-  \"path_glob\": ""**/*.cs"",
-  \"context_lines\": 1,
-  \"max_matches\": 100
-}";
-string result = await grepTool.ExecuteAsync(argsJson, CancellationToken.None);
-Console.WriteLine(result);
+// Search for "TODO" in all C# files, case-insensitive with one line of context.
+var grep = new GrepTool(agentPathResolver);
+var args = new {
+    pattern = "TODO",
+    path_glob = "**/*.cs",
+    context_lines = 1,
+    case_sensitive = false
+};
+var argumentsJson = System.Text.Json.JsonSerializer.Serialize(args);
+string result = await grep.ExecuteAsync(argumentsJson, CancellationToken.None);
+Console.WriteLine(result); // ripgrep-style hits or an Error: ... message
 ```
 
 ## Notes
-- The pattern field is required in the JSON arguments; set literal=true to treat the input as a plain string (Regex.Escape is used).
-- Defaults and safety caps: default max_matches = 200, hard cap = 1000; per-file byte cap = 4 MB; global byte cap = 256 MB; displayed line content is capped (240 chars).
-- Several noisy directories are excluded by default (node_modules, bin, obj, .git, dist, .vs, .idea, .vscode); pass an empty exclude_dirs array to disable these defaults.
-- context_lines is limited (schema enforces 0–5). Parsing or path resolution errors are returned as an "Error: <message>" string rather than thrown exceptions.
+- The `pattern` parameter is required; set `literal=true` to match the pattern as a literal string (it will be escaped via Regex.Escape).
+- Default noisy directories are skipped (node_modules, bin, obj, .git, dist, .vs, .idea, .vscode); pass an empty `exclude_dirs` array to disable these defaults.
+- The tool enforces caps (per-file byte cap, global byte cap, and a hard cap on matches). Large files, binary files, or very large trees may produce fewer results than an unbounded search would.

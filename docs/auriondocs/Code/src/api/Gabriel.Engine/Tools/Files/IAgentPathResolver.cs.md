@@ -11,41 +11,38 @@
 ---
 
 ## IAgentPathResolver
-
 > **File:** `src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs`  
 > **Kind:** interface
 
-Resolves a tool-supplied path into an absolute, validated path on disk that is scoped either to the host root or to the active conversation's project sandbox. Reach for this interface whenever an agent filesystem tool needs a canonical, authorization-checked path so all normalization, root-scoping and access gating are applied consistently.
+```csharp
+public interface IAgentPathResolver
+```
+
+
+This interface defines a contract for resolving a tool’s path argument into an absolute filesystem path on disk. Implementations centralize security-critical checks by validating path prefixes, applying mode-based root gating, and enforcing project authorization, guaranteeing these hardening steps occur exactly once per resolution. Callers pass a string that may be relative or absolute, a PathRootMode that selects the root scope (host root vs. project sandbox), and a CancellationToken to support cooperative cancellation. All filesystem agent tools route through this resolver to ensure consistent, auditable path resolution.
 
 ## Remarks
-This interface centralizes path hardening for filesystem tools: implementations perform the same prefix checks, mode-based gating and project authorization once, so callers don't need to duplicate those checks. That reduces the chance of inconsistent enforcement across different tools and makes it straightforward to change scoping or authorization logic in one place.
+By funneling path resolution through IAgentPathResolver, the system ensures consistent scoping of tool-accessible files and prevents leakage between host and project sandboxes. The abstraction decouples the concerns of path normalization and security checks from individual tools, simplifying testing and evolving the underlying policy. It also makes it straightforward to swap in different resolution strategies (e.g., in-process vs. remote) without changing call sites.
 
 ## Example
 ```csharp
-// Resolve a relative path for project-scoped access
-CancellationToken ct = CancellationToken.None;
-IAgentPathResolver resolver = /* injected implementation */;
-var resolved = await resolver.ResolveAsync("relative/path/to/file.txt", PathRootMode.Project, ct);
-// 'resolved' is a validated, absolute representation of the path; use it with your filesystem operations
+// Typical usage via dependency injection
+var resolver = serviceProvider.GetRequiredService<IAgentPathResolver>();
+ResolvedPath path = await resolver.ResolveAsync("logs/output.txt", PathRootMode.HostRoot, cancellationToken);
 ```
 
 ## Notes
-- Choose the correct PathRootMode (host vs project) — using the wrong mode can result in denied access or incorrect scoping.
-- Do not bypass this resolver when implementing agent filesystem tools; doing so risks inconsistent authorization and path-traversal vulnerabilities.
-- Honour the provided CancellationToken to avoid long-running or blocked operations.
+- Ensure path normalization prevents directory traversal outside the allowed root; implementers must enforce the prefix check exactly once during resolution.
+- Observe CancellationToken to support cancellation in I/O or authorization checks.
+- Respect PathRootMode semantics; mixing modes across calls could bypass sandbox boundaries.
 
 ---
 
 ## ResolvedPath
-
 > **File:** `src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs`  
 > **Kind:** record
 
 ```csharp
-// `Display` is the user-friendly form to show in tool output - relative to
-// the resolved root. `Absolute` is what we actually open. `RootAbsolute` is
-// the directory the path is pinned under, surfaced for "Path: X (rooted at Y)"
-// output and for callers that want to do their own walks.
 public sealed record ResolvedPath(
     string Absolute,
     string Display,
@@ -57,57 +54,44 @@ public sealed record ResolvedPath(
 
 | Parameter | Type | Default |
 |-----------|------|---------|
-| `Y` | `rooted at` | — |
+| `Absolute` | `string` | — |
+| `Display` | `string` | — |
+| `RootAbsolute` | `string` | — |
+| `Mode` | `PathRootMode` | — |
 
 
-Represents a path that has been resolved against a known root and provides both a user-facing form and the concrete filesystem location to operate on. Reach for this record when a resolver must return what to display to the user (Display), what to actually open or read (Absolute), and which root the path is pinned under (RootAbsolute), along with the resolution mode (Mode).
+Represents the outcome of resolving a path within a rooted file system context. It bundles both the actual path opened by the tool (Absolute) and a user-friendly representation (Display) that is relative to the resolved root (RootAbsolute). The Mode indicates how the path was rooted, guiding consumers on how to interpret the Display value.
 
 ## Remarks
-This type exists to separate presentation from action: Display is intended for human-friendly output (usually relative to the resolved root), while Absolute is the canonical filesystem path callers should use for I/O. RootAbsolute records the directory the path was resolved/pinned under so callers can show context like "rooted at X" or perform their own directory walks relative to that root. Mode conveys how the path was resolved and can influence caller behavior when handling the result.
-
-## Example
-```csharp
-// Typical use: present a path to the user, but use Absolute for file operations
-var rp = new ResolvedPath(
-    Absolute: "/work/project/src/File.cs",
-    Display: "src/File.cs",
-    RootAbsolute: "/work/project",
-    Mode: PathRootMode.Pinned
-);
-
-Console.WriteLine($"Path: {rp.Display} (rooted at {rp.RootAbsolute})");
-using var stream = File.OpenRead(rp.Absolute);
-```
+By centralizing path-related information in a single, immutable record, this symbol separates IO concerns from presentation concerns. Consumers can use Absolute for file access while presenting Display to users, and rely on RootAbsolute to understand the anchored root. PathRootMode further clarifies the rooting strategy, enabling callers to adapt Display formatting without changing how the underlying file system is accessed.
 
 ## Notes
-- Do not assume Display is an absolute path; prefer Absolute for any file system operations.
-- RootAbsolute is provided for context and for callers that need to enumerate or walk the pinned root themselves.
-- Mode indicates how the resolver derived the returned path and may affect how callers interpret or validate the other fields.
+- Absolute is the concrete filesystem path opened by the tool; Display is intended for user-facing presentation and may be rooted relative to RootAbsolute.
+- RootAbsolute serves as the anchored root directory used to compute or interpret Display; ensure it remains consistent with how Display is produced.
+- As a sealed record, ResolvedPath has value-based equality and is immutable once constructed, which supports straightforward caching and comparison across components.
 
 ---
 
 ## PathRootMode
-
 > **File:** `src/api/Gabriel.Engine/Tools/Files/IAgentPathResolver.cs`  
 > **Kind:** enum
 
-Specifies which base/root should be used when resolving file paths for agent operations: Host treats paths relative to the machine/host filesystem, while Project treats paths relative to the current project or workspace root. Use this enum when calling path-resolution APIs to indicate whether a path should be resolved against the project sandbox or against the host environment.
-
-## Remarks
-This enum lets path-resolution logic be explicit about scope, enabling the same resolver APIs to operate in either project-local or host-wide contexts. It helps prevent accidental access to files outside the intended workspace (use Project to stay within the workspace) or to intentionally reference host-level locations (use Host when the agent must access system paths).
-
-## Example
 ```csharp
-// Typical usage with a resolver that accepts a root mode
-var mode = PathRootMode.Project; // resolve relative to the project's root
-var resolvedPath = agentPathResolver.Resolve("logs/output.txt", mode);
-
-mode = PathRootMode.Host; // resolve relative to the host filesystem
-var hostPath = agentPathResolver.Resolve("/var/log/service.log", mode);
+public enum PathRootMode
+{
+    Host,
+    Project,
+}
 ```
 
+
+PathRootMode represents which root context to use when resolving file system paths in the agent's path-resolution workflow. It exposes two values, Host and Project, to distinguish between paths resolved against the host machine's filesystem and those resolved within the current project workspace. Use this enum whenever a path-resolution operation must be contextualized to a specific root rather than assuming a single default.
+
+## Remarks
+This enum provides a lightweight abstraction that enables a multi-root path resolver to support different resolution strategies without scattering root-specific logic across callers. It cleanly separates concerns, letting the IAgentPathResolver switch behavior based on the selected root while other components simply pass a PathRootMode value.
+
 ## Notes
-- Relative paths are interpreted with respect to the selected root; prefer Project for workspace-scoped operations to avoid leaking access to host files.
-- Choosing Host can expose files outside the project; validate inputs when paths originate from untrusted sources.
+- Ensure that all path-resolution code paths handling PathRootMode remain in sync when adding new roots.
+- Prefer using the enum type in switch statements and comparisons rather than raw integers to avoid invalid values.
 
 ---

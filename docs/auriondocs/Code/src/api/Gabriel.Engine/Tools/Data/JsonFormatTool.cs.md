@@ -8,32 +8,12 @@ public sealed class JsonFormatTool : ITool
 ```
 
 
-JsonFormatTool validates, formats, or minifies a JSON string. It delegates parsing and re-serialization to System.Text.Json and returns a human-friendly formatted JSON, a compact one-liner, or a validation message—without performing any I/O.
+Formats, validates, or minifies a JSON string using System.Text.Json. It's a pure function with no I/O or side effects: provide the JSON string and an optional mode (pretty, minify, or validate); it returns either the formatted JSON, a compact single-line string, or a validity message. If the input is invalid, it reports the error location (line and position) to help locate the problem. It also enforces a maximum input length (500,000 characters) to guard resource usage.
 
 ## Remarks
-
-JsonFormatTool is a pure formatting utility: given the same input, it always yields the same output and has no side effects beyond producing a string. It centralizes JSON handling behind a small API surface, and its error messages include the location (line and position) of invalid JSON to ease debugging in logs and pipelines.
-
-## Example
-
-```csharp
-// Pretty-print a JSON string
-var tool = new JsonFormatTool();
-string input = "{\"a\":1,\"b\":\"text\"}";
-string args = "{\"json\": \"" + input.Replace("\"","\\\"") + "\", \"mode\": \"pretty\"}";
-string pretty = await tool.ExecuteAsync(args, CancellationToken.None);
-
-// Minify a JSON string
-string minArgs = "{\"json\": \"" + input.Replace("\"","\\\"") + "\", \"mode\": \"minify\"}";
-string minified = await tool.ExecuteAsync(minArgs, CancellationToken.None);
-
-// Validate a JSON string
-string valArgs = "{\"json\": \"" + input.Replace("\"","\\\"") + "\", \"mode\": \"validate\"}";
-string validation = await tool.ExecuteAsync(valArgs, CancellationToken.None);
-```
+JsonFormatTool serves as a predictable JSON-handling primitive for tooling and diagnostics. By centralizing formatting behavior, it avoids ad-hoc string manipulation scattered throughout the codebase. The three modes cover common developer needs: pretty for human readability, minify for compact transmission or storage, and validate to verify syntax without transforming the data. Being a pure function makes it suitable for inclusion in pipelines and tests without hidden side effects.
 
 ## Notes
-
-- The input JSON string is capped at 500,000 characters; larger payloads yield an error: `'json' is too long (max 500000 characters).`.
-- The default mode is pretty if `mode` is omitted; supported modes are pretty, minify, and validate.
-- The tool reports JSON parsing errors with a precise line and position, and returns results as strings (no exceptions are thrown to the caller).
+- Enforces a hard limit of 500,000 characters for the input JSON, producing an error if exceeded.
+- Error messages report the location using 1-based line and position indices to aid debugging.
+- Not designed for structural JSON mutations beyond formatting or syntax validation (no data reshaping or querying).

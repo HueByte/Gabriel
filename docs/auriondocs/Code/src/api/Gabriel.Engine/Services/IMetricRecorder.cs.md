@@ -3,29 +3,26 @@
 > **File:** `src/api/Gabriel.Engine/Services/IMetricRecorder.cs`  
 > **Kind:** interface
 
-A lightweight abstraction for recording telemetry-style metric events from engine subsystems. Use this interface when you want to emit a named metric (a stable dotted "system" identifier) with an arbitrary payload without taking a dependency on the underlying storage implementation or risking metric-related exceptions propagating into business logic.
+```csharp
+public interface IMetricRecorder
+```
+
+
+IMetricRecorder provides a lightweight wrapper around the engine's metric log. Subsystems should use RecordAsync instead of talking directly to storage; it serializes the payload to JSON and swallows storage errors so metric writes never affect business logic, and it relies on a stable dotted system name (for example, "web_search.tavily") to enable grouping by read-side tooling. The payload shape is flexible and specific to the subsystem; by convention include an `outcome` field with values ("success", "error", or "empty") so aggregations can count without inspecting every field.
 
 ## Remarks
-This interface decouples producers of metric data from the storage and serialization concerns. Implementations are expected to serialize the provided payload to JSON and persist it to the metric event log; they also absorb storage/IO errors so that metric recording failures do not interrupt the caller's flow. The contract is intentionally minimal: callers supply a stable "system" name and a payload whose shape is defined by the producing subsystem.
+By centralizing metric emission behind this interface, the implementation decouples callers from storage details and ensures a consistent, best-effort telemetry path across subsystems. The generic T payload supports strong typing while preserving the ability to evolve payload shapes independently of the interface.
 
 ## Example
 ```csharp
-// Typical usage from an async subsystem method
-public async Task SearchAndRecordAsync(string query, CancellationToken ct)
-{
-    var metric = new {
-        outcome = "success",
-        query = query,
-        result_count = 5,
-        latency_ms = 287
-    };
-
-    // _metrics is an IMetricRecorder injected into the subsystem
-    await _metrics.RecordAsync("web_search.tavily", metric, ct);
-}
+await _metrics.RecordAsync("web_search.tavily", new {
+    outcome = "success",
+    query = "example query",
+    result_count = 5,
+    latency_ms = 287
+}, ct);
 ```
 
 ## Notes
-- The payload is serialized to JSON by implementations, so ensure the object is JSON-serializable (avoid circular references, unsupported types).
-- The "system" parameter should be a stable, dotted identifier (for example: "web_search.tavily") so downstream tooling can group and aggregate events reliably.
-- Implementations absorb storage errors; callers should not assume recording succeeded — metrics are best-effort and must not be relied upon for control flow or correctness.
+- Metric writes are best-effort: failures are swallowed and do not affect business logic. Do not rely on metrics for correctness or user-facing behavior.
+- Payload types must be JSON-serializable. Avoid non-serializable references or large object graphs; keep payloads focused and simple.

@@ -3,20 +3,27 @@
 > **File:** `src/api/Gabriel.Infrastructure/Persistence/Configurations/RefreshTokenConfiguration.cs`  
 > **Kind:** class
 
-Configures the Entity Framework Core mapping for the RefreshToken entity: sets the table name, primary key, required properties, column constraints (TokenHash length), and two indexes (unique TokenHash for fast lookup and a non-unique UserId index for bulk operations). Use this configuration when registering entity mappings in your DbContext (e.g., inside OnModelCreating via modelBuilder.ApplyConfiguration).
+```csharp
+public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
+```
+
+
+Configures EF Core's Fluent API for the RefreshToken entity and maps it to the RefreshTokens table. It declares the primary key and a set of required and optional properties, and defines indexes to support lookups by token hash and by user for revoke/monitoring operations.
 
 ## Remarks
-This class centralizes persistence concerns for refresh tokens so the entity definition stays focused on domain behavior. The configuration intentionally keeps the TokenHash index lean and unique to make single-token lookups (token validation) fast and selective, while a separate non-unique index on UserId supports user-scoped operations such as bulk revocation or theft-detection scans.
+This abstraction centralizes persistence concerns for the RefreshToken aggregate, decoupling schema decisions from the domain model. By combining table mapping, key constraints, and targeted indexes, it optimizes common refresh-token workflows (validation by hash and user-scoped revocation scans) while keeping the domain entity simple.
 
 ## Example
 ```csharp
+// Typical usage in your DbContext
 protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
+    base.OnModelCreating(modelBuilder);
     modelBuilder.ApplyConfiguration(new RefreshTokenConfiguration());
 }
 ```
 
 ## Notes
-- TokenHash is constrained to 128 characters; ensure your hashing/encoding produces values that fit this length.
-- The unique TokenHash index implies two different refresh tokens cannot share the same hash value; inserting duplicates will fail.
-- RevokedAt and ReplacedByTokenId are configured without IsRequired(), so they are nullable in the database and indicate optional revocation/rotation state.
+- Ensure hashing of the refresh token yields a string within the TokenHash max length (128).
+- RevokedAt and ReplacedByTokenId are nullable to support pending or historical states; account for nulls in queries.
+- The unique index on TokenHash enforces that each refresh token hash is stored exactly once, while the UserId index supports efficient user-scoped revocation scans.

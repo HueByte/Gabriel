@@ -10,76 +10,69 @@
 ---
 
 ## IMemoryService
-
 > **File:** `src/api/Gabriel.Core/Services/IMemoryService.cs`  
 > **Kind:** interface
 
-A service-layer abstraction over the memory repository that centralizes user-scoping and common memory operations for controllers and tools. Use this interface when you need to list, retrieve, upsert, or remove memory entries on behalf of the current user without plumbing the caller's UserId through every call; the implementation reads the current user (ICurrentUser) and enforces per-user isolation at this boundary.
-
-## Remarks
-This interface intentionally sits above IMemoryRepository to enforce security and scoping rules: callers provide only the optional project context (projectId) and the service attaches the calling user's identity. It also provides higher-level behaviors useful to callers: merging user-scope and project-scope memories for conversations, returning results in display order, and performing idempotent upserts (create-or-update) so tools and controllers can call SaveAsync without first checking existence.
-
-## Example
 ```csharp
-// List user-only memories
-var userMemories = await memoryService.ListAsync(projectId: null, ct);
-
-// List what an agent should see for a conversation (includes both user and project scope)
-var visible = await memoryService.ListForConversationAsync(projectId: conversationProjectId, ct);
-
-// Upsert a memory entry (create or update in-place)
-var saved = await memoryService.SaveAsync(new MemoryEntrySpec {
-    ProjectId = projectId,
-    Name = "favorite_color",
-    Type = "preference",
-    Value = "blue"
-}, ct);
-
-// Remove by name within a project (or user-scope when projectId is null)
-var removed = await memoryService.RemoveByNameAsync(projectId, "favorite_color", ct);
+public interface IMemoryService
 ```
 
+
+IMemoryService defines a service-layer contract for memory data that derives the current user from ICurrentUser and exposes operations to list, retrieve, upsert, and remove memories within the appropriate scope. It prevents controllers and tools from leaking or manipulating another user's memories by enforcing user-scoped access at the service boundary.
+
+## Remarks
+IMemoryService acts as a boundary between controllers/tools and the repository, centralizing memory-access rules and presenting a stable, user-scoped API. It coordinates scope-aware retrieval (including the option to include project-scoped memories for conversations), provides an idempotent SaveAsync upsert, and exposes explicit removal semantics to distinguish between "not found" and "deleted" scenarios.
+
 ## Notes
-- Passing projectId = null targets the calling user's personal (user-scope) memories only; non-null projectId includes project-scoped entries. 
-- ListForConversationAsync returns the union of user-scope memories and (when applicable) the conversation's project-scope memories, sorted for display by Type then Name.
-- SaveAsync performs an upsert keyed by (UserId, ProjectId, Name); repeated calls with the same spec are idempotent aside from updating the entry's UpdatedAt timestamp.
-- RemoveAsync returns false when no entry matched (true only on an actual delete)—useful for clear tooling responses.
-- All operations accept a CancellationToken; callers should forward cancellation where appropriate.
+- RemoveAsync and RemoveByNameAsync return a boolean indicating whether a matching entry was removed (false means nothing matched).
+- SaveAsync is idempotent: repeated saves with the same spec only update metadata (e.g., UpdatedAt) and do not create duplicate entries.
+- ListForConversationAsync returns memories in a deterministic display order (Type, then Name) when presenting data for a given conversation.
 
 ---
 
 ## MemoryEntrySpec
-
 > **File:** `src/api/Gabriel.Core/Services/IMemoryService.cs`  
 > **Kind:** record
 
-Represents the data required to create or describe a memory entry handled by the memory service. Use this immutable, positional record when you need to pass the project scope, entry type, human-friendly name, description, and the entry body to IMemoryService methods (for example when adding or updating memory entries).
+```csharp
+public sealed record MemoryEntrySpec(
+    Guid? ProjectId,
+    MemoryEntryType Type,
+    string Name,
+    string Description,
+    string Body)
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `ProjectId` | `Guid?` | — |
+| `Type` | [`MemoryEntryType`](../Entities/MemoryEntryType.cs.md) | — |
+| [`Name`](../../Gabriel.Engine/Providers/ToolBridge/GabrielToolBridge.cs.md) | `string` | — |
+| `Description` | `string` | — |
+| `Body` | `string` | — |
+
+
+Represents the specification for a memory entry used by the memory service. MemoryEntrySpec bundles the data required to create or update a memory entry: an optional ProjectId to scope the entry, a Type that classifies the entry (MemoryEntryType), and the entry’s Name, Description, and Body. As a sealed record, it provides value-based equality and immutable semantics, making it a reliable data contract for API boundaries and inter-service communication.
 
 ## Remarks
-This sealed positional record is a compact Data Transfer Object that groups the common fields the memory subsystem needs. Its value-based equality and deconstruct support make it convenient for passing around, comparing, and pattern-matching entries. ProjectId is nullable to allow entries that are not scoped to a specific project.
+MemoryEntrySpec serves as a transport object between the caller and IMemoryService. It captures the essential metadata and content of a memory entry without embedding persistence concerns. The record nature ensures that two specs with identical properties are treated as equal, which simplifies testing and caching scenarios.
 
 ## Example
 ```csharp
-// create a new memory entry specification (using named arguments for clarity)
 var spec = new MemoryEntrySpec(
-    ProjectId: projectId,                      // Guid? — null for global/unscoped
-    Type: MemoryEntryType.Note,               // MemoryEntryType enum value
-    Name: "Meeting notes",
-    Description: "Notes from the 2026-06-01 planning meeting",
-    Body: "Decisions: ...\nAction items: ..."
+    ProjectId: someProjectId,
+    Type: MemoryEntryType.Note,
+    Name: "Initialization Notes",
+    Description: "Prepares the runtime with essential notes",
+    Body: "Initialize X, Y, and Z with defaults."
 );
-
-// deconstructing
-var (projId, type, name, description, body) = spec;
-
-// pass to a memory service
-await memoryService.AddEntryAsync(spec);
 ```
 
 ## Notes
-- The record is sealed and positional: it provides immutable properties, value equality, and deconstruction.
-- ProjectId is nullable; a null value typically indicates an unscoped or global entry.
-- The type and string properties are not validated by this type — callers must enforce constraints (length, allowed characters, business rules) before sending to the service.
-- Strings are non-nullable by the signature; do not pass null for Name, Description, or Body.
+- ProjectId is nullable to permit creating memory entries outside a specific project, or to be assigned later.
+- Ensure the Type aligns with the Body semantics (e.g., a CodeSnippet type should have code-like content).
+- MemoryEntrySpec is a data contract used by IMemoryService operations; it does not perform persistence itself.
 
 ---
