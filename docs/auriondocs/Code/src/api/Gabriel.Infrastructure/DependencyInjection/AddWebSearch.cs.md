@@ -1,9 +1,0 @@
-Adds web search providers to the dependency injection container based on runtime configuration. It reads Tools:Web:Active (defaulting to ddg if not provided) and registers the concrete providers (BraveWebSearch, TavilyWebSearch, DuckDuckGoWebSearch) along with their provider-specific HttpClient wiring, so they can be consumed as implementations of IWebSearch. The registrations are tagged for subsequent wrapping by the InstrumentedWebSearch decorator to enable metrics collection via IMetricRecorder and surface diagnostics through IMetricRepository. If an unknown provider key is encountered, it is ignored with a warning rather than failing startup.
-
-## Remarks
-This method centralizes the wiring of multiple web search providers behind a single DI entry point, allowing the application to compose and switch among providers purely through configuration. It separates provider-specific HTTP configuration from consumer code and enables uniform instrumentation by delegating to the InstrumentedWebSearch decorator used elsewhere in the composition. The approach makes it straightforward to add new providers in the future by extending the switch-case without altering consumer code.
-
-## Notes
-- Unknown provider keys are dropped with a warning instead of causing startup failure.
-- Each provider registers its own HttpClient configuration (base address, timeout, and relevant headers) and a singleton implementation to be consumed by higher-level code.
-- The actual composition into a single IWebSearch with instrumentation happens outside this method (via the InstrumentedWebSearch decorator and related wiring).

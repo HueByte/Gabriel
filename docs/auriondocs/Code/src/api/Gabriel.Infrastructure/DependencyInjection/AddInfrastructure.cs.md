@@ -1,7 +1,0 @@
-AddInfrastructure is an extension method for IServiceCollection that wires the infrastructure layer into the application's DI container. It configures Entity Framework Core to use SQLite with a connection string sourced from configuration (falling back to a local Data Source=gabriel.db), registers UoW and repository services with scoped lifetimes, binds and applies ProjectFilesOptions from configuration, and registers a file storage implementation DiskProjectFileService. It then delegates to helper registrations for chat providers, web search, web fetch, and docs lookup, before returning the service collection for fluent configuration.
-
-## Remarks
-By centralizing infrastructure composition, callers gain a single, discoverable entry point for wiring up persistence, repositories, and ancillary services. The extension hides concrete implementations behind interfaces (IUnitOfWork, IConversationRepository, etc.), enabling swap-out for testing or alternate environments without touching business logic. It also ensures configuration-driven concerns—like database provider and file storage options—are consistently applied across the application.
-
-## Notes
-- Be aware that the default connection string uses a local SQLite file (gabriel.db) in the application's working directory; ensure the hosting environment grants write access to that location.
