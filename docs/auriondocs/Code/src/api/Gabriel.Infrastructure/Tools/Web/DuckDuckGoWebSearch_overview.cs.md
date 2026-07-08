@@ -1,0 +1,9 @@
+DuckDuckGoWebSearch is a no-API-key IWebSearch implementation that uses DuckDuckGo as a backend by posting the same search payload to two endpoints: the rich HTML interface (html.duckduckgo.com/html/) and, if necessary, the lightweight lite endpoint (lite.duckduckgo.com/lite/). It prefers the richer HTML results but gracefully falls back to lite when parsing yields no usable data, making it suitable for environments without a paid API. The class maintains a session-wide User-Agent and uses a semaphore to deduplicate concurrent first-use warmups, logging diagnostic details when anomalies are detected so failures are debuggable rather than silent. This design trades the reliability of a paid API for zero-quota convenience, with the caveat that HTML structure can change and the parsing is regex-driven, which can yield zero results on problematic responses.
+
+## Remarks
+DuckDuckGoWebSearch acts as an abstraction layer around the two endpoints, encapsulating endpoint selection, session management, and basic anomaly handling behind the IWebSearch contract. It centralizes resilience concerns (fallback behavior and logging) so callers don't need to implement their own retry or parsing logic. By isolating this integration, the rest of the system can depend on a testable, consistent search backend without tying to a specific HTTP strategy or endpoint shape.
+
+## Notes
+- Regex-based parsing makes results brittle to changes in DuckDuckGo's HTML; a change can yield zero results or mis-parsed data.
+- The lite endpoint helps avoid aggressive bot flags but may still be rate-limited or blocked; consider a paid API for production use.
+- This class relies on HttpClientFactory and a named client; ensure the DI container registers the appropriate client (e.g., DuckDuckGoSearch) to prevent misconfiguration.
