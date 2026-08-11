@@ -24,9 +24,9 @@ public static class PromptKey
     // Per-mode behaviour snippets. Selected by Conversation.Mode and appended
     // to the static block per-turn so the same persona can be re-weighted
     // without rewriting the whole prompt.
-    public const string ModeChatty      = "mode.chatty";
+    public const string ModeChatty = "mode.chatty";
     public const string ModeElaborative = "mode.elaborative";
-    public const string ModeConcise     = "mode.concise";
-    public const string ModeTutor       = "mode.tutor";
-    public const string ModeCritic      = "mode.critic";
+    public const string ModeConcise = "mode.concise";
+    public const string ModeTutor = "mode.tutor";
+    public const string ModeCritic = "mode.critic";
 }

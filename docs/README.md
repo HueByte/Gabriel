@@ -1,6 +1,8 @@
 # Gabriel - documentation
 
-Architectural and behavioral documentation for the Gabriel codebase. The roadmap and per-feature design notes live under [`.dev/`](../.dev/) (gitignored); this folder is the durable, committed reference.
+Architectural and behavioral documentation for the Gabriel codebase — the durable, committed reference.
+
+Quick pointers: [SYSTEMS.md](SYSTEMS.md) is the systems inventory (kept current by rule), [scripts.md](scripts.md) documents the repeatable-operation scripts, [conversations-api.md](conversations-api.md) is the full conversations API reference.
 
 There are **two** documentation surfaces under `docs/`:
 

@@ -465,6 +465,9 @@ dist/
 logs/
 **/logs/
 
+# scripts/dev.ps1 bookkeeping — pids of the locally launched dev processes.
+scripts/.gabriel-dev.pids
+
 # IDEs
 .vs/
 .idea/

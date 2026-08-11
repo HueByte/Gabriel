@@ -10,10 +10,10 @@ namespace Gabriel.Engine.Sequence;
 // The layer of a given frame index is `(index / 16)` cast to this enum.
 public enum FrameLayer
 {
-    DnaCore       = 0,
-    StableTraits  = 1,
-    Context       = 2,
-    LiveState     = 3,
+    DnaCore = 0,
+    StableTraits = 1,
+    Context = 2,
+    LiveState = 3,
 }
 
 public static class FrameLayers

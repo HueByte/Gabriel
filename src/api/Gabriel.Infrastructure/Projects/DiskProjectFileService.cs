@@ -4,10 +4,10 @@ using Gabriel.Core.Exceptions;
 using Gabriel.Core.Identity;
 using Gabriel.Core.Repositories;
 using Gabriel.Core.Services;
+using Gabriel.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Gabriel.Infrastructure.Persistence;
 
 namespace Gabriel.Infrastructure.Projects;
 

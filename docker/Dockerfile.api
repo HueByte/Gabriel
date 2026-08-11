@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# Build context is `src/api/` so this Dockerfile can `COPY` every project
-# referenced by Gabriel.API.csproj (Core, Engine, Infrastructure) in one go.
+# Lives in docker/, but the build CONTEXT is `src/api/` (wired in
+# docker-compose.yml) so this Dockerfile can `COPY` every project referenced
+# by Gabriel.API.csproj (Core, Engine, Infrastructure) in one go. The
+# .dockerignore that applies is `src/api/.dockerignore` (context-owned).
 
 # ---- Build stage ------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
