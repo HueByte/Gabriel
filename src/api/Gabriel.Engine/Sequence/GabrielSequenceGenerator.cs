@@ -113,10 +113,10 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
     {
         return b.Kind switch
         {
-            PatternKind.Plasma  => Patterns.Plasma(x, y, t, b.Plasma),
-            PatternKind.Waves   => Patterns.Waves(x, y, t, b.Waves),
-            PatternKind.Spiral  => Patterns.Spiral(x, y, t, b.Spiral),
-            PatternKind.Pulse   => Patterns.Pulse(x, y, t, b.Pulse),
+            PatternKind.Plasma => Patterns.Plasma(x, y, t, b.Plasma),
+            PatternKind.Waves => Patterns.Waves(x, y, t, b.Waves),
+            PatternKind.Spiral => Patterns.Spiral(x, y, t, b.Spiral),
+            PatternKind.Pulse => Patterns.Pulse(x, y, t, b.Pulse),
             PatternKind.Shimmer => Patterns.Shimmer(x, y, Size, t, b.Shimmer),
             _ => 0.5,
         };
@@ -170,12 +170,12 @@ public sealed class GabrielSequenceGenerator : IGabrielSequenceGenerator
             // Mood biases the palette window into a specific gradient zone.
             var (pMin, pMax, intensity) = state.Mood switch
             {
-                Mood.Playful   => (paletteSize / 2,        paletteSize - 1,     1.10),  // bright, hot
-                Mood.Venting   => (0,                      paletteSize / 2,     0.80),  // dark, dim
-                Mood.Serious   => (paletteSize / 3,        2 * paletteSize / 3, 0.90),  // narrow midband
-                Mood.Curious   => (1,                      paletteSize - 1,     1.05),  // wide, alive
-                Mood.LowEnergy => (1,                      paletteSize / 2 - 1, 0.75),  // dark, sleepy
-                _              => (1,                      paletteSize - 1,     1.0),
+                Mood.Playful => (paletteSize / 2, paletteSize - 1, 1.10),  // bright, hot
+                Mood.Venting => (0, paletteSize / 2, 0.80),  // dark, dim
+                Mood.Serious => (paletteSize / 3, 2 * paletteSize / 3, 0.90),  // narrow midband
+                Mood.Curious => (1, paletteSize - 1, 1.05),  // wide, alive
+                Mood.LowEnergy => (1, paletteSize / 2 - 1, 0.75),  // dark, sleepy
+                _ => (1, paletteSize - 1, 1.0),
             };
 
             // Pinch the window further if the user has been sending shorts -

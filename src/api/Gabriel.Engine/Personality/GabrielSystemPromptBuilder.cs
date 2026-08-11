@@ -82,10 +82,10 @@ public sealed class GabrielSystemPromptBuilder : ISystemPromptBuilder
     private static string ModeKey(GabrielMode? mode) => (mode ?? GabrielMode.Chatty) switch
     {
         GabrielMode.Elaborative => PromptKey.ModeElaborative,
-        GabrielMode.Concise     => PromptKey.ModeConcise,
-        GabrielMode.Tutor       => PromptKey.ModeTutor,
-        GabrielMode.Critic      => PromptKey.ModeCritic,
-        _                       => PromptKey.ModeChatty,
+        GabrielMode.Concise => PromptKey.ModeConcise,
+        GabrielMode.Tutor => PromptKey.ModeTutor,
+        GabrielMode.Critic => PromptKey.ModeCritic,
+        _ => PromptKey.ModeChatty,
     };
 
     // Fragments carry `{name}` as a literal placeholder; substitute once at
@@ -110,7 +110,7 @@ public sealed class GabrielSystemPromptBuilder : ISystemPromptBuilder
         return (state?.LastUserTokenCount ?? 0) switch
         {
             // Truly tiny ('lol', 'k', 'fair') - mirror in scale, but if there's even a sliver of substance, one punchy sentence with a hook.
-            <= 5  => "User went very short. If it's pure noise ('lol', 'k') mirror it. Otherwise, ONE punchy sentence with personality - a take, a callback, a reaction with actual flavor. 'yeah ok' is failing.",
+            <= 5 => "User went very short. If it's pure noise ('lol', 'k') mirror it. Otherwise, ONE punchy sentence with personality - a take, a callback, a reaction with actual flavor. 'yeah ok' is failing.",
             <= 20 => "1-3 sentences. Match their casual register but BRING SOMETHING - an opinion, a curious question, a small observation, a callback to earlier. Bare acknowledgments ('yeah, details help') are a fail.",
             <= 60 => "3-5 sentences. Engage with the substance, add your angle, push the conversation forward.",
             <= 150 => "Match their depth - a short paragraph that actually engages, not just summarizes back.",

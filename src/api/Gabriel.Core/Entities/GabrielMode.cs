@@ -12,9 +12,9 @@ namespace Gabriel.Core.Entities;
 //   3. New case in the mode→PromptKey switch in GabrielSystemPromptBuilder.
 public enum GabrielMode
 {
-    Chatty      = 0,  // default — current persona, unchanged
+    Chatty = 0,  // default — current persona, unchanged
     Elaborative = 1,  // longer artifacts, more comments, named trade-offs
-    Concise     = 2,  // shortest correct answer, no preamble / closer
-    Tutor       = 3,  // step-by-step, examples-first, explain the *why*
-    Critic      = 4,  // skeptical stance, finds flaws before validating
+    Concise = 2,  // shortest correct answer, no preamble / closer
+    Tutor = 3,  // step-by-step, examples-first, explain the *why*
+    Critic = 4,  // skeptical stance, finds flaws before validating
 }

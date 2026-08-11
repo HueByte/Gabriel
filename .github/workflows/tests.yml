@@ -1,0 +1,64 @@
+# 2. Tests — whole-solution build + test suite + webapp typecheck/build.
+#
+# Order matters: `npm ci` runs BEFORE `dotnet build` because the API's
+# OpenAPI MSBuild target (Gabriel.API.csproj) emits swagger.json and then
+# runs `npm run gen-api` to regenerate the typed TS client — which the
+# webapp's typecheck and build both import. The generated client is
+# gitignored on purpose (source↔generated drift is structurally impossible),
+# so CI must regenerate it the same way a dev machine does.
+#
+# Trigger surface (budget-aware): PRs to main + manual dispatch. Heavy
+# suites needing live infrastructure (a real LLM provider) are consciously
+# excluded from CI.
+#
+# Catches: compile errors, test failures, type errors, a webapp that no
+# longer builds against the current API surface.
+# Does NOT catch: runtime behavior against a real provider, Docker image
+# build breakage (no image gate yet), UI regressions.
+name: 2. Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - ".github/workflows/tests.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/webapp/package-lock.json
+
+      - name: npm ci (webapp)
+        working-directory: src/webapp
+        run: npm ci
+
+      - name: dotnet build (also regenerates the OpenAPI client)
+        run: dotnet build src/api/Gabriel.slnx -c Release
+
+      - name: dotnet test
+        run: dotnet test src/api/Gabriel.slnx -c Release --no-build
+
+      - name: webapp typecheck
+        working-directory: src/webapp
+        run: npm run typecheck
+
+      - name: webapp build
+        working-directory: src/webapp
+        run: npm run build

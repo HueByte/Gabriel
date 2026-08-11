@@ -6,15 +6,15 @@ namespace Gabriel.Engine.Services;
 // JSON discriminator is "type", so clients switch on that string.
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(AgentUserMessagePersisted), "userMessagePersisted")]
-[JsonDerivedType(typeof(AgentTextDelta),        "textDelta")]
-[JsonDerivedType(typeof(AgentReasoningDelta),   "reasoningDelta")]
-[JsonDerivedType(typeof(AgentToolCall),         "toolCall")]
-[JsonDerivedType(typeof(AgentToolResult),       "toolResult")]
+[JsonDerivedType(typeof(AgentTextDelta), "textDelta")]
+[JsonDerivedType(typeof(AgentReasoningDelta), "reasoningDelta")]
+[JsonDerivedType(typeof(AgentToolCall), "toolCall")]
+[JsonDerivedType(typeof(AgentToolResult), "toolResult")]
 [JsonDerivedType(typeof(AgentAssistantMessage), "assistantMessage")]
-[JsonDerivedType(typeof(AgentCompactStart),     "compactStart")]
-[JsonDerivedType(typeof(AgentCompactDone),      "compactDone")]
-[JsonDerivedType(typeof(AgentError),            "error")]
-[JsonDerivedType(typeof(AgentDone),             "done")]
+[JsonDerivedType(typeof(AgentCompactStart), "compactStart")]
+[JsonDerivedType(typeof(AgentCompactDone), "compactDone")]
+[JsonDerivedType(typeof(AgentError), "error")]
+[JsonDerivedType(typeof(AgentDone), "done")]
 public abstract record AgentEvent;
 
 // First event of every turn that originated from a user message (RunAsync,

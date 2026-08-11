@@ -1,0 +1,41 @@
+# 1a. Markdown Lint — markdownlint over the CURATED, hand-written markdown
+# surfaces only (root files, docs/ root pages, .github/). Out of scope, per
+# .markdownlintignore: working notes (.dev/), prototype/, and the
+# auto-generated docs trees (docs/gabriel-self-docs/, docs/Gabriel.Engine/) —
+# machine output is skipped, not diff-policed.
+#
+# Trigger surface (budget-aware): PRs to main + manual dispatch. Plain branch
+# pushes deliberately do NOT run gates — open a draft PR when you want them.
+#
+# Catches: broken markdown structure in public-facing docs.
+# Does NOT catch: factual staleness, broken relative links, spelling.
+name: 1a. Markdown Lint
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.md"
+      - ".markdownlint.json"
+      - ".markdownlintignore"
+      - ".github/workflows/lint-markdown.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: lint-markdown-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdownlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: markdownlint (curated surfaces)
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          config: .markdownlint.json
+          globs: |
+            *.md
+            docs/*.md
+            .github/**/*.md

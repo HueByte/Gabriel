@@ -18,16 +18,16 @@ public sealed class PromptRegistry : IPromptRegistry
     {
         _fragments = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            [PromptKey.PersonaStatic]     = Fragments.PersonaStatic,
-            [PromptKey.PersonaFewShot]    = Fragments.PersonaFewShot,
-            [PromptKey.PersonaMemory]     = Fragments.PersonaMemory,
+            [PromptKey.PersonaStatic] = Fragments.PersonaStatic,
+            [PromptKey.PersonaFewShot] = Fragments.PersonaFewShot,
+            [PromptKey.PersonaMemory] = Fragments.PersonaMemory,
             [PromptKey.PersonaFormatting] = Fragments.PersonaFormatting,
 
-            [PromptKey.ModeChatty]       = Fragments.ModeChatty,
-            [PromptKey.ModeElaborative]  = Fragments.ModeElaborative,
-            [PromptKey.ModeConcise]      = Fragments.ModeConcise,
-            [PromptKey.ModeTutor]        = Fragments.ModeTutor,
-            [PromptKey.ModeCritic]       = Fragments.ModeCritic,
+            [PromptKey.ModeChatty] = Fragments.ModeChatty,
+            [PromptKey.ModeElaborative] = Fragments.ModeElaborative,
+            [PromptKey.ModeConcise] = Fragments.ModeConcise,
+            [PromptKey.ModeTutor] = Fragments.ModeTutor,
+            [PromptKey.ModeCritic] = Fragments.ModeCritic,
         };
     }
 

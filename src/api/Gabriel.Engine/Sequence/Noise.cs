@@ -27,16 +27,16 @@ internal static class Noise
         var yi = (int)Math.Floor(y);
         var xf = x - xi;
         var yf = y - yi;
-        var a = Hash2(xi,     yi,     seed);
-        var b = Hash2(xi + 1, yi,     seed);
-        var c = Hash2(xi,     yi + 1, seed);
+        var a = Hash2(xi, yi, seed);
+        var b = Hash2(xi + 1, yi, seed);
+        var c = Hash2(xi, yi + 1, seed);
         var d = Hash2(xi + 1, yi + 1, seed);
         var u = Smooth(xf);
         var v = Smooth(yf);
         return a * (1 - u) * (1 - v)
-             + b * u       * (1 - v)
+             + b * u * (1 - v)
              + c * (1 - u) * v
-             + d * u       * v;
+             + d * u * v;
     }
 
     // Fractional Brownian motion - sums octaves of value noise at doubling

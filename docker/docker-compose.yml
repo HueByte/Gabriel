@@ -1,0 +1,80 @@
+# Gabriel — local / single-box compose stack.
+#
+# Two services:
+#   - api     : .NET 10 backend, exposes 8080 inside the network
+#   - webapp  : nginx serving the Vite SPA + reverse-proxying /api/ to the api
+#
+# Persistent state lives in named volumes so the SQLite DB, uploaded project
+# files, and the daily rolling log files survive `docker compose down`.
+#
+# This file lives in docker/ — all relative paths below resolve from HERE,
+# not the repo root. Run from the repo root:
+#   cp .env.example .env
+#   # edit .env, fill in REPLACE_ME values
+#   docker compose -f docker/docker-compose.yml --env-file .env up --build
+# or just: scripts/dev.ps1 up -Docker
+# (--env-file matters: compose substitutes ${VARS} from the compose file's own
+#  directory by default, and the .env stays at the repo root.)
+
+services:
+  api:
+    build:
+      context: ../src/api
+      # Dockerfile path is resolved relative to the build CONTEXT, hence the
+      # climb back out to docker/.
+      dockerfile: ../../docker/Dockerfile.api
+      # docs/ is at the repo root, OUTSIDE this service's primary build
+      # context (../src/api). BuildKit's named contexts let the Dockerfile
+      # COPY it in via `COPY --from=docs` without us having to widen the
+      # whole build context (which would drag node_modules, .git, etc. into
+      # the build cache). The resulting image carries docs at /app/docs so
+      # LocalDocsLookup resolves them with no host mount required.
+      additional_contexts:
+        docs: ../docs
+    image: gabriel-api:latest
+    container_name: gabriel-api
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    # Override a few env vars the container needs regardless of .env content.
+    environment:
+      ASPNETCORE_URLS: ${ASPNETCORE_URLS:-http://+:8080}
+    volumes:
+      - gabriel-data:/app/data
+      - gabriel-logs:/app/logs
+      - gabriel-projects:/app/projects-data
+      # OPTIONAL dev override: overlays the host docs/ on top of the image's
+      # baked-in copy so edits to docs/ on the host are picked up without
+      # rebuilding the image. Safe to remove for production-style deploys.
+      - ../docs:/app/docs:ro
+    expose:
+      - "8080"
+    # Optional: expose the API directly on the host too, useful for hitting
+    # Swagger or curl-ing the API while bypassing nginx.
+    ports:
+      - "${API_PORT:-6040}:8080"
+    networks:
+      - gabriel-net
+
+  webapp:
+    build:
+      context: ../src/webapp
+      dockerfile: ../../docker/Dockerfile.webapp
+    image: gabriel-webapp:latest
+    container_name: gabriel-webapp
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-6080}:80"
+    networks:
+      - gabriel-net
+
+networks:
+  gabriel-net:
+    driver: bridge
+
+volumes:
+  gabriel-data:
+  gabriel-logs:
+  gabriel-projects:

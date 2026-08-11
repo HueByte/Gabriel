@@ -1,0 +1,337 @@
+# palettes.ts
+
+> **Source:** `src/webapp/src/pulse/palettes.ts`
+
+## Contents
+
+- [Palette](#palette)
+- [RGB](#rgb)
+- [brightestStop](#brighteststop)
+- [gradientCssFromStops](#gradientcssfromstops)
+- [paletteAccent](#paletteaccent)
+- [paletteForSeed](#paletteforseed)
+- [paletteGradientCss](#palettegradientcss)
+- [paletteVarsFromStops](#palettevarsfromstops)
+- [pickPalette](#pickpalette)
+- [rgbToCss](#rgbtocss)
+- [sampleGradient](#samplegradient)
+
+---
+
+## Palette
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** interface
+
+```typescript
+export interface Palette
+```
+
+
+Palette defines a named sequence of color stops as an ordered array of RGB colors. It acts as a compact data contract you can pass around when you need a color ramp as a single unit—useful for theming, charts, or UI components that render gradients.
+
+## Remarks
+Palette is a simple data shape that decouples color ramp data from presentation. By packaging a name with an ordered stops array, it enables reuse across theming and rendering layers, makes serialization/transport straightforward, and makes the gradient definition explicit and self-describing. The order of stops matters for gradients, and each element is an RGB color that defines a point on the ramp.
+
+## Notes
+- The stops array and the RGB objects it contains are mutable; avoid sharing mutable Palette instances across boundaries or clone before mutation to prevent unintended side effects.
+- The interface does not enforce a non-empty stops collection; if your rendering or validation requires at least one color, ensure such checks at runtime.
+
+---
+
+## RGB
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** type alias
+
+```typescript
+export type RGB = readonly [number, number, number]
+```
+
+
+RGB is a type alias for a read-only triple of numbers, representing the red, green, and blue components of a color. Use it to pass around a color as a single, immutable value rather than as separate numeric components, ensuring the length is exactly three and the components cannot be mutated in-place.
+
+## Remarks
+Choosing RGB as a distinct type communicates intent and documents that a value is a color triplet. The readonly tuple enforces both the three-component structure and immutability, which helps prevent accidental mutations and keeps color values consistent across APIs. Note that the numeric range for each channel is not enforced by the type; you may need runtime checks or a helper constructor if you require 0–255 bounds.
+
+## Notes
+- Individual elements are immutable; attempts to mutate channels (e.g., rgb[0] = 123) are a type error.
+- The type does not enforce a per-channel range; validate or clamp values if you rely on 0–255 bounds.
+
+---
+
+## brightestStop
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function brightestStop(stops: readonly RGB[]): RGB
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `stops` | `readonly RGB[]` | — |
+
+**Returns:** `RGB`
+
+
+BrightestStop returns the color stop with the highest sum of its RGB channels, using that sum as a cheap proxy for luminance. This fast heuristic works well for the small palettes shipped with the client and for larger palettes the server may emit; in pulse palettes the last stop is already the brightest, so this function preserves that behavior.
+
+## Remarks
+This abstraction provides a simple, dependency-light way to pick a standout color from a list of stops without requiring perceptual color computations. It yields deterministic results by comparing a single numeric score and keeps the implementation small and easy to test. The function assumes a non-empty input and non-negative channel values; callers should guard against empty arrays.
+
+## Example
+```typescript
+// Example usage: pick the brightest stop from a palette
+const stops: readonly RGB[] = [
+  [255, 0, 0],
+  [0, 255, 0],
+  [10, 10, 250]
+];
+const best = brightestStop(stops);
+```
+
+## Notes
+- Assumes the input array is non-empty; calling with an empty array would access stops[0] and may throw.
+
+---
+
+## gradientCssFromStops
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function gradientCssFromStops(stops: readonly RGB[]): string
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `stops` | `readonly RGB[]` | — |
+
+**Returns:** `string`
+
+
+Converts an array of RGB colors into a CSS linear-gradient string. It handles edge cases where there are no stops (returns 'transparent') or a single stop (returns the color as-is). For palettes with multiple stops, it sorts by a simple brightness metric (the sum of the red, green, and blue channels) and derives a representative five-stop subset when needed to produce a clear dim-to-bright gradient. It then builds a 90-degree linear gradient from these stops using per-stop colors generated by rgbToCss, returning the CSS gradient string. The function relies on rgbToCss to render each color as an rgb(...) formatted color value.
+
+When there are more than five stops, the function selects five representative stops by first sorting the input by brightness and then sampling at 0, 0.25, 0.5, 0.75, and 1 of the sorted sequence. Each selected stop is assigned a position from 0% to 100%, and the resulting stops are concatenated into a linear-gradient(90deg, ...) string.
+
+In short: gradientCssFromStops provides a compact, ready-to-use CSS gradient from an arbitrary set of RGB colors, normalizing output for consistent UI visuals.
+
+---
+
+## paletteAccent
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function paletteAccent(palette: Palette): RGB
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `palette` | `Palette` | — |
+
+**Returns:** `RGB`
+
+
+paletteAccent returns the RGB color corresponding to the palette’s brightest stop. It does so by calling brightestStop on palette.stops, effectively choosing the most vivid stop defined in the palette as the accent color. Use this helper when you want a consistent UI accent derived from a named palette without selecting a stop yourself.
+
+## Remarks
+
+paletteAccent encodes a design rule: the accent color should come from the palette’s brightest stop. Centralizing this logic ensures the same rule is applied across components and makes it easy to adjust the rule by changing brightestStop in one place. Because the function simply delegates to brightestStop, any changes to how brightness is determined will propagate to all consumers of paletteAccent.
+
+## Notes
+
+- Requires at least one stop in the palette; behavior for an empty stops collection depends on brightestStop.
+- The function is a non-mutating mapper from Palette to RGB; given the same Palette, it will produce the same RGB as long as brightestStop is deterministic.
+
+---
+
+## paletteForSeed
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function paletteForSeed(seed: number, name?: string): Palette
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `seed` | `number` | — |
+| `name` | `string` | — |
+
+**Returns:** `Palette`
+
+
+Documentation submitted for symbol paletteForSeed (function, TypeScript, file: src/webapp/src/pulse/palettes.ts, ID f14b8cb3-2f97-487a-890e-753467baee8a).
+
+---
+
+## paletteGradientCss
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function paletteGradientCss(palette: Palette): string
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `palette` | `Palette` | — |
+
+**Returns:** `string`
+
+
+paletteGradientCss converts a Palette into a CSS gradient string by delegating to gradientCssFromStops with the palette's stops. It is useful when you already have a Palette object and need a ready CSS gradient value for styling, abstracting away the details of turning stops into CSS.
+
+## Remarks
+paletteGradientCss serves as a small adapter between the Palette data model and the UI styling layer. By funneling through a single export, it ensures consistent gradient formatting across components and isolates the rest of the code from the exact CSS generation logic, which lives in gradientCssFromStops.
+
+---
+
+## paletteVarsFromStops
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function paletteVarsFromStops(stops: readonly RGB[]): Record<string, string>
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `stops` | `readonly RGB[]` | — |
+
+**Returns:** `Record<string, string>`
+
+
+Translates a color stops palette into a ready-to-use set of CSS custom properties for theming. It selects the brightest stop as the accent color and exposes three tokens: --palette-accent for the solid color, --palette-accent-soft for a translucent variant, and --palette-gradient which represents a gradient built from all stops. Use this function when you want to derive theme tokens from a simple stops representation rather than hard-coding CSS values.
+
+## Remarks
+PaletteVarsFromStops serves as a focused adapter between design-time color stops and runtime CSS tokens. It centralizes the logic for picking the accent (brightest stop) and for formatting colors (rgbToCss) and gradients (gradientCssFromStops) so UI code can rely on a single source of truth. Returning a plain object of CSS variable mappings makes the function usable from CSS-in-JS, style objects, or inline styles while keeping theming concerns isolated from component code.
+
+## Example
+```ts
+const stops: readonly RGB[] = [
+  { r: 255, g: 64, b: 0 },
+  { r: 0, g: 128, b: 255 },
+  { r: 34, g: 177, b: 76 },
+];
+const vars = paletteVarsFromStops(stops);
+console.log(vars);
+```
+
+## Notes
+- Requires at least one stop; an empty array may cause an error when brightestStop is invoked.
+- Returns a new object mapping CSS variable names to color strings; input stops array is not mutated.
+
+---
+
+## pickPalette
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function pickPalette(rng: Rand, name?: string): Palette
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `rng` | `Rand` | — |
+| `name` | `string` | — |
+
+**Returns:** `Palette`
+
+
+PickPalette selects a Palette from the central catalog. If a name is supplied and a matching Palette exists, that Palette is returned; otherwise, a random Palette is chosen from PALETTES using the provided RNG function. This enables both deterministic selection by name and reproducible randomization by injecting a seedable Rand function.
+
+## Remarks
+This function centralizes access to the Palette catalog, abstracting away the details of PALETTES and the Palette type. By relying on an injected RNG, it supports deterministic testing and reproducible rendering scenarios, while keeping the caller agnostic to how Palettes are stored or iterated.
+
+## Notes
+- Be sure PALETTES is non-empty; if it is empty, the random access path may yield undefined. Consider validating the catalog before use.
+- If a name is provided but no matching Palette exists, the function silently falls back to a random selection rather than throwing.
+- The function relies on the RNG returning a value in [0, 1); ensure the Rand implementation adheres to this contract for predictable behavior.
+
+---
+
+## rgbToCss
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function rgbToCss([r, g, b]: RGB, alpha = 1): string
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `[r, g, b]` | `RGB` | — |
+| `alpha` | — | `1` |
+
+**Returns:** `string`
+
+
+Converts an RGB color represented as a 3-tuple into a CSS color string. Given an RGB value [r, g, b] and an optional alpha (default 1), it returns a CSS color string using the opaque form when alpha is 1 or greater, or the translucent form using the CSS Color Module syntax rgb(r g b / a) when alpha is less than 1. This utility is handy whenever you build inline styles or color strings from raw color components without manually composing the CSS syntax at every call site.
+
+## Remarks
+ rgbToCss centralizes the formatting of CSS color strings derived from a simple RGB triplet, keeping the color-construction logic consistent across the codebase. By supporting the alpha-slash syntax, it cleanly expresses transparency in environments that expect modern CSS color syntax, reducing boilerplate and potential inconsistencies in styling code.
+
+## Example
+```typescript
+rgbToCss([255, 0, 0]); // "rgb(255 0 0)"
+rgbToCss([255, 0, 0], 0.5); // "rgb(255 0 0 / 0.5)"
+```
+
+## Notes
+- No bounds validation is performed on r, g, b, or alpha. Callers should ensure RGB components are in 0–255 and alpha is in 0–1 to avoid producing invalid CSS strings.
+
+
+---
+
+## sampleGradient
+> **File:** `src/webapp/src/pulse/palettes.ts`  
+> **Kind:** function
+
+```typescript
+export function sampleGradient(stops: readonly RGB[], t: number): RGB
+```
+
+**Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `stops` | `readonly RGB[]` | — |
+| `t` | `number` | — |
+
+**Returns:** `RGB`
+
+
+Computes an RGB color by linearly interpolating along a gradient defined by the provided stops. The input t represents a position within the gradient from 0 to 1; t is clamped to this range, the appropriate adjacent stops are found, and each color channel is interpolated with rounding. If there is only a single stop, that color is returned. Use this when you need a color corresponding to a scalar progress value along a custom gradient defined by RGB stops.
+
+## Remarks
+This function encapsulates the common gradient-mapping pattern, so callers don’t have to implement per-channel interpolation or boundary handling themselves. It deterministically maps any t in [0,1] to a color between the nearest stops, using linear interpolation with integer rounding for RGB channels. It assumes the stops array has at least one color; edge cases with an empty array are not defined by the function and should be prevented by callers upstream.
+
+## Example
+```typescript
+const stops: readonly RGB[] = [[0, 0, 0], [255, 0, 0], [255, 255, 0]];
+const color = sampleGradient(stops, 0.5);
+```
+
+## Notes
+- Do not pass an empty stops array; the function does not guard against this and behavior is undefined. Ensure stops.length >= 1 before calling.
+
+
+---
