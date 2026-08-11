@@ -8,12 +8,13 @@ using Microsoft.Extensions.Options;
 
 namespace Gabriel.Engine.Personality;
 
-// "Gabriel" persona: a natural-DM agent that mirrors the user's energy, avoids
-// AI-isms, and never falls into bullet-list assistant mode. The persona text
-// itself lives in Personality/Prompts/Fragments.* — this class is the
-// assembly orchestrator that pulls fragments from IPromptRegistry, splices
-// in per-turn ConversationState + per-conversation GabrielMode, and emits
-// the final system message.
+// "Gabriel" persona: a dry, skeptical-of-claims conversational agent that
+// calibrates to the user's register, avoids AI-isms, and never falls into
+// bullet-list assistant mode. The persona text itself lives in
+// Personality/Prompts/Fragments.* — this class is the assembly orchestrator
+// that pulls fragments from IPromptRegistry, splices in per-turn
+// ConversationState + per-conversation GabrielMode, and emits the final
+// system message.
 //
 // Phase 8 (per-project personality) will replace this with a per-project
 // SystemPrompt + per-project few-shot. For now the persona is hardcoded
@@ -25,7 +26,10 @@ public sealed class GabrielSystemPromptBuilder : ISystemPromptBuilder
 
     // Pre-substituted strings cached so we don't re-run Replace on every turn.
     private readonly string _staticBlock;
+    private readonly string _voiceBlock;
     private readonly string _formattingBlock;
+    private readonly string _agenticBlock;
+    private readonly string _memoryBlock;
     private readonly string _fewShotBlock;
 
     public GabrielSystemPromptBuilder(IOptions<PersonalityOptions> options, IPromptRegistry prompts)
@@ -33,15 +37,23 @@ public sealed class GabrielSystemPromptBuilder : ISystemPromptBuilder
         _options = options.Value;
         _prompts = prompts;
         _staticBlock = SubstituteName(_prompts.Get(PromptKey.PersonaStatic), _options.Name);
+        _voiceBlock = _prompts.Get(PromptKey.PersonaVoice);
         _formattingBlock = _prompts.Get(PromptKey.PersonaFormatting);
+        _agenticBlock = _prompts.Get(PromptKey.PersonaAgentic);
+        _memoryBlock = _prompts.Get(PromptKey.PersonaMemory);
         _fewShotBlock = SubstituteName(_prompts.Get(PromptKey.PersonaFewShot), _options.Name);
     }
 
     public string Build(ConversationState? state, GabrielMode? mode = null)
     {
-        var sb = new StringBuilder(_staticBlock.Length + 1024);
+        var sb = new StringBuilder(_staticBlock.Length + _voiceBlock.Length + 1024);
         sb.Append(_staticBlock);
         sb.AppendLine();
+        sb.AppendLine();
+
+        // Voice-and-character block — temperament and register. Identity
+        // first (static block), character second, capabilities after.
+        sb.AppendLine(_voiceBlock);
         sb.AppendLine();
 
         // What the UI actually renders — markdown surface (gfm + mermaid +
@@ -49,6 +61,16 @@ public sealed class GabrielSystemPromptBuilder : ISystemPromptBuilder
         // mode snippet ("how to weight behaviour") because it's a medium
         // concern, not an identity or behaviour one.
         sb.AppendLine(_formattingBlock);
+        sb.AppendLine();
+
+        // Working conventions: task management (todo tools) + tool-usage
+        // policy, then the memory-system guidance. Both are capability
+        // concerns like formatting, so they sit before the mode snippet.
+        // PersonaMemory existed since the memory tools landed but was never
+        // wired into the build - fixed 2026-08-12.
+        sb.AppendLine(_agenticBlock);
+        sb.AppendLine();
+        sb.AppendLine(_memoryBlock);
         sb.AppendLine();
 
         // Per-conversation mode snippet — appended right after the static
@@ -120,7 +142,7 @@ public sealed class GabrielSystemPromptBuilder : ISystemPromptBuilder
 
     private static string MoodGuidance(Mood mood) => mood switch
     {
-        Mood.Playful => "Keep it light. Jokes, banter, and short quips land well - but still bring an angle, not flat one-liners.",
+        Mood.Playful => "Keep it light. Wit lands well here - but the ratio rules still hold: one good line beats a string of quips, and bring an angle, not flat one-liners.",
         Mood.Venting => "Listen more than advise. Validate, don't fix. Short empathetic reactions WITH genuine warmth, not 'damn that sucks' canned-style.",
         Mood.Serious => "Drop the jokes. Be direct, thoughtful, and substantive.",
         Mood.Curious => "They're exploring an idea. Engage with it, add your take, ask one thing if genuinely curious.",

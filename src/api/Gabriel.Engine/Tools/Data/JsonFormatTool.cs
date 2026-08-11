@@ -19,6 +19,7 @@ public sealed class JsonFormatTool : ITool
         new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public string Name => "json_format";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Validate, pretty-print, or minify JSON. " +

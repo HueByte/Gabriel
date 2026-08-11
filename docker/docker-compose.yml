@@ -1,8 +1,10 @@
 # Gabriel — local / single-box compose stack.
 #
-# Two services:
+# Three services:
 #   - api     : .NET 10 backend, exposes 8080 inside the network
 #   - webapp  : nginx serving the Vite SPA + reverse-proxying /api/ to the api
+#   - qdrant  : vector store for semantic memory (only used when
+#               SemanticMemory__Enabled=true; harmless when idle)
 #
 # Persistent state lives in named volumes so the SQLite DB, uploaded project
 # files, and the daily rolling log files survive `docker compose down`.
@@ -70,6 +72,23 @@ services:
     networks:
       - gabriel-net
 
+  qdrant:
+    image: qdrant/qdrant:v1.15.1
+    container_name: gabriel-qdrant
+    restart: unless-stopped
+    volumes:
+      - gabriel-qdrant:/qdrant/storage
+    # REST stays internal to the compose network; the api reaches it at
+    # http://qdrant:6333 (see SemanticMemory__QdrantUrl in .env.example).
+    # Uncomment the ports mapping to inspect the Qdrant dashboard from the
+    # host at http://localhost:6333/dashboard.
+    expose:
+      - "6333"
+    # ports:
+    #   - "6333:6333"
+    networks:
+      - gabriel-net
+
 networks:
   gabriel-net:
     driver: bridge
@@ -78,3 +97,4 @@ volumes:
   gabriel-data:
   gabriel-logs:
   gabriel-projects:
+  gabriel-qdrant:

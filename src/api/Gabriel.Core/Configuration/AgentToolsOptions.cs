@@ -30,4 +30,32 @@ public sealed class AgentToolsOptions : IConfigSection<AgentToolsOptions>
 
     // Default head/tail line count shown by file_info previews.
     public int DefaultPreviewLines { get; set; } = 6;
+
+    // Shell executor (shell_execute). Off by default: enabling it hands the
+    // model a real command line on the host, which is an explicit operator
+    // decision, not a default.
+    public ShellToolOptions Shell { get; set; } = new();
+}
+
+public sealed class ShellToolOptions
+{
+    public bool Enabled { get; set; }
+
+    // Working directory commands run in. Falls back to AgentTools:HostRoot
+    // when empty; if neither is set the tool refuses to run even when
+    // enabled. Note this pins the STARTING directory only - a shell can cd
+    // anywhere, which is exactly why Enabled defaults to false.
+    public string? WorkingRoot { get; set; }
+
+    // Per-command wall clock. The model can request less via timeout_seconds
+    // but never more. Clamped to 600s.
+    public int TimeoutSeconds { get; set; } = 60;
+
+    // Combined stdout/stderr cap per stream; longer output is truncated with
+    // a marker so one noisy build log can't flood the context window.
+    public int MaxOutputChars { get; set; } = 20000;
+
+    // Operator-supplied regexes (case-insensitive) appended to the built-in
+    // deny list. A match rejects the command before anything executes.
+    public List<string> DenyPatterns { get; set; } = new();
 }

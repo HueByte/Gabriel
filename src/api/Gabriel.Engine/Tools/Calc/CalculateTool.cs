@@ -33,6 +33,7 @@ public sealed class CalculateTool : ITool
     private const int MaxDepth = 64;
 
     public string Name => "calculate";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Evaluate a mathematical expression and return the exact numeric result. " +

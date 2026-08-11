@@ -15,6 +15,7 @@ public sealed partial class TextTransformTool : ITool
     private const int MaxTextLength = 100_000;
 
     public string Name => "text_transform";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Transform the case or shape of text. Ops: upper, lower, title, sentence; " +

@@ -302,9 +302,17 @@ $$
 
 The `8` constant accounts for role markers and JSON separators that surround the content on the wire. The chars/4 ratio is a coarse approximation - real BPE tokenization is 30-50% more accurate - but for context-window budgeting at the 80% threshold, the headroom absorbs the error easily. The interface exists so swapping in a real BPE tokenizer later doesn't touch any caller.
 
+## Parallel tool execution (2026-08-12)
+
+Tool calls within one iteration are announced up front (one `AgentToolCall` per call, before any observation), then executed with a two-lane model:
+
+- Tools whose `ITool.IsParallelSafe` is `true` (pure compute + singleton-HTTP-backed: web, docs, utilities) start immediately and fan out on the thread pool, bounded by `Agent:MaxParallelToolCalls` (default 4; `1` restores fully sequential behavior).
+- Everything else — every tool that transitively touches the request-scoped `AppDbContext` (memory, project files, filesystem-via-resolver, todo) — executes serially on the loop thread, as does all persistence, so the scoped DbContext is never used concurrently.
+
+Observations are persisted and emitted (`AgentToolResult`) in the model's original call order regardless of completion order, keeping the timeline deterministic. The system prompt's agentic fragment teaches the model to batch independent calls to exploit this.
+
 ## What this loop deliberately does NOT do
 
-- **Parallel tool execution**: tool calls within an iteration run serially. The provider can emit multiple tool calls per iteration, but we execute them one at a time. Parallelism would be straightforward but isn't worth the complexity until the tool list contains slow IO-bound calls.
 - **Streaming-aware compact**: compact fires only between turns. Inside an iteration, even if the history grows past the threshold, we don't interrupt - the model will get its full response or hit the iteration cap.
 - **Per-turn cost tracking**: no accounting. Each turn calls the provider 1 to `MaxIterations` times; we don't tally tokens or expose usage.
 - **Re-feed native CoT on subsequent iterations**: `Message.ReasoningContent` is persisted for transparency but is not added to `ToProviderHistory`. Only `Message.Content` (the visible text channel, which contains any ReAct "Thought" prelude) is re-fed. Mirrors the providers' own behavior - they treat their `reasoning_content` as ephemeral by design.

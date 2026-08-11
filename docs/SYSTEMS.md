@@ -1,6 +1,6 @@
 # Systems inventory
 
-One row per externally meaningful unit — controllers, engine services, providers, tool families, infrastructure services. **Maintenance rule (CLAUDE.md): any added/removed/renamed system updates its row here, same session.** Compiled 2026-08-11.
+One row per externally meaningful unit — controllers, engine services, providers, tool families, infrastructure services. **Maintenance rule (CLAUDE.md): any added/removed/renamed system updates its row here, same session.** Compiled 2026-08-11; semantic memory + task-loop tools added 2026-08-12.
 
 ## API controllers (`src/api/Gabriel.API/Controllers/`)
 
@@ -19,7 +19,7 @@ One row per externally meaningful unit — controllers, engine services, provide
 
 | System | Role |
 | --- | --- |
-| `AgentService` | The ReAct loop: streams provider events, executes tools, persists messages, triggers compact |
+| `AgentService` | The ReAct loop: streams provider events, executes tools (parallel-safe tools concurrently, capped by `Agent:MaxParallelToolCalls`), persists messages, triggers compact, injects semantic memory recall |
 | `AgentContext` | Single authority assembling provider history AND the token-metrics breakdown |
 | `GabrielToolBridge` (+ `ToolCallStreamSplitter`, `ToolCallBlockParser`) | Tool-call emulation decorator for text-only providers (`ToolMode: Emulated`) |
 | `ModelCatalog` / `IChatProviderRegistry` | Model + provider resolution, `ToolMode` routing |
@@ -37,8 +37,12 @@ One row per externally meaningful unit — controllers, engine services, provide
 | Docs | `docs_list`, `docs_read` (local baked-in docs + GitHub fallback) |
 | Files (read-only, path-hardened) | `file_info`, `list_dir`, `find`, `grep` |
 | Project files | `list_project_files`, `read_project_file` |
-| Memory | `memory_save`, `memory_list`, `memory_remove` |
+| Memory | `memory_save`, `memory_list`, `memory_remove`, `memory_search` (semantic, Qdrant-backed; reports unavailable when `SemanticMemory:Enabled=false`) |
+| Tasks | `todo_write`, `todo_read` (Claude Code-style per-conversation plan, persisted on `Conversation.TodoListJson`) |
+| Shell | `shell_execute` (off by default — `AgentTools:Shell:Enabled`; deny-list + timeout + output cap) |
 | Utilities | `calculate`, `base_convert`, `base64`, `hash`, `color_convert`, `json_format`, `text_stats`, `text_transform`, `get_current_time` |
+
+Tools declare `ITool.IsParallelSafe`; the loop runs flagged tools from one batch concurrently while DbContext-backed tools stay serial.
 
 ## Infrastructure (`src/api/Gabriel.Infrastructure/`)
 
@@ -51,6 +55,8 @@ One row per externally meaningful unit — controllers, engine services, provide
 | `DiskProjectFileService` | Project file storage under the configured root |
 | Web search backends (`DuckDuckGoWebSearch`, `BraveWebSearch`, `TavilyWebSearch`, `CompositeWebSearch`, `InstrumentedWebSearch`) | `IWebSearch` implementations |
 | Docs backends (`LocalDocsLookup`, `GitHubDocsLookup`, `CompositeDocsLookup`) | `IDocsLookup` implementations |
+| Semantic memory (`QdrantMemoryIndex`, `NoopSemanticMemoryIndex`, `SemanticMemoryBackfillService`) | `ISemanticMemoryIndex` over Qdrant REST; SQLite stays authoritative, index is rebuildable (startup backfill); no-op when disabled |
+| Embeddings (`MockEmbeddingProvider`, `OpenAIEmbeddingProvider`) | `IEmbeddingProvider` — deterministic hashed BoW (no key) or OpenAI `text-embedding-3-small` |
 
 ## Webapp (`src/webapp/`)
 

@@ -13,6 +13,7 @@ public sealed class WebSearchTool : ITool
     }
 
     public string Name => "web_search";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Search the open web for current, external, or third-party information. " +

@@ -57,6 +57,9 @@ namespace Gabriel.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TodoListJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("INTEGER");
 
@@ -117,33 +120,6 @@ namespace Gabriel.Infrastructure.Migrations
                     b.ToTable("MemoryEntries", (string)null);
                 });
 
-            modelBuilder.Entity("Gabriel.Core.Entities.MetricEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Metric")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("System")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedAt");
-
-                    b.HasIndex("System", "CreatedAt");
-
-                    b.ToTable("MetricEntries", (string)null);
-                });
-
             modelBuilder.Entity("Gabriel.Core.Entities.Message", b =>
                 {
                     b.Property<Guid>("Id")
@@ -185,6 +161,33 @@ namespace Gabriel.Infrastructure.Migrations
                     b.HasIndex("ConversationId", "VariantGroupId");
 
                     b.ToTable("Messages", (string)null);
+                });
+
+            modelBuilder.Entity("Gabriel.Core.Entities.MetricEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Metric")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("System")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("System", "CreatedAt");
+
+                    b.ToTable("MetricEntries", (string)null);
                 });
 
             modelBuilder.Entity("Gabriel.Core.Entities.Project", b =>

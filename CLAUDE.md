@@ -6,7 +6,7 @@ This file is the working brief for AI agents (and a solid orientation doc for hu
 
 **Gabriel** is an LLM chat app with a pixel-art "AI entity" avatar, built as a playground for chat-agent ideas. The mission (stated 2026-08-11): a proper **generalistic personal assistant — to talk, to do tasks, to learn and teach.** Feature priorities are judged against that mission.
 
-Current phase: post-foundation. The agent loop (ReAct + streaming), sessions, auto-compact, identity/JWT, projects, SQLite memory, markdown chat, Docker, and a broad tool belt are shipped. Active focus after the 2026-08-11 cleanup: task-oriented agent work (planning loop, shell executor) — see `.dev/PLAN.md` (local-only) for the roadmap.
+Current phase: post-foundation. The agent loop (ReAct + streaming), sessions, auto-compact, identity/JWT, projects, SQLite memory, markdown chat, Docker, and a broad tool belt are shipped. 2026-08-12 (Claude Code-parity push): parallel tool-call execution (`ITool.IsParallelSafe` + `Agent:MaxParallelToolCalls`), per-conversation todo tools (`todo_write`/`todo_read`), a guard-railed `shell_execute` (off by default), semantic memory over Qdrant (`SemanticMemory:Enabled`, off by default; SQLite stays authoritative), and a real test project (`Gabriel.Tests`, xUnit). See `.dev/PLAN.md` (local-only) for the roadmap.
 
 Naming: the repo folder is `PulsePixel` (historical); the product, solution, and all namespaces are **Gabriel**. `prototype/` holds the original Node-based pixel experiments — excluded from lint/CI gates, kept for the trail.
 
@@ -35,7 +35,7 @@ Reference docs: `docs/SYSTEMS.md` (systems inventory), `docs/gabriel-self-docs/`
 
 ## Technology Stack
 
-- Backend: .NET 10, ASP.NET Core, EF Core 10 (SQLite), ASP.NET Identity + JWT cookies, Serilog
+- Backend: .NET 10, ASP.NET Core, EF Core 10 (SQLite), ASP.NET Identity + JWT cookies, Serilog; Qdrant (REST) + pluggable embeddings (Mock / OpenAI) for semantic memory
 - Agent: xAI Grok provider + Mock provider; tool-call emulation bridge for text-only models (`ToolMode: Native | Emulated | None`)
 - Frontend: Vite, React 19, TypeScript, Three.js, react-markdown + shiki, mermaid
 - Infra: Docker + compose (`docker/`), BuildKit named contexts; CI via GitHub Actions (`.github/workflows/`)
@@ -60,7 +60,7 @@ scripts/dev.ps1 up -Docker        # containerized stack (docker/docker-compose.y
 scripts/add-migration.ps1 <Name>  # EF migration with the right project flags
 
 dotnet build src/api/Gabriel.slnx           # also regenerates the OpenAPI client (needs npm ci once)
-dotnet test src/api/Gabriel.slnx
+dotnet test src/api/Gabriel.slnx            # runs Gabriel.Tests (xUnit)
 npm run typecheck                           # in src/webapp
 npm run build                               # in src/webapp
 ```

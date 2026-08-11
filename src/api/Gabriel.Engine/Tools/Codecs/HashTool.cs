@@ -13,6 +13,7 @@ public sealed class HashTool : ITool
     private const int MaxTextLength = 1_000_000;
 
     public string Name => "hash";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Compute a cryptographic hash of text and return it as lowercase hex. " +

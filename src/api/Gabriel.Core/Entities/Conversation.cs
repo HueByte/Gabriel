@@ -47,6 +47,12 @@ public class Conversation
     // separate table because the shape evolves and we never query its fields.
     public string? StateJson { get; private set; }
 
+    // Serialized agent task list (todo_write / todo_read tools) - the Claude
+    // Code-style working plan the agent maintains during multi-step tasks.
+    // JSON column for the same reason as StateJson: the shape may evolve and
+    // we never query into it. Null = no plan recorded.
+    public string? TodoListJson { get; private set; }
+
     // Per-conversation behaviour bias. Null = use the default (Chatty).
     // Stored nullable so the column can be added without backfilling and so
     // a future "use the user's default mode" preference can layer onto the
@@ -221,6 +227,14 @@ public class Conversation
     public void SetState(ConversationState state)
     {
         StateJson = JsonSerializer.Serialize(state);
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    // Full-replacement semantics (matching the todo_write tool contract):
+    // callers always hand over the complete serialized list. Null/empty clears.
+    public void SetTodoList(string? todoListJson)
+    {
+        TodoListJson = string.IsNullOrWhiteSpace(todoListJson) ? null : todoListJson;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

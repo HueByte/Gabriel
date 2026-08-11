@@ -19,6 +19,7 @@ public sealed class BaseConvertTool : ITool
     private const string Digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
     public string Name => "base_convert";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Convert a whole number between numeral bases - binary, octal, decimal, " +

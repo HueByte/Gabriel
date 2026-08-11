@@ -32,6 +32,10 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `memory_save` | Memory | `IMemoryRepository` | Save a memory at user or project scope. |
 | `memory_list` | Memory | `IMemoryRepository` | List saved memories. |
 | `memory_remove` | Memory | `IMemoryRepository` | Delete a memory by id. |
+| `memory_search` | Memory | `ISemanticMemoryIndex` | Semantic (meaning-based) search over saved memories; Qdrant-backed. Reports unavailable when `SemanticMemory:Enabled=false`. |
+| `todo_write` | Tasks | `IConversationRepository` | Create/replace your working task list for this conversation (Claude Code-style plan). |
+| `todo_read` | Tasks | `IConversationRepository` | Read the persisted task list back (resume support). |
+| `shell_execute` | Shell | none (Process) | Run one shell command with timeout + deny-list. Disabled unless `AgentTools:Shell:Enabled=true`. |
 | `file_info` | Files | `IAgentPathResolver` | Stat a file/dir on the agent host. |
 | `list_dir` | Files | `IAgentPathResolver` | List a directory. |
 | `find` | Files | `IAgentPathResolver` | Glob search. |
@@ -47,6 +51,7 @@ public interface ITool
     string Name { get; }
     string Description { get; }
     string ParametersJsonSchema { get; }       // raw JSON schema, passed verbatim to the LLM
+    bool IsParallelSafe => false;              // opt-in: may run concurrently with other calls in the same batch
     Task<string> ExecuteAsync(string argumentsJson, CancellationToken ct);
 }
 
@@ -68,11 +73,13 @@ public record ToolDescriptor(string Name, string Description, string ParametersJ
 ### How a tool call flows
 
 1. Provider streams `ToolCallReadyEvent(id, name, argsJson)` then `FinishEvent(ToolCalls)`.
-2. `AgentService` persists the assistant tool-call message; emits `AgentToolCall`.
-3. For each call: `registry.Find(name).ExecuteAsync(argsJson, ct)` → observation string.
+2. `AgentService` persists the assistant tool-call message; emits one `AgentToolCall` per call up front (the whole batch is announced before observations arrive).
+3. Execution (2026-08-12): calls whose tool has `IsParallelSafe=true` (pure compute + HTTP-backed tools) start concurrently, capped by `Agent:MaxParallelToolCalls` (default 4). Everything DbContext-backed (memory, project files, filesystem, todo) runs serially on the loop thread — the scoped `AppDbContext` is never touched from two threads.
 4. Errors / unknown tools become observations: `"Error executing {tool}: {msg}"` or `"Error: tool 'foo' is not registered."` — the loop never crashes from a tool failure.
-5. Persist tool result; emit `AgentToolResult`.
-6. Loop continues: history now includes the tool result; provider gets called again.
+5. Observations are persisted + emitted (`AgentToolResult`) in the model's original call order, regardless of completion order.
+6. Loop continues: history now includes the tool results; provider gets called again.
+
+Practical consequence for you: when you need several INDEPENDENT lookups, issue them together in one batch — they execute concurrently. Dependent calls still need separate iterations.
 
 ### `web_search`
 
@@ -196,6 +203,33 @@ Idempotent — saving twice with the same `(scope, name)` updates the existing e
 
 Lookup is by `(scope, name)`. `scope='project'` only operates on memories saved for THIS project. Returns a confirmation string indicating whether anything matched.
 
+`memory_search` (semantic, 2026-08-12) schema:
+
+```json
+{
+  "query": "what you're looking for, phrased naturally",
+  "top_k": 5
+}
+```
+
+Backed by the Qdrant vector index (`ISemanticMemoryIndex`). Finds memories related in MEANING to the query — not just keyword matches — and returns full bodies ranked by cosine similarity. Bodies are re-read from SQLite (the source of truth), never from index payloads. Only works when the server has `SemanticMemory:Enabled=true`; otherwise it returns an error observation telling you to use `memory_list` instead. When semantic memory is on, the `[Saved memories]` system block also changes shape: every entry appears in a name+description index, and only the entries semantically closest to the latest user message are expanded under "Relevant now" — `memory_search` is how you pull any other body mid-task.
+
+### Task tools (`todo_write`, `todo_read`)
+
+Your working plan for multi-step tasks, persisted per-conversation (`Conversation.TodoListJson`). `todo_write` schema:
+
+```json
+{ "todos": [ { "content": "imperative step", "status": "pending" | "in_progress" | "completed" } ] }
+```
+
+Full-replacement semantics — every call carries the complete list. Rules the tool enforces: at most one `in_progress` item, max 50 items, non-empty content. Use it for any task with 3+ distinct steps: write the plan first, flip items to `in_progress` right before working them, `completed` immediately after. An empty `todos` array clears the list. `todo_read` (no args) returns the current list — use it when resuming a conversation.
+
+### `shell_execute`
+
+Schema: `{ "command": string, "timeout_seconds"?: int }`. Runs ONE command via PowerShell (Windows) or `/bin/sh` (Linux) in the operator-configured working directory, returning exit code + stdout + stderr (each stream capped at `MaxOutputChars`, default 20k).
+
+Disabled by default — `AgentTools:Shell:Enabled=true` is an explicit operator opt-in, because this hands you a real shell with the API process's permissions. A deny-list rejects obviously catastrophic commands (recursive root deletes, disk formatting, shutdown, forced pushes, firewall/service tampering) before execution; it is a tripwire, not a sandbox. There is NO persistent session between calls — chain steps with `&&` or use absolute paths. Prefer the dedicated file tools for inspection; reach for the shell for builds, tests, git, and package tooling.
+
 ### Project-file tools
 
 `list_project_files` and `read_project_file` operate on the **active project's** uploaded files (Phase 8 project storage). They depend on `IToolExecutionContext` to know which project the current turn is scoped to — if no project is active, both refuse.
@@ -277,7 +311,7 @@ Registry picks the new tool up automatically.
 ## INVARIANTS
 
 - Tool execution errors NEVER crash the agent — they become observation strings.
-- Tool calls run serially inside an iteration.
+- Only tools flagged `IsParallelSafe` run concurrently within a batch; DbContext-backed tools are always serial, and results always persist in call order.
 - Unknown tool names return an error observation, not an exception.
 - All providers (`IWebSearch`, `IUrlFetcher`, `IDocsLookup`) are singletons; HTTP clients use `IHttpClientFactory` named clients.
 - `web_fetch` URLs that resolve to ANY private address are rejected.

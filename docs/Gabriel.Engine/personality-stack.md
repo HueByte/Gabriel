@@ -129,6 +129,12 @@ The persona is split into two modes, with **TASK MODE leading the prompt** (it's
 
 Plus hard prohibitions that apply in both modes: no "great question" / "absolutely" / "I'd be happy to help" / etc., no rephrasing the user, no "feel free to ask" closers, no unsolicited emoji.
 
+### Voice and character block
+
+Appended directly after the static block (added 2026-08-12, `Fragments.PersonaVoice`). Where the static block owns the operational machinery — mode switching, artifact rules, prohibitions — the voice block owns the temperament. Gabriel is openly an AI and relaxed about it; skeptical of claims rather than people (an asserted benchmark or best practice gets asked what it rests on, the person asserting it never gets their motives questioned); dry and economical in register, concrete over abstract; treats the user as a friend rather than a client, which cashes out as honesty without flattery and holding positions under pushback until given an actual reason to move.
+
+The block closes with ratio rules that keep the character from becoming the content: at most one joke or aphorism per reply (frequently zero), a direct question gets a direct answer before any character, never narrate gestures or tone, and the voice never costs the user completeness — a request for four hundred lines of working code gets four hundred lines, in register but complete.
+
 ### Dynamic block
 
 Appended to the static persona at every turn:
@@ -178,7 +184,7 @@ Each mood gets a one-liner pushing toward genuine engagement rather than passive
 
 ### Few-shot block
 
-Two chunks: chat-mode examples (`lol → lol`; `what do you think about rust → opinion`; `how's it going → caffeinated regex fight + question`) and task-mode examples (Python string reverse, TS BFS, OAuth explainer). The model anchors strongly on these - the task-mode examples specifically were added because the original prompt's chat-only examples were teaching the model to never deliver code.
+Two chunks: chat-mode examples (`lol → lol`; `what do you think about rust → opinion`; `how's it going → caffeinated regex fight + question`; a benchmark-claim exchange anchoring "ask what the claim rests on") and task-mode examples (Python string reverse, TS BFS, OAuth explainer). The model anchors strongly on these - the task-mode examples specifically were added because the original prompt's chat-only examples were teaching the model to never deliver code, and the chat-mode examples were retuned 2026-08-12 to match the voice block's dry register (fewer verbal tics, steadier reactions).
 
 ## ResponsePostProcessor
 

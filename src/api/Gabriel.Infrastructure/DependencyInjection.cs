@@ -1,10 +1,12 @@
 using Gabriel.Core.Configuration;
+using Gabriel.Core.Memory;
 using Gabriel.Core.Repositories;
 using Gabriel.Core.Services;
 using Gabriel.Engine.Providers;
 using Gabriel.Engine.Services;
 using Gabriel.Engine.Tools.Docs;
 using Gabriel.Engine.Tools.Web;
+using Gabriel.Infrastructure.Memory;
 using Gabriel.Infrastructure.Persistence;
 using Gabriel.Infrastructure.Persistence.Repositories;
 using Gabriel.Infrastructure.Projects;
@@ -44,8 +46,63 @@ public static class DependencyInjection
         AddWebSearch(services, config);
         AddWebFetch(services);
         AddDocsLookup(services, config);
+        AddSemanticMemory(services, config);
 
         return services;
+    }
+
+    // Semantic memory (Qdrant + embeddings). Disabled by default: MemoryService
+    // requires an ISemanticMemoryIndex, so the disabled path registers a no-op
+    // instead of leaving the graph unresolvable. Enabling without an OpenAI
+    // key silently uses the deterministic Mock embedder - the pipeline works
+    // end-to-end, recall quality is just token-overlap-grade until a real
+    // embedding provider is configured.
+    private static void AddSemanticMemory(IServiceCollection services, IConfiguration config)
+    {
+        services.Configure<SemanticMemoryOptions>(config.GetSection(SemanticMemoryOptions.SectionName));
+        services.Configure<EmbeddingOptions>(config.GetSection(EmbeddingOptions.SectionName));
+
+        if (!config.GetSection(SemanticMemoryOptions.SectionName).GetValue<bool>(nameof(SemanticMemoryOptions.Enabled)))
+        {
+            services.AddSingleton<ISemanticMemoryIndex, NoopSemanticMemoryIndex>();
+            return;
+        }
+
+        var embeddingProvider = config[$"{EmbeddingOptions.SectionName}:{nameof(EmbeddingOptions.Provider)}"]?.Trim();
+        var openAiKey = config[$"{EmbeddingOptions.SectionName}:OpenAI:ApiKey"];
+        if (string.Equals(embeddingProvider, "OpenAI", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(openAiKey))
+        {
+            services.AddHttpClient(OpenAIEmbeddingProvider.HttpClientName, (sp, client) =>
+            {
+                var opts = sp.GetRequiredService<IOptions<EmbeddingOptions>>().Value.OpenAI;
+                client.BaseAddress = new Uri(opts.BaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {opts.ApiKey}");
+            });
+            services.AddSingleton<IEmbeddingProvider, OpenAIEmbeddingProvider>();
+        }
+        else
+        {
+            services.AddSingleton<IEmbeddingProvider, MockEmbeddingProvider>();
+        }
+
+        services.AddHttpClient(QdrantMemoryIndex.HttpClientName, (sp, client) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<SemanticMemoryOptions>>().Value;
+            // Trailing slash so relative paths ("collections/...") append
+            // instead of replacing the last segment.
+            var baseUrl = opts.QdrantUrl.EndsWith('/') ? opts.QdrantUrl : opts.QdrantUrl + "/";
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+            if (!string.IsNullOrWhiteSpace(opts.QdrantApiKey))
+            {
+                client.DefaultRequestHeaders.Add("api-key", opts.QdrantApiKey);
+            }
+        });
+
+        services.AddSingleton<ISemanticMemoryIndex, QdrantMemoryIndex>();
+        services.AddHostedService<SemanticMemoryBackfillService>();
     }
 
     // Web page fetcher used by the web_fetch tool. A single HttpClient with a

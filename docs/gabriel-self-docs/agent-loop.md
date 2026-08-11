@@ -50,7 +50,7 @@ In-stream failures cannot change HTTP status; they emit a final `AgentError` eve
 9. Loop up to `MaxIterations`:
    - `IChatProvider.StreamAsync(history, tools)` yields a stream of `ChatProviderEvent`. When `ToolMode == Emulated`, the registered provider is wrapped by `GabrielToolBridge`, which translates between the model's XML-tagged-JSON tool transport and the same `ChatProviderEvent` shape the native path uses — the loop sees no difference.
    - Forward text/reasoning deltas to the caller as `AgentEvent`.
-   - On `FinishEvent.ToolCalls`: persist assistant tool-calls msg, execute each tool serially via `IToolRegistry`, persist each tool result, continue loop.
+   - On `FinishEvent.ToolCalls`: persist assistant tool-calls msg, announce every call, then execute — parallel-safe tools concurrently (capped by `Agent:MaxParallelToolCalls`), DbContext-backed tools serially — persist each result in call order, continue loop.
    - On `FinishEvent.Stop`: run `IResponsePostProcessor.Clean`, persist assistant text, yield `AgentAssistantMessage` + `AgentDone`, exit.
    - On `FinishEvent.Length` / `Error` / unexpected: yield `AgentError` + `AgentDone`, exit.
 10. If max iterations hit without `Stop`: persist `"(stopped after N tool iterations)"`, yield `AgentDone`.
@@ -94,7 +94,7 @@ Never collapse these into one channel; the data model and UI treat them as separ
 
 Assembly is consolidated into the `AgentContext` value object so the live provider call and the metrics breakdown see exactly the same bytes (they used to diverge — metrics ignored persona / project prompt / memory / tools entirely). Order matters for prefix-caching:
 
-1. Persona system message (`PersonaStatic` + `PersonaFormatting` + active mode fragment + per-turn `[Conversation metadata]` + few-shot).
+1. Persona system message (`PersonaStatic` + `PersonaVoice` + `PersonaFormatting` + `PersonaAgentic` + `PersonaMemory` + active mode fragment + per-turn `[Conversation metadata]` + few-shot).
 2. `[Project context]` block, when the conversation is in a non-default project. Carries the project name, a directive to default `memory_save` to `scope='project'`, and the user's optional per-project `SystemPrompt`. Omitted for Default-project / standalone conversations.
 3. `[Saved memories]` block — user-scope first, then project-scope (current project only).
 4. `[Summary of earlier conversation]` block — the rolling summary, when present.
@@ -161,7 +161,7 @@ After completion, the variant group has ≥ 2 sibling turn-sequences (old inacti
 
 ## INVARIANTS
 
-- Tool calls within an iteration run **serially**, never in parallel.
+- Tools flagged `IsParallelSafe` may run concurrently within an iteration's batch; DbContext-backed tools and all persistence stay serial, and observations always persist in the model's call order.
 - Compact never fires mid-iteration; only between turns.
 - `MaxIterations` is a hard ceiling. Past it, the loop bails with a placeholder.
 - `Message.ReasoningContent` is persisted for transparency but never added to `ToProviderHistory`.

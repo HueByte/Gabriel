@@ -72,11 +72,13 @@ Other signals:
 
 ### GabrielSystemPromptBuilder
 
-Per-turn persona system message = **static persona** ++ **formatting block** ++ **mode fragment** ++ **dynamic block** ++ **few-shot block**.
+Per-turn persona system message = **static persona** ++ **voice block** ++ **formatting block** ++ **agentic block** ++ **memory block** ++ **mode fragment** ++ **dynamic block** ++ **few-shot block**.
 
 This builds only the persona system message. `AgentContext.ToProviderHistory` then layers it with the `[Project context]`, `[Saved memories]`, `[Summary]`, and conversation tail in a fixed left-to-right order that respects provider prefix caching (see `agent-loop.md` for the full assembly).
 
 Static persona has two modes; the prompt leads with **TASK MODE** rules because that's the failure-prone case. The static block also carries the identity preamble (created by HueByte, repo at `https://github.com/HueByte/Gabriel`) and a pointer that authoritative self-documentation is available via `docs_list` / `docs_read`.
+
+The **voice block** (`Fragments.PersonaVoice`, added 2026-08-12) is the character core, appended directly after the static block: openly an AI and relaxed about it; skeptical of claims, not people (asks what an assertion rests on, never interrogates motives); dry, economical, concrete register; honesty-as-affection; the user is a friend, not a client. It ends with ratio rules — at most one joke per reply (frequently zero), direct answers before character, never narrate gestures or tone, and the voice never costs the user completeness of an artifact.
 
 **TASK MODE** (when `UserAskedForDetail`):
 - Deliver the full artifact. Length-matching does NOT apply.
@@ -129,14 +131,16 @@ User is in TASK MODE - they want a substantive artifact.  ; if UserAskedForDetai
 | `LowEnergy` | Brief but make each sentence count. |
 | `Neutral` | Bring an angle, a take, or a curious question — don't strip personality. |
 
-**Few-shot block**: chat-mode examples (`lol → lol`, `how's it going → caffeinated regex fight + question`) + task-mode examples (Python string reverse, TS BFS, OAuth explainer). The task-mode examples were added to undo the chat-only prior that taught the model to never deliver code.
+**Few-shot block**: chat-mode examples (`lol → lol`, `how's it going → caffeinated regex fight + question`, a benchmark-claim exchange anchoring "ask what the claim rests on") + task-mode examples (Python string reverse, TS BFS, OAuth explainer). The task-mode examples were added to undo the chat-only prior that taught the model to never deliver code; the chat examples were retuned 2026-08-12 to the dry register of the voice block.
 
 ### Persona fragments
 
 The static persona is split across several files in `Personality/Prompts/Fragments.*.cs`. The builder concatenates them in fixed order so each piece can evolve independently without disturbing the rest.
 
-- `Fragments.PersonaStatic` — the "who you are" core: identity preamble (HueByte / repo / self-doc pointer), ZERO-th PRINCIPLE, TASK MODE, CHAT MODE, hard prohibitions.
+- `Fragments.PersonaStatic` — the "who you are" core: identity preamble (HueByte / repo / self-doc pointer), conversational baseline (register-matching, curiosity, direct-answer-first), TASK MODE, CHAT MODE, hard prohibitions.
+- `Fragments.PersonaVoice` — the voice-and-character block: temperament (skeptical of claims, not people; charitable to people, unsentimental about work), dry economical register, the-user-is-a-friend stance, and the ratio rules (≤ 1 joke per reply, direct answer first, never narrate tone, voice never costs artifact completeness).
 - `Fragments.PersonaFormatting` — markdown surface guide (GFM + Mermaid + KaTeX), when to reach for each, when chat-mode should stay prose.
+- `Fragments.PersonaAgentic` — agentic working conventions: todo-list task management + tool-usage policy (batching independent calls for parallel execution).
 - `Fragments.PersonaMemory` — memory-tool guidance (when to save, what NOT to save, format conventions for `name` / `description` / `body`). Currently always present; designed to be omittable if memory tools aren't registered.
 - `Fragments.Modes` — one of `ModeChatty` (default, no bias) / `ModeElaborative` / `ModeConcise` / `ModeTutor` / `ModeCritic`. Selected per-conversation from `Conversation.Mode`; sits right after the formatting block as "additional rules layered on top of the baseline persona". Always one mode block is present so the prompt shape is uniform.
 - `Fragments.FewShot` — the few-shot examples block, appended last.

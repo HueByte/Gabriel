@@ -5,6 +5,7 @@ using Gabriel.Core.Configuration;
 using Gabriel.Core.Entities;
 using Gabriel.Core.Exceptions;
 using Gabriel.Core.Identity;
+using Gabriel.Core.Memory;
 using Gabriel.Core.Personality;
 using Gabriel.Core.Repositories;
 using Gabriel.Core.Services;
@@ -34,6 +35,8 @@ public class AgentService : IAgentService
     private readonly IModelCatalog _modelCatalog;
     private readonly IUserPreferences _userPrefs;
     private readonly IMemoryService _memories;
+    private readonly ISemanticMemoryIndex _memoryIndex;
+    private readonly SemanticMemoryOptions _semanticOptions;
     private readonly IToolRegistry _tools;
     private readonly IToolExecutionContext _toolContext;
     private readonly IUnitOfWork _uow;
@@ -57,6 +60,8 @@ public class AgentService : IAgentService
         IModelCatalog modelCatalog,
         IUserPreferences userPrefs,
         IMemoryService memories,
+        ISemanticMemoryIndex memoryIndex,
+        IOptions<SemanticMemoryOptions> semanticOptions,
         IToolRegistry tools,
         IToolExecutionContext toolContext,
         IUnitOfWork uow,
@@ -75,6 +80,8 @@ public class AgentService : IAgentService
         _modelCatalog = modelCatalog;
         _userPrefs = userPrefs;
         _memories = memories;
+        _memoryIndex = memoryIndex;
+        _semanticOptions = semanticOptions.Value;
         _tools = tools;
         _toolContext = toolContext;
         _uow = uow;
@@ -246,15 +253,54 @@ public class AgentService : IAgentService
         return sb.ToString();
     }
 
-    // Formats the user's saved memories as a single system message. Two
-    // sections (user-scope first, project-scope after) so the model can tell
-    // which entries follow them everywhere versus only inside this project.
+    // Formats the user's saved memories as a single system message. Two modes:
+    //
+    //   Semantic memory OFF (default): every visible memory is injected
+    //   verbatim - the original behavior, fine at small counts.
+    //
+    //   Semantic memory ON (Qdrant): every memory appears in a lightweight
+    //   name+description index, but only the entries semantically closest to
+    //   the latest user message get their full bodies expanded. This keeps
+    //   the block's token cost roughly constant as the memory set grows; the
+    //   memory_search tool covers mid-task recall of anything not expanded.
+    //
     // Returns null when there's nothing to inject.
-    private async Task<string?> LoadMemoryBlockAsync(Guid? projectId, CancellationToken ct)
+    private async Task<string?> LoadMemoryBlockAsync(Conversation conversation, Guid userId, CancellationToken ct)
     {
-        var entries = await _memories.ListForConversationAsync(projectId, ct);
+        var entries = await _memories.ListForConversationAsync(conversation.ProjectId, ct);
         if (entries.Count == 0) return null;
 
+        if (!_memoryIndex.IsEnabled)
+        {
+            return BuildFullMemoryBlock(entries);
+        }
+
+        // Recall query: the latest active user message (already persisted by
+        // the time turn prompts load, for both RunAsync and Regenerate).
+        var query = conversation.Messages
+            .LastOrDefault(m => m.Role == MessageRole.User && m.IsActiveVariant)?.Content;
+
+        var recalled = new List<(Core.Entities.MemoryEntry Entry, float Score)>();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var hits = await _memoryIndex.SearchAsync(
+                query, userId, conversation.ProjectId,
+                _semanticOptions.RecallTopK, _semanticOptions.RecallMinScore, ct);
+            var byId = entries.ToDictionary(e => e.Id);
+            foreach (var hit in hits)
+            {
+                if (byId.TryGetValue(hit.MemoryId, out var entry))
+                {
+                    recalled.Add((entry, hit.Score));
+                }
+            }
+        }
+
+        return BuildSemanticMemoryBlock(entries, recalled);
+    }
+
+    private static string BuildFullMemoryBlock(IReadOnlyList<Core.Entities.MemoryEntry> entries)
+    {
         var sb = new StringBuilder();
         sb.AppendLine("[Saved memories]");
         sb.AppendLine("Durable facts the user has asked Gabriel to remember. Apply these unless the user contradicts them in the current conversation. Each entry has a scope (user = applies everywhere; project = only in this project), a type (user/feedback/project/reference), and a body.");
@@ -273,6 +319,33 @@ public class AgentService : IAgentService
         {
             sb.AppendLine("## Project-scope memories");
             foreach (var m in projectScope) AppendMemory(sb, m);
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string BuildSemanticMemoryBlock(
+        IReadOnlyList<Core.Entities.MemoryEntry> entries,
+        IReadOnlyList<(Core.Entities.MemoryEntry Entry, float Score)> recalled)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("[Saved memories]");
+        sb.AppendLine("Durable facts the user has asked Gabriel to remember. The index lists every saved entry; entries under 'Relevant now' were selected by semantic similarity to the latest message and include their full content. Call memory_search to read any other entry when its description looks relevant.");
+        sb.AppendLine();
+
+        sb.AppendLine("## Memory index");
+        foreach (var m in entries)
+        {
+            var scope = m.ProjectId is null ? "user" : "project";
+            sb.Append("- [").Append(m.Type.ToString().ToLowerInvariant()).Append(", ").Append(scope).Append("] ")
+              .Append(m.Name).Append(" — ").AppendLine(m.Description);
+        }
+
+        if (recalled.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Relevant now");
+            foreach (var (entry, _) in recalled) AppendMemory(sb, entry);
         }
 
         return sb.ToString().TrimEnd();
@@ -306,7 +379,7 @@ public class AgentService : IAgentService
         CancellationToken ct)
     {
         var projectPrompt = await LoadProjectSystemPromptAsync(conversation, userId, ct);
-        var memoryBlock = await LoadMemoryBlockAsync(conversation.ProjectId, ct);
+        var memoryBlock = await LoadMemoryBlockAsync(conversation, userId, ct);
         var personaPrompt = _promptBuilder.Build(conversation.GetState(), conversation.Mode);
         IReadOnlyList<ToolDescriptor> tools = selection.ToolMode == ToolMode.None
             ? Array.Empty<ToolDescriptor>()
@@ -439,11 +512,39 @@ public class AgentService : IAgentService
                     "Iter {Iter}: model requested {ToolCount} tool call(s) | conv={ConversationId} reasoningChars={ReasoningLen}",
                     iter, pendingCalls.Count, conversation.Id, reasoningForCall?.Length ?? 0);
 
+                // Announce every call up front - the model issued this batch
+                // together, so the client sees the full action set before
+                // observations start arriving (mirrors how batched tool calls
+                // read in Claude Code).
                 foreach (var call in pendingCalls)
                 {
                     yield return new AgentToolCall(assistantMessage.Id, call.Id, call.Name, call.ArgumentsJson);
+                }
 
-                    var observation = await ExecuteToolSafelyAsync(call, conversation.Id, ct);
+                // Concurrency model: tools flagged IsParallelSafe start now and
+                // fan out on the thread pool, bounded by MaxParallelToolCalls.
+                // Everything else (all DbContext-backed tools) executes serially
+                // on this thread in the second pass below - as does persistence,
+                // so the scoped DbContext is only ever touched sequentially.
+                // Observations are persisted + emitted in the model's original
+                // call order regardless of completion order, keeping the
+                // timeline deterministic.
+                var parallelGate = new SemaphoreSlim(Math.Max(1, _options.MaxParallelToolCalls));
+                var started = new Task<string>?[pendingCalls.Count];
+                for (var i = 0; i < pendingCalls.Count; i++)
+                {
+                    if (_tools.Find(pendingCalls[i].Name) is { IsParallelSafe: true })
+                    {
+                        started[i] = ExecuteGatedAsync(parallelGate, pendingCalls[i], conversation.Id, ct);
+                    }
+                }
+
+                for (var i = 0; i < pendingCalls.Count; i++)
+                {
+                    var call = pendingCalls[i];
+                    var observation = started[i] is { } task
+                        ? await task
+                        : await ExecuteToolSafelyAsync(call, conversation.Id, ct);
 
                     var toolMessage = conversation.AppendToolResult(call.Id, observation, variantGroupIdOverride);
                     _conversations.AddMessage(toolMessage);
@@ -756,6 +857,28 @@ public class AgentService : IAgentService
                 "Tool call THREW | conv={ConversationId} tool={Tool} callId={CallId} elapsedMs={ElapsedMs}",
                 conversationId, call.Name, call.Id, sw.ElapsedMilliseconds);
             return $"Error executing {call.Name}: {ex.Message}";
+        }
+    }
+
+    // Wraps ExecuteToolSafelyAsync in the parallel gate. Never throws for tool
+    // failures (the inner method converts them to "Error ..." observations);
+    // the gate is intentionally not disposed by callers - SemaphoreSlim holds
+    // no unmanaged state unless AvailableWaitHandle is touched, and disposal
+    // while a late task still holds it would turn Release() into a crash.
+    private async Task<string> ExecuteGatedAsync(
+        SemaphoreSlim gate,
+        ChatProviderToolCall call,
+        Guid conversationId,
+        CancellationToken ct)
+    {
+        await gate.WaitAsync(ct);
+        try
+        {
+            return await ExecuteToolSafelyAsync(call, conversationId, ct);
+        }
+        finally
+        {
+            gate.Release();
         }
     }
 

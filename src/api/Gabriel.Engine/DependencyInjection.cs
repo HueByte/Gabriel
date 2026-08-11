@@ -13,7 +13,9 @@ using Gabriel.Engine.Tools.Files;
 using Gabriel.Engine.Tools.Memory;
 using Gabriel.Engine.Tools.Numbers;
 using Gabriel.Engine.Tools.Projects;
+using Gabriel.Engine.Tools.Shell;
 using Gabriel.Engine.Tools.Strings;
+using Gabriel.Engine.Tools.Tasks;
 using Gabriel.Engine.Tools.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -81,10 +83,14 @@ public static class DependencyInjection
         services.AddScoped<ITool, ReadProjectFileTool>();
 
         // Memory tools — Claude-style. Scope is "user" (cross-project) or
-        // "project" (this conversation's project only).
+        // "project" (this conversation's project only). memory_search is the
+        // semantic (Qdrant) recall path; it degrades to an "unavailable" soft
+        // error when SemanticMemory:Enabled=false.
         services.AddScoped<ITool, MemorySaveTool>();
         services.AddScoped<ITool, MemoryListTool>();
         services.AddScoped<ITool, MemoryRemoveTool>();
+        services.AddScoped<ITool, MemorySearchTool>();
+        services.Configure<SemanticMemoryOptions>(config.GetSection(SemanticMemoryOptions.SectionName));
 
         // Filesystem tools (Phase 12). Path resolution is shared so the same
         // host-vs-project hardening applies to every file tool.
@@ -93,6 +99,13 @@ public static class DependencyInjection
         services.AddScoped<ITool, ListDirTool>();
         services.AddScoped<ITool, FindTool>();
         services.AddScoped<ITool, GrepTool>();
+
+        // Task-loop tools (Claude Code parity, 2026-08-12): a persistent
+        // per-conversation todo list + a guard-railed shell executor. The
+        // shell tool self-disables unless AgentTools:Shell:Enabled=true.
+        services.AddScoped<ITool, TodoWriteTool>();
+        services.AddScoped<ITool, TodoReadTool>();
+        services.AddScoped<ITool, ShellExecuteTool>();
 
         return services;
     }

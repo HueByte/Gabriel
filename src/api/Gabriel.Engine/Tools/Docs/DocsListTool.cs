@@ -12,6 +12,7 @@ public sealed class DocsListTool : ITool
     }
 
     public string Name => "docs_list";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "List every page in Gabriel's OFFICIAL INTERNAL DOCUMENTATION. " +

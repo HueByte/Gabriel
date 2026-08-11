@@ -12,6 +12,7 @@ public sealed partial class ColorConvertTool : ITool
     private const int MaxValueLength = 200;
 
     public string Name => "color_convert";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Convert a color between hex, rgb(), and hsl() notations. " +

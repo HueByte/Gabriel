@@ -13,9 +13,11 @@ Every options POCO bound from `appsettings*.json`, its section name, defaults, a
 
 | Section | Type | Project | Purpose |
 | --- | --- | --- | --- |
-| `Agent` | `AgentOptions` | Engine | Loop iteration caps, compact knobs. |
+| `Agent` | `AgentOptions` | Engine | Loop iteration caps, compact knobs, parallel tool-call cap. |
 | `Personality` | `PersonalityOptions` | Engine | Persona name, typing-tempo (SSE pacing). |
-| `AgentTools` | `AgentToolsOptions` | Engine | Tool-level toggles (per-tool enable/disable, future). |
+| `AgentTools` | `AgentToolsOptions` | Engine | Filesystem-tool roots/caps + `Shell` sub-section for `shell_execute`. |
+| `SemanticMemory` | `SemanticMemoryOptions` | Core | Qdrant-backed semantic memory: enable flag, Qdrant URL/key, collection, recall top-K + min score. Off by default. |
+| `Embeddings` | `EmbeddingOptions` | Core | Embedding provider for semantic memory: `Mock` (default, no key) or `OpenAI` (+ key/model/dimensions). |
 | `Providers:Grok` | `GrokOptions` | Engine | xAI Grok provider + per-model catalog. |
 | `Tools:Web:Active` | string | n/a | Comma-separated list of providers: any of `ddg`, `brave`, `tavily`. One = direct; many = `CompositeWebSearch` parallel-query + merge. Default `"ddg"`. |
 | `Tools:Web:Brave` | `BraveSearchOptions` | Engine | Brave Search API key + endpoint. |
@@ -37,7 +39,53 @@ Every options POCO bound from `appsettings*.json`, its section name, defaults, a
   "Agent": {
     "MaxIterations": 8,           // ReAct loop ceiling
     "CompactThreshold": 0.8,      // fire compact at θ × W
-    "CompactKeepLast": 6          // keep ≥ this many messages post-cut
+    "CompactKeepLast": 6,         // keep ≥ this many messages post-cut
+    "MaxParallelToolCalls": 4     // concurrent cap for IsParallelSafe tools; 1 = sequential
+  }
+}
+```
+
+### `SemanticMemory` — `SemanticMemoryOptions` + `Embeddings` — `EmbeddingOptions` (2026-08-12)
+
+```jsonc
+{
+  "SemanticMemory": {
+    "Enabled": false,                     // off = pre-Qdrant behavior (full memory dump, no memory_search)
+    "QdrantUrl": "http://localhost:6333", // REST endpoint; "http://qdrant:6333" in the compose stack
+    "QdrantApiKey": "",                   // "api-key" header for secured deployments
+    "Collection": "gabriel_memories",
+    "TimeoutSeconds": 10,
+    "RecallTopK": 5,                      // bodies expanded per turn under "Relevant now"
+    "RecallMinScore": 0.35                // cosine floor
+  },
+  "Embeddings": {
+    "Provider": "Mock",                   // "Mock" (deterministic, no key) | "OpenAI"
+    "MockDimensions": 256,
+    "OpenAI": {
+      "ApiKey": "<via secret>",           // EMBEDDINGS__OPENAI__APIKEY
+      "Model": "text-embedding-3-small",
+      "Dimensions": 1536,
+      "BaseUrl": "https://api.openai.com/v1/",
+      "TimeoutSeconds": 30
+    }
+  }
+}
+```
+
+Selecting `Provider=OpenAI` without a key silently falls back to Mock. Changing embedding model/dimensions needs a fresh collection (the startup backfill re-embeds everything on process start, so wiping the Qdrant volume is enough).
+
+### `AgentTools:Shell` — `ShellToolOptions` (2026-08-12)
+
+```jsonc
+{
+  "AgentTools": {
+    "Shell": {
+      "Enabled": false,          // explicit operator opt-in — this is a real shell
+      "WorkingRoot": null,       // starting cwd; falls back to AgentTools:HostRoot
+      "TimeoutSeconds": 60,      // per-command wall clock (cap 600)
+      "MaxOutputChars": 20000,   // per-stream truncation
+      "DenyPatterns": []         // operator regexes appended to the built-in deny list
+    }
   }
 }
 ```

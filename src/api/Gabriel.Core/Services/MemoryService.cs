@@ -1,6 +1,7 @@
 using Gabriel.Core.Entities;
 using Gabriel.Core.Exceptions;
 using Gabriel.Core.Identity;
+using Gabriel.Core.Memory;
 using Gabriel.Core.Repositories;
 
 namespace Gabriel.Core.Services;
@@ -10,15 +11,18 @@ public class MemoryService : IMemoryService
     private readonly IMemoryRepository _memories;
     private readonly IUnitOfWork _uow;
     private readonly ICurrentUser _currentUser;
+    private readonly ISemanticMemoryIndex _index;
 
     public MemoryService(
         IMemoryRepository memories,
         IUnitOfWork uow,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        ISemanticMemoryIndex index)
     {
         _memories = memories;
         _uow = uow;
         _currentUser = currentUser;
+        _index = index;
     }
 
     public Task<IReadOnlyList<MemoryEntry>> ListAsync(Guid? projectId, CancellationToken ct = default)
@@ -55,6 +59,11 @@ public class MemoryService : IMemoryService
         }
 
         await _uow.SaveChangesAsync(ct);
+
+        // Index after the relational save commits - SQLite is the source of
+        // truth and the index contract is non-throwing, so a Qdrant outage
+        // can't fail the save.
+        await _index.UpsertAsync(entry, ct);
         return entry;
     }
 
@@ -65,6 +74,7 @@ public class MemoryService : IMemoryService
 
         _memories.Remove(entry);
         await _uow.SaveChangesAsync(ct);
+        await _index.DeleteAsync(id, ct);
         return true;
     }
 
@@ -73,8 +83,10 @@ public class MemoryService : IMemoryService
         var entry = await _memories.FindByNameAsync(RequireUserId(), projectId, name, ct);
         if (entry is null) return false;
 
+        var entryId = entry.Id;
         _memories.Remove(entry);
         await _uow.SaveChangesAsync(ct);
+        await _index.DeleteAsync(entryId, ct);
         return true;
     }
 

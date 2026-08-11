@@ -12,5 +12,14 @@ public interface ITool
     // the LLM verbatim, so it must be valid JSON schema.
     string ParametersJsonSchema { get; }
 
+    // Whether this tool may run concurrently with other tools in the same
+    // batch of tool calls. Default false: every ITool is resolved from the
+    // request scope, so tools that (transitively) touch the scoped
+    // AppDbContext - memory_*, project files, the path-resolver-backed
+    // filesystem tools - would race on a single DbContext instance if run in
+    // parallel. Only opt in tools that are pure or depend exclusively on
+    // singleton/thread-safe services (HTTP clients, in-process compute).
+    bool IsParallelSafe => false;
+
     Task<string> ExecuteAsync(string argumentsJson, CancellationToken ct);
 }

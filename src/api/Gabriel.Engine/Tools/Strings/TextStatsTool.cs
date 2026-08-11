@@ -14,6 +14,7 @@ public sealed partial class TextStatsTool : ITool
     private const int WordsPerMinute = 200; // typical adult silent-reading pace
 
     public string Name => "text_stats";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Measure a block of text: character, word, line, sentence, and paragraph " +

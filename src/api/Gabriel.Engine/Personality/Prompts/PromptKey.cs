@@ -11,11 +11,19 @@ public static class PromptKey
     // Static persona block — Gabriel's identity / mode rules / hard prohibitions.
     public const string PersonaStatic = "persona.static";
 
+    // Voice-and-character block — temperament: skeptical of claims, dry
+    // economical register, ratio rules keeping the wit sparse.
+    public const string PersonaVoice = "persona.voice";
+
     // The few-shot exchanges that anchor the model's register-mirroring.
     public const string PersonaFewShot = "persona.few-shot";
 
     // Memory-system guidance — when to save, what to save, format conventions.
     public const string PersonaMemory = "persona.memory";
+
+    // Agentic working conventions — todo-list task management + tool usage
+    // policy (batching independent calls for parallel execution).
+    public const string PersonaAgentic = "persona.agentic";
 
     // Rendering surfaces available in the UI (markdown / mermaid / LaTeX) and
     // rules-of-thumb for when each is worth reaching for.

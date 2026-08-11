@@ -5,6 +5,7 @@ namespace Gabriel.Engine.Tools;
 public class GetCurrentTimeTool : ITool
 {
     public string Name => "get_current_time";
+    public bool IsParallelSafe => true;
 
     public string Description => "Returns the current UTC time as an ISO 8601 string.";
 

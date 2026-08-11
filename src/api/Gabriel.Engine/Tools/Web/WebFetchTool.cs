@@ -13,6 +13,7 @@ public sealed class WebFetchTool : ITool
     }
 
     public string Name => "web_fetch";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Fetch and read the actual content of a public web page by URL. " +

@@ -13,6 +13,7 @@ public sealed class DocsReadTool : ITool
     }
 
     public string Name => "docs_read";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Read one page of Gabriel's OFFICIAL INTERNAL DOCUMENTATION by path. " +

@@ -12,6 +12,7 @@ public sealed class Base64Tool : ITool
     private const int MaxTextLength = 100_000;
 
     public string Name => "base64";
+    public bool IsParallelSafe => true;
 
     public string Description =>
         "Encode text to Base64 or decode Base64 back to text. " +

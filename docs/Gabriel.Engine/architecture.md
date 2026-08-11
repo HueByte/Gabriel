@@ -119,6 +119,6 @@ Concretely: implementing `IChatProvider` in another Infrastructure class, then r
 
 ## Things this layering deliberately does not solve
 
-- **Cross-conversation memory** (Qdrant) - Phase 9. Will land as an `IMemoryStore` interface in Engine + a `QdrantMemoryStore` in Infrastructure.
+- ~~**Cross-conversation memory** (Qdrant) - Phase 9~~ — **landed 2026-08-12** as `ISemanticMemoryIndex` + `IEmbeddingProvider` in Core with `QdrantMemoryIndex` / `MockEmbeddingProvider` / `OpenAIEmbeddingProvider` in Infrastructure (REST, not gRPC). SQLite remains the source of truth; Qdrant is a derived, rebuildable index. Off by default (`SemanticMemory:Enabled`).
 - **Per-project personality** - Phase 8. Today the persona is global (config-driven `PersonalityOptions.Name`). Per-project will introduce a `Project` aggregate in Core with its own `SystemPrompt` field that overrides the global default.
 - **Streaming as a general transport** - Engine's `RunAsync` returns `IAsyncEnumerable<AgentEvent>` regardless of whether the consumer wraps it in SSE, WebSockets, or just awaits the whole sequence. The SSE specifics (the `data: ...\n\n` framing, the typing-tempo pacing) live in `Gabriel.API/Controllers/ConversationsController`, not in Engine.
