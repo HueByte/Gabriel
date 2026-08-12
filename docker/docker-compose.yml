@@ -49,6 +49,10 @@ services:
       # baked-in copy so edits to docs/ on the host are picked up without
       # rebuilding the image. Safe to remove for production-style deploys.
       - ../docs:/app/docs:ro
+      # Local embedding model files (Embeddings__Provider=Local). Populate on
+      # the host with scripts/download-embedding-model.ps1; an empty mount is
+      # harmless (the provider falls back to Mock embeddings).
+      - ../models:/app/models:ro
     expose:
       - "8080"
     # Optional: expose the API directly on the host too, useful for hitting

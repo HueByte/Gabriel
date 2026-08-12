@@ -49,6 +49,13 @@ public sealed class QdrantMemoryIndex : ISemanticMemoryIndex
 
     public bool IsEnabled => true;
 
+    // Collections are namespaced by embedding dimensionality: switching the
+    // embedding provider (Mock 256 / Local 384 / OpenAI 1536) targets a fresh
+    // collection instead of writing mismatched vectors into an existing one,
+    // and the startup backfill repopulates the active collection - no manual
+    // volume wipe needed when changing providers.
+    private string CollectionName => $"{_options.Collection}_{_embeddings.Dimensions}d";
+
     public async Task UpsertAsync(MemoryEntry entry, CancellationToken ct = default)
     {
         try
@@ -58,7 +65,7 @@ public sealed class QdrantMemoryIndex : ISemanticMemoryIndex
             var vector = await _embeddings.EmbedAsync(EmbeddingText(entry), ct);
             var client = _httpFactory.CreateClient(HttpClientName);
             using var response = await client.PutAsJsonAsync(
-                $"collections/{_options.Collection}/points?wait=true",
+                $"collections/{CollectionName}/points?wait=true",
                 new { points = new[] { ToPoint(entry, vector) } },
                 ct);
             response.EnsureSuccessStatusCode();
@@ -81,7 +88,7 @@ public sealed class QdrantMemoryIndex : ISemanticMemoryIndex
 
             var client = _httpFactory.CreateClient(HttpClientName);
             using var response = await client.PostAsJsonAsync(
-                $"collections/{_options.Collection}/points/delete?wait=true",
+                $"collections/{CollectionName}/points/delete?wait=true",
                 new { points = new[] { memoryId } },
                 ct);
             response.EnsureSuccessStatusCode();
@@ -117,7 +124,7 @@ public sealed class QdrantMemoryIndex : ISemanticMemoryIndex
 
             var client = _httpFactory.CreateClient(HttpClientName);
             using var response = await client.PostAsJsonAsync(
-                $"collections/{_options.Collection}/points/search",
+                $"collections/{CollectionName}/points/search",
                 new
                 {
                     vector,
@@ -172,7 +179,7 @@ public sealed class QdrantMemoryIndex : ISemanticMemoryIndex
 
             var client = _httpFactory.CreateClient(HttpClientName);
             using var response = await client.PutAsJsonAsync(
-                $"collections/{_options.Collection}/points?wait=true",
+                $"collections/{CollectionName}/points?wait=true",
                 new { points },
                 ct);
             response.EnsureSuccessStatusCode();
@@ -220,11 +227,11 @@ public sealed class QdrantMemoryIndex : ISemanticMemoryIndex
             if (_collectionReady) return true;
 
             var client = _httpFactory.CreateClient(HttpClientName);
-            using var probe = await client.GetAsync($"collections/{_options.Collection}", ct);
+            using var probe = await client.GetAsync($"collections/{CollectionName}", ct);
             if (probe.StatusCode == HttpStatusCode.NotFound)
             {
                 using var create = await client.PutAsJsonAsync(
-                    $"collections/{_options.Collection}",
+                    $"collections/{CollectionName}",
                     new { vectors = new { size = _embeddings.Dimensions, distance = "Cosine" } },
                     ct);
                 create.EnsureSuccessStatusCode();
@@ -235,7 +242,7 @@ public sealed class QdrantMemoryIndex : ISemanticMemoryIndex
                 foreach (var field in new[] { "userId", "projectId" })
                 {
                     using var index = await client.PutAsJsonAsync(
-                        $"collections/{_options.Collection}/index",
+                        $"collections/{CollectionName}/index",
                         new { field_name = field, field_schema = "keyword" },
                         ct);
                     if (!index.IsSuccessStatusCode)
@@ -246,7 +253,7 @@ public sealed class QdrantMemoryIndex : ISemanticMemoryIndex
 
                 _logger.LogInformation(
                     "Created Qdrant collection '{Collection}' ({Dims} dims, cosine, embeddings={Provider})",
-                    _options.Collection, _embeddings.Dimensions, _embeddings.Name);
+                    CollectionName, _embeddings.Dimensions, _embeddings.Name);
             }
             else
             {

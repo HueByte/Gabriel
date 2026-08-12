@@ -68,8 +68,16 @@ public static class DependencyInjection
             return;
         }
 
+        // Provider choice, prerequisites checked at DI time so a missing key
+        // or missing model files degrade to Mock instead of failing startup.
+        // The active provider's Name is logged when the Qdrant collection is
+        // created, so a silent fallback is still visible in the logs.
         var embeddingProvider = config[$"{EmbeddingOptions.SectionName}:{nameof(EmbeddingOptions.Provider)}"]?.Trim();
         var openAiKey = config[$"{EmbeddingOptions.SectionName}:OpenAI:ApiKey"];
+        var localOptions = config
+            .GetSection($"{EmbeddingOptions.SectionName}:{nameof(EmbeddingOptions.Local)}")
+            .Get<LocalEmbeddingOptions>() ?? new LocalEmbeddingOptions();
+
         if (string.Equals(embeddingProvider, "OpenAI", StringComparison.OrdinalIgnoreCase)
             && !string.IsNullOrWhiteSpace(openAiKey))
         {
@@ -81,6 +89,11 @@ public static class DependencyInjection
                 client.DefaultRequestHeaders.Add("Authorization", $"Bearer {opts.ApiKey}");
             });
             services.AddSingleton<IEmbeddingProvider, OpenAIEmbeddingProvider>();
+        }
+        else if (string.Equals(embeddingProvider, "Local", StringComparison.OrdinalIgnoreCase)
+            && LocalOnnxEmbeddingProvider.TryResolveModelFiles(localOptions, out _, out _))
+        {
+            services.AddSingleton<IEmbeddingProvider, LocalOnnxEmbeddingProvider>();
         }
         else
         {

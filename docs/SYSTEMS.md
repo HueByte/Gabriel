@@ -56,7 +56,7 @@ Tools declare `ITool.IsParallelSafe`; the loop runs flagged tools from one batch
 | Web search backends (`DuckDuckGoWebSearch`, `BraveWebSearch`, `TavilyWebSearch`, `CompositeWebSearch`, `InstrumentedWebSearch`) | `IWebSearch` implementations |
 | Docs backends (`LocalDocsLookup`, `GitHubDocsLookup`, `CompositeDocsLookup`) | `IDocsLookup` implementations |
 | Semantic memory (`QdrantMemoryIndex`, `NoopSemanticMemoryIndex`, `SemanticMemoryBackfillService`) | `ISemanticMemoryIndex` over Qdrant REST; SQLite stays authoritative, index is rebuildable (startup backfill); no-op when disabled |
-| Embeddings (`MockEmbeddingProvider`, `OpenAIEmbeddingProvider`) | `IEmbeddingProvider` — deterministic hashed BoW (no key) or OpenAI `text-embedding-3-small` |
+| Embeddings (`MockEmbeddingProvider`, `LocalOnnxEmbeddingProvider`, `OpenAIEmbeddingProvider`, `EmbeddingPipeline`) | `IEmbeddingProvider` — hashed BoW (zero setup), open-source all-MiniLM-L6-v2 in-process via ONNX Runtime (no key/vendor; `scripts/download-embedding-model.ps1`), or OpenAI `text-embedding-3-small`. Missing prerequisites fall back to Mock; Qdrant collections are dimension-suffixed so provider switches can't mix vectors |
 
 ## Webapp (`src/webapp/`)
 

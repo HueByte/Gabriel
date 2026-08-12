@@ -30,3 +30,12 @@ scripts/add-migration.ps1 AddWidgetTable
 ```
 
 Wraps `dotnet ef migrations add` with the `--project Gabriel.Infrastructure --startup-project Gabriel.API` pair the repo always needs. Uses the pinned `dotnet-ef` from `src/api/dotnet-tools.json` — the repo's single tool manifest, shared with the swagger CLI the OpenAPI build target uses — restored automatically, no global install needed.
+
+## `download-embedding-model.ps1` — local embedding model
+
+```powershell
+scripts/download-embedding-model.ps1          # fetch model files (skips existing)
+scripts/download-embedding-model.ps1 -Force   # re-download
+```
+
+Fetches sentence-transformers/all-MiniLM-L6-v2 (Apache-2.0; ONNX model + WordPiece vocab, ~90 MB) from Hugging Face into `models/embeddings/all-MiniLM-L6-v2/` at the repo root — the default location `Embeddings:Provider=Local` probes. `models/` is gitignored (binaries never enter git history), and the compose stack mounts it read-only at `/app/models`. If the files are absent at startup, the embedding provider silently falls back to Mock, so running this script is the difference between token-overlap recall and real semantic recall.

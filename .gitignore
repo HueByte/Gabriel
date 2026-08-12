@@ -471,3 +471,6 @@ scripts/.gabriel-dev.pids
 # IDEs
 .vs/
 .idea/
+
+# Local embedding model binaries (fetched by scripts/download-embedding-model.ps1)
+models/

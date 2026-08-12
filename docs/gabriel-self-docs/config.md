@@ -59,8 +59,15 @@ Every options POCO bound from `appsettings*.json`, its section name, defaults, a
     "RecallMinScore": 0.35                // cosine floor
   },
   "Embeddings": {
-    "Provider": "Mock",                   // "Mock" (deterministic, no key) | "OpenAI"
+    "Provider": "Mock",                   // "Mock" | "Local" | "OpenAI"
     "MockDimensions": 256,
+    "Local": {                            // open-source model, in-process ONNX, no key/network
+      "ModelDirectory": "models/embeddings/all-MiniLM-L6-v2",
+      "ModelFile": "model.onnx",
+      "VocabFile": "vocab.txt",
+      "Dimensions": 384,                  // must match the model's hidden size (verified at runtime)
+      "MaxTokens": 256                    // truncation cap per input, [SEP] preserved
+    },
     "OpenAI": {
       "ApiKey": "<via secret>",           // EMBEDDINGS__OPENAI__APIKEY
       "Model": "text-embedding-3-small",
@@ -72,7 +79,7 @@ Every options POCO bound from `appsettings*.json`, its section name, defaults, a
 }
 ```
 
-Selecting `Provider=OpenAI` without a key silently falls back to Mock. Changing embedding model/dimensions needs a fresh collection (the startup backfill re-embeds everything on process start, so wiping the Qdrant volume is enough).
+Three providers so semantic memory never depends on a single vendor: `Local` runs sentence-transformers/all-MiniLM-L6-v2 (Apache-2.0, 384-dim) in-process via ONNX Runtime with real WordPiece tokenization + attention-masked mean pooling — fetch the ~90 MB of model files once with `scripts/download-embedding-model.ps1`; `OpenAI` is the hosted path; `Mock` is the zero-setup hashed bag-of-words fallback. A provider missing its prerequisites (model files, API key) falls back to Mock at startup rather than crashing. Qdrant collections are namespaced by dimensionality (`gabriel_memories_384d`), so switching providers targets a fresh collection and the startup backfill repopulates it automatically — no manual wipe needed.
 
 ### `AgentTools:Shell` — `ShellToolOptions` (2026-08-12)
 
