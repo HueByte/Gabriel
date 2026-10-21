@@ -3444,3 +3444,366 @@ button {
     min-width: 150px;
   }
 }
+
+/* ===== Autonomous tasks (/tasks, /tasks/:id) ============================= */
+/* Built on the .settings shell; everything task-specific lives here. */
+
+.new-chat.sidebar-tasks {
+  margin-top: -0.4rem;
+}
+.new-chat.active {
+  color: var(--text);
+  background: var(--active-bg);
+  border-color: var(--border-hover);
+}
+
+.task-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-hover);
+  resize: vertical;
+}
+.task-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.task-new-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.task-budget {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.task-budget input {
+  width: 96px;
+  font: inherit;
+  font-size: 13.5px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-hover);
+}
+.task-new-row .task-button-primary {
+  margin-left: auto;
+}
+
+.task-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-hover);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.task-button svg {
+  width: 15px;
+  height: 15px;
+}
+.task-button:hover:not(:disabled) {
+  background: var(--active-bg);
+}
+.task-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.task-button-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+.task-button-primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+.task-button-danger:hover:not(:disabled) {
+  color: #e57676;
+  border-color: #4a2828;
+  background: rgba(229, 118, 118, 0.08);
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.task-row:hover {
+  background: var(--active-bg);
+  border-color: var(--border);
+}
+.task-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-row-meta {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.task-status {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-hover);
+  color: var(--text-dim);
+}
+.task-status-running {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.task-status-blocked {
+  color: #e8b45a;
+  border-color: #5a4523;
+  background: rgba(232, 180, 90, 0.1);
+}
+.task-status-completed {
+  color: #6cc28a;
+  border-color: #264a33;
+  background: rgba(108, 194, 138, 0.1);
+}
+.task-status-failed {
+  color: #e57676;
+  border-color: #4a2828;
+  background: rgba(229, 118, 118, 0.08);
+}
+
+.task-head {
+  flex-wrap: wrap;
+}
+.task-head-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.task-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.task-field em {
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
+.task-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.task-objective {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.task-contract-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.task-subtitle {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.task-bullets {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.task-budget-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.task-budget-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 400ms ease;
+}
+
+.task-question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #5a4523;
+  background: rgba(232, 180, 90, 0.06);
+}
+.task-question-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.task-reason {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.task-summary p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
+.task-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.task-log-entry {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.task-log-entry:first-child {
+  border-top: none;
+}
+.task-log-kind {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  padding-top: 2px;
+}
+.task-log-text {
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.task-log-time {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.task-log-review .task-log-text {
+  color: var(--text-dim);
+  font-style: italic;
+}
+.task-log-step .task-log-kind {
+  color: var(--accent);
+}
+.task-log-error .task-log-kind {
+  color: #e57676;
+}
+
+@media (max-width: 640px) {
+  .task-log-entry {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .task-new-row .task-button-primary {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+  .task-head-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* Above the composer in a task-owned conversation. */
+.task-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--content-max);
+  box-sizing: border-box;
+  margin: 0 auto 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.task-banner.running {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.task-banner a {
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.task-banner a:hover {
+  text-decoration: underline;
+}

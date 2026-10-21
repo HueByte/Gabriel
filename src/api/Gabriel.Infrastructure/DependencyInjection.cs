@@ -11,6 +11,7 @@ using Gabriel.Infrastructure.Persistence;
 using Gabriel.Infrastructure.Persistence.Repositories;
 using Gabriel.Infrastructure.Projects;
 using Gabriel.Infrastructure.Providers;
+using Gabriel.Infrastructure.Tasks;
 using Gabriel.Infrastructure.Tools.Docs;
 using Gabriel.Infrastructure.Tools.Web;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IMemoryRepository, MemoryRepository>();
         services.AddScoped<IMetricRepository, MetricRepository>();
+        services.AddScoped<IAgentTaskRepository, AgentTaskRepository>();
 
         // Project file storage (Phase 8). Options bound from Projects:Files,
         // disk-backed implementation persists under {Root}/{ProjectId:N}.
@@ -47,6 +49,10 @@ public static class DependencyInjection
         AddWebFetch(services);
         AddDocsLookup(services, config);
         AddSemanticMemory(services, config);
+
+        // Background driver for autonomous tasks (Engine's IAgentTaskRunner
+        // does the per-step work). Self-disables via AgentTasks:Enabled.
+        services.AddHostedService<AgentTaskWorker>();
 
         return services;
     }

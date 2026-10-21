@@ -28,6 +28,17 @@ public interface IProjectFileService
         Stream content,
         CancellationToken ct = default);
 
+    // Agent write path: creates a UTF-8 text file, or replaces an existing one
+    // with the same name when `overwrite` is true (DomainException otherwise).
+    // Same filename sanitizing + extension allowlist + size cap as uploads;
+    // non-text content types are refused.
+    Task<ProjectFile> WriteTextAsync(
+        Guid projectId,
+        string filename,
+        string content,
+        bool overwrite,
+        CancellationToken ct = default);
+
     Task DeleteAsync(Guid projectId, Guid fileId, CancellationToken ct = default);
 
     // Authorizes the current user against the project, then returns the

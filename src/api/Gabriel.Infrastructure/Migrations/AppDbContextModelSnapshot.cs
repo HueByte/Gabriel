@@ -15,7 +15,135 @@ namespace Gabriel.Infrastructure.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
+
+            modelBuilder.Entity("Gabriel.Core.Entities.AgentTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CheckpointProgress")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CheckpointQuestion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CheckpointStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CheckpointStep")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CheckpointSummary")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ConsecutiveErrors")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ConsecutiveNoProgress")
+                        .HasColumnType("INTEGER");
+
+                    b.PrimitiveCollection<string>("Constraints")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("Deadline")
+                        .HasColumnType("INTEGER");
+
+                    b.PrimitiveCollection<string>("DoneCriteria")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FinalSummary")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("FinishedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Goal")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaxDurationMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxSteps")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Objective")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PendingGuidance")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("StartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StatusReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StepsCompleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "UpdatedAt");
+
+                    b.HasIndex("UserId", "ProjectId", "UpdatedAt");
+
+                    b.ToTable("AgentTasks", (string)null);
+                });
+
+            modelBuilder.Entity("Gabriel.Core.Entities.AgentTaskLogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Step")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId", "CreatedAt");
+
+                    b.ToTable("AgentTaskLogEntries", (string)null);
+                });
 
             modelBuilder.Entity("Gabriel.Core.Entities.Conversation", b =>
                 {
@@ -514,6 +642,24 @@ namespace Gabriel.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Gabriel.Core.Entities.AgentTask", b =>
+                {
+                    b.HasOne("Gabriel.Core.Entities.Conversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Gabriel.Core.Entities.AgentTaskLogEntry", b =>
+                {
+                    b.HasOne("Gabriel.Core.Entities.AgentTask", null)
+                        .WithMany("Log")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Gabriel.Core.Entities.Message", b =>
                 {
                     b.HasOne("Gabriel.Core.Entities.Conversation", null)
@@ -581,6 +727,11 @@ namespace Gabriel.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Gabriel.Core.Entities.AgentTask", b =>
+                {
+                    b.Navigation("Log");
                 });
 
             modelBuilder.Entity("Gabriel.Core.Entities.Conversation", b =>

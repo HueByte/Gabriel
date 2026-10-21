@@ -11,6 +11,7 @@ One row per externally meaningful unit — controllers, engine services, provide
 | `ProjectsController` | `/api/projects/*` | Project CRUD, sequence, avatar reroll |
 | `ProjectFilesController` | `/api/projects/{id}/files/*` | List, multipart upload, download, delete |
 | `MemoriesController` | `/api/memories/*` | List/delete saved memories (user + project scope) |
+| `TasksController` | `/api/tasks/*` | Autonomous tasks: create (drafts contract), edit contract, approve, pause, resume, answer, cancel |
 | `ModelsController` | `/api/models/*` | Available-model catalog + user's preferred model |
 | `SequenceController` | `/api/sequence/*` | Gabriel Sequence rendering/diagnostics endpoints |
 | `DiagnosticsController` | `/api/diagnostics/*` | Diagnostics page backend |
@@ -20,6 +21,7 @@ One row per externally meaningful unit — controllers, engine services, provide
 | System | Role |
 | --- | --- |
 | `AgentService` | The ReAct loop: streams provider events, executes tools (parallel-safe tools concurrently, capped by `Agent:MaxParallelToolCalls`), persists messages, triggers compact, injects semantic memory recall |
+| Autonomous tasks (`AgentTaskService`, `AgentTaskRunner`, `TaskStepPolicy`, `TaskContractDrafter`, `TaskStepReviewer`) | Delegated long-running work: the API side, the per-step engine (one agent turn per step), the pure decision rules, and the two tool-less judgement calls. Driven by `AgentTaskWorker` (Infrastructure) |
 | `ActiveTurnRegistry` | In-process map of running turns so `POST .../messages/stop` can cancel one; the loop then persists the partial reply and ends the stream normally |
 | `ConversationTitleGenerator` | Auto-titles placeholder-titled conversations from the first user message; started by `AgentService` in parallel with the turn, emitted as `titleUpdated` (`Agent:AutoTitle`) |
 | `AgentContext` | Single authority assembling provider history AND the token-metrics breakdown |
@@ -38,9 +40,9 @@ One row per externally meaningful unit — controllers, engine services, provide
 | Web | `web_search` (DDG hardened; Brave/Tavily/composite backends), `web_fetch` |
 | Docs | `docs_list`, `docs_read` (local baked-in docs + GitHub fallback) |
 | Files (read-only, path-hardened) | `file_info`, `list_dir`, `find`, `grep` |
-| Project files | `list_project_files`, `read_project_file` |
+| Project files | `list_project_files`, `read_project_file`, `write_project_file`, `edit_project_file` (text only, confined to project storage) |
 | Memory | `memory_save`, `memory_list`, `memory_remove`, `memory_search` (semantic, Qdrant-backed; reports unavailable when `SemanticMemory:Enabled=false`) |
-| Tasks | `todo_write`, `todo_read` (Claude Code-style per-conversation plan, persisted on `Conversation.TodoListJson`) |
+| Tasks | `todo_write`, `todo_read` (Claude Code-style per-conversation plan, persisted on `Conversation.TodoListJson`), `task_checkpoint` (end-of-step report inside an autonomous task) |
 | Shell | `shell_execute` (off by default — `AgentTools:Shell:Enabled`; deny-list + timeout + output cap) |
 | Utilities | `calculate`, `base_convert`, `base64`, `hash`, `color_convert`, `json_format`, `text_stats`, `text_transform`, `get_current_time` |
 
@@ -54,7 +56,8 @@ Tools declare `ITool.IsParallelSafe`; the loop runs flagged tools from one batch
 | Repositories (`Conversation`, `Project`, `Memory`, `Metric`, `RefreshTokenStore`) | Persistence behind Core interfaces |
 | Identity (`JwtTokenService`, `ApplicationUser`, `UserPreferencesService`) | ASP.NET Identity + JWT cookie auth |
 | Providers (`GrokChatProvider`, `MockChatProvider`) | `IChatProvider` implementations; Mock fakes tool calls for credit-free dev |
-| `DiskProjectFileService` | Project file storage under the configured root |
+| `DiskProjectFileService` | Project file storage under the configured root; also the agent write path (`WriteTextAsync`, atomic overwrite) |
+| `AgentTaskWorker` | Hosted service stepping Running autonomous tasks round-robin, one step at a time, each in its own scope acting as the task owner (`CurrentUserOverride`) |
 | Web search backends (`DuckDuckGoWebSearch`, `BraveWebSearch`, `TavilyWebSearch`, `CompositeWebSearch`, `InstrumentedWebSearch`) | `IWebSearch` implementations |
 | Docs backends (`LocalDocsLookup`, `GitHubDocsLookup`, `CompositeDocsLookup`) | `IDocsLookup` implementations |
 | Semantic memory (`QdrantMemoryIndex`, `NoopSemanticMemoryIndex`, `SemanticMemoryBackfillService`) | `ISemanticMemoryIndex` over Qdrant REST; SQLite stays authoritative, index is rebuildable (startup backfill); no-op when disabled |

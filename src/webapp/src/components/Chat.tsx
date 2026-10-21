@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { Link } from 'react-router-dom';
 import {
   HiOutlineArrowPath,
   HiOutlineArrowUp,
@@ -214,6 +215,11 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   // the backend). Hydrated from ConversationResponse.mode on load; mutated
   // by the ModeSelector dropdown above the composer.
   const [mode, setMode] = useState<GabrielMode | null>(null);
+  // Set when this conversation belongs to an autonomous task. While the task
+  // runs it owns the conversation: the composer is locked (the server would
+  // 409 anyway) and the transcript polls to show the work as it happens.
+  const [task, setTask] = useState<{ id: string; status: string } | null>(null);
+  const taskRunning = task?.status === 'running';
   // User preferences: per-kind ReAct visibility. Each toggle independently
   // suppresses one category of scaffolding in the transcript:
   //   - thinking:   `thought` + `reasoning` entries (chain-of-thought)
@@ -248,6 +254,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     setEntries(historyToEntries(msgs));
     setProjectId(conv.projectId ?? null);
     setMode((conv.mode as GabrielMode | null) ?? null);
+    setTask(conv.taskId ? { id: conv.taskId, status: conv.taskStatus ?? '' } : null);
     onConversationLoaded?.(conv);
   }, [onConversationLoaded]);
 
@@ -266,6 +273,12 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
       notifyError(e);
     }
   }, [conversationId, applyConversation, onConversationMissing]);
+
+  useEffect(() => {
+    if (!taskRunning) return;
+    const timer = window.setInterval(() => void refetchConversation(), 3000);
+    return () => window.clearInterval(timer);
+  }, [taskRunning, refetchConversation]);
 
   // Load history on conversation switch.
   useEffect(() => {
@@ -664,6 +677,16 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
           <CompactingOverlay paletteStops={paletteStops} messageCount={compactingCount} />
         )}
       </div>
+      {task && (
+        <div className={`task-banner${taskRunning ? ' running' : ''}`}>
+          <span>
+            {taskRunning
+              ? 'Gabriel is working on a task in this conversation.'
+              : 'This conversation belongs to a task.'}
+          </span>
+          <Link to={`/tasks/${encodeURIComponent(task.id)}`}>View task</Link>
+        </div>
+      )}
       <form className="composer" onSubmit={onSubmit}>
         <div className="composer-toolbar">
           <ModeSelector
@@ -679,8 +702,8 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Message Gabriel…"
-            disabled={busy}
+            placeholder={taskRunning ? 'Pause the task to take over…' : 'Message Gabriel…'}
+            disabled={busy || taskRunning}
             rows={1}
           />
           {streaming ? (
@@ -695,7 +718,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
               <HiStop aria-hidden="true" />
             </button>
           ) : (
-            <button type="submit" disabled={busy || input.trim().length === 0} aria-label="Send">
+            <button type="submit" disabled={busy || taskRunning || input.trim().length === 0} aria-label="Send">
               <HiOutlineArrowUp aria-hidden="true" />
             </button>
           )}

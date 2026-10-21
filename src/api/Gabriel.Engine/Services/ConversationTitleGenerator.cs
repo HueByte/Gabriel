@@ -1,6 +1,4 @@
-using System.Text;
 using System.Text.RegularExpressions;
-using Gabriel.Core.Entities;
 using Gabriel.Engine.Providers;
 using Microsoft.Extensions.Logging;
 
@@ -51,24 +49,11 @@ public sealed partial class ConversationTitleGenerator : IConversationTitleGener
         timeout.CancelAfter(Timeout);
 
         var input = firstUserMessage.Length > MaxInputChars ? firstUserMessage[..MaxInputChars] : firstUserMessage;
-        var history = new List<ChatProviderMessage>
-        {
-            new(MessageRole.System, SystemPrompt),
-            new(MessageRole.User, input),
-        };
 
         try
         {
-            // Text deltas only - reasoning models stream their thinking on a
-            // separate channel that must not leak into the title.
-            var text = new StringBuilder();
-            await foreach (var evt in provider.StreamAsync(history, [], modelName, timeout.Token))
-            {
-                if (evt is TextDeltaEvent td) text.Append(td.Delta);
-                else if (evt is FinishEvent) break;
-            }
-
-            var title = Sanitize(text.ToString());
+            var text = await ProviderText.CompleteAsync(provider, modelName, SystemPrompt, input, timeout.Token);
+            var title = Sanitize(text);
             if (title is null)
                 _logger.LogWarning("Title generation returned nothing usable | provider={Provider} model={Model}", provider.Name, modelName);
             return title;

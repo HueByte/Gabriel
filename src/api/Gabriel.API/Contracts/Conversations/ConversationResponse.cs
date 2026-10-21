@@ -28,5 +28,10 @@ public record ConversationResponse(
     string? PaletteOverride = null,
     // Per-conversation behaviour bias (chatty/elaborative/concise/tutor/critic).
     // Null = use the default (chatty). Sent as lowercased enum name.
-    string? Mode = null
+    string? Mode = null,
+    // Set when the conversation belongs to an autonomous task (single-
+    // conversation GET only). While TaskStatus is "running" the task owns the
+    // conversation: sends are refused (409) and the client should poll.
+    Guid? TaskId = null,
+    string? TaskStatus = null
 );

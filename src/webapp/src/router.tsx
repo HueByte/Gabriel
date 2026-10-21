@@ -25,6 +25,12 @@ const ProjectSettingsPage = lazy(() =>
 const UserSettingsPage = lazy(() =>
   import('./pages/UserSettingsPage').then(m => ({ default: m.UserSettingsPage })),
 );
+const TasksPage = lazy(() =>
+  import('./pages/TasksPage').then(m => ({ default: m.TasksPage })),
+);
+const TaskDetailPage = lazy(() =>
+  import('./pages/TaskDetailPage').then(m => ({ default: m.TaskDetailPage })),
+);
 const LoginPage = lazy(() =>
   import('./pages/LoginPage').then(m => ({ default: m.LoginPage })),
 );
@@ -142,6 +148,14 @@ export const router = createBrowserRouter([
           {
             path: '/settings',
             element: <LazyPage><UserSettingsPage /></LazyPage>,
+          },
+          {
+            path: '/tasks',
+            element: <LazyPage><TasksPage /></LazyPage>,
+          },
+          {
+            path: '/tasks/:taskId',
+            element: <LazyPage><TaskDetailPage /></LazyPage>,
           },
         ],
       },

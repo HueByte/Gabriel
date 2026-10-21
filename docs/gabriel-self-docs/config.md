@@ -46,6 +46,24 @@ Every options POCO bound from `appsettings*.json`, its section name, defaults, a
 }
 ```
 
+### `AgentTasks` — `AgentTaskOptions` (2026-10-21)
+
+```jsonc
+{
+  "AgentTasks": {
+    "Enabled": true,                  // background worker on/off; tasks can still be drafted when off
+    "DefaultMaxSteps": 40,            // per-task step budget (overridable at creation)
+    "DefaultMaxDurationMinutes": 180, // per-task wall-clock budget
+    "ResumeStepIncrement": 20,        // steps granted when resuming past an exhausted step budget
+    "MaxStepsWithoutProgress": 3,     // reviewer "no progress" verdicts in a row -> blocked
+    "MaxConsecutiveErrors": 3,        // failed steps in a row -> failed
+    "PollIntervalSeconds": 3          // idle scan interval of the worker
+  }
+}
+```
+
+See `autonomous-tasks.md`.
+
 ### `SemanticMemory` — `SemanticMemoryOptions` + `Embeddings` — `EmbeddingOptions` (2026-08-12)
 
 ```jsonc

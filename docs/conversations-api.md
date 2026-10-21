@@ -151,6 +151,20 @@ ReAct iterations interleave these: a single turn can emit one or more `textDelta
 
 `POST /api/conversations/{id}/messages/{messageId}/edit` with `SendMessageRequest` (`{ "content": "..." }`) is edit-and-resend. It deletes the user message at `messageId` and **everything after it** (same truncation as `DELETE` below), then runs a normal turn with the new content. The response is the same SSE stream as `/messages/stream`, starting with `userMessagePersisted` for the replacement message. Pre-flight errors: `400` for empty content or a non-user message, `404` for an unknown message. History is linear — the old branch is not kept as a variant. If the truncation cuts back past the rolling-compact point, the stale summary is dropped too, and the next turn re-compacts if needed.
 
+## Conversations owned by a task
+
+A conversation created for an autonomous task carries `taskId` and `taskStatus` on `GET /api/conversations/{id}` (both `null` otherwise). While `taskStatus` is `running`, the task's background worker owns the conversation: `/messages/stream`, `/edit`, `/regenerate`, and `DELETE .../messages/{messageId}` return `409 Conflict`. Pause the task (`POST /api/tasks/{id}/pause`) to take over. The worker's steps are ordinary turns, so polling the conversation shows the work as it happens.
+
+## Tasks
+
+`/api/tasks` drives autonomous tasks — long-running delegated work. A task owns a conversation and is advanced by a background worker one step (one agent turn) at a time. See [gabriel-self-docs/autonomous-tasks.md](gabriel-self-docs/autonomous-tasks.md) for the loop itself.
+
+`POST /api/tasks` with `CreateTaskRequest` (`goal`, optional `projectId`, `maxSteps`, `maxDurationMinutes`) creates the task's conversation and drafts its contract with one model call (a few seconds). The task comes back with `status: "draft"`; nothing runs yet. `PUT /api/tasks/{id}/contract` with `UpdateTaskContractRequest` (`objective`, `doneCriteria[]`, `constraints[]`) edits the draft, and `POST /api/tasks/{id}/approve` starts it (`400` without at least one done-criterion).
+
+From there `pause`, `resume`, `cancel`, and `answer` (with `AnswerTaskRequest`, only valid while `blocked`) are all `POST /api/tasks/{id}/...` and return the updated task. Invalid transitions, such as approving a running task or resuming a cancelled one, are `409`. Pause and cancel also stop the step in flight. Resuming a task that ran out of budget grants a fresh one.
+
+`TaskResponse.status` is one of `draft`, `running`, `paused`, `blocked`, `completed`, `failed`, `cancelled`. `statusReason` carries the blocking question, pause reason, or failure cause, and `finalSummary` is the agent's report on completion. `log` (single-task endpoints only) is the progress history: entries with `kind` `system`, `user`, `step`, `review`, or `error`, and the `step` they belong to.
+
 ## Regenerating, deleting, and navigating message variants
 
 Conversations support "regenerate this assistant turn", which produces a sibling message that shares a `variantGroupId` with the original. The UI exposes a `< 2/3 >` picker on any message that has siblings.
@@ -241,6 +255,12 @@ The controllers don't define their own problem-details middleware; failures bubb
 | `POST` | `/api/conversations/{id}/messages/{messageId}/regenerate` | — | `text/event-stream` of `AgentEvent` | yes |
 | `POST` | `/api/conversations/{id}/messages/{messageId}/edit` | `SendMessageRequest` | `text/event-stream` of `AgentEvent` | yes |
 | `POST` | `/api/conversations/{id}/messages/stop` | — | `StopTurnResponse` | no |
+| `GET` | `/api/tasks?projectId=` | — | `TaskResponse[]` (no log) | no |
+| `POST` | `/api/tasks` | `CreateTaskRequest` | `TaskResponse` (draft) | no |
+| `GET` | `/api/tasks/{id}` | — | `TaskResponse` (with log) | no |
+| `PUT` | `/api/tasks/{id}/contract` | `UpdateTaskContractRequest` | `TaskResponse` | no |
+| `POST` | `/api/tasks/{id}/approve` · `/pause` · `/resume` · `/cancel` | — | `TaskResponse` | no |
+| `POST` | `/api/tasks/{id}/answer` | `AnswerTaskRequest` | `TaskResponse` | no |
 | `PATCH` | `/api/conversations/{id}/messages/{messageId}/active` | — | `ConversationResponse` (with messages) | no |
 | `DELETE` | `/api/conversations/{id}/messages/{messageId}` | — | `ConversationResponse` (no messages) | no |
 | `GET` | `/api/memories?scope=&projectId=` | — | `MemoryDto[]` | no |

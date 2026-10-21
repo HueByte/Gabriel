@@ -133,6 +133,61 @@ public sealed class DiskProjectFileService : IProjectFileService
         return entity;
     }
 
+    public async Task<ProjectFile> WriteTextAsync(
+        Guid projectId,
+        string filename,
+        string content,
+        bool overwrite,
+        CancellationToken ct = default)
+    {
+        await AuthorizeAsync(projectId, ct);
+
+        var sanitized = SanitizeFilename(filename);
+        EnsureExtensionAllowed(sanitized);
+        var contentType = NormalizeContentType(null, sanitized);
+        if (!IsTextLike(contentType))
+            throw new DomainException($"Only text files can be written; '{sanitized}' is {contentType}.");
+
+        var bytes = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(content);
+        if (bytes.LongLength > _options.MaxFileBytes)
+            throw new DomainException(
+                $"Content exceeds max file size of {_options.MaxFileBytes / (1024 * 1024)} MiB.");
+
+        var projectDir = ResolveProjectDir(projectId);
+        Directory.CreateDirectory(projectDir);
+
+        var lowered = sanitized.ToLowerInvariant();
+        var existing = await _ctx.ProjectFiles
+            .FirstOrDefaultAsync(f => f.ProjectId == projectId && f.Name.ToLower() == lowered, ct);
+
+        if (existing is not null)
+        {
+            if (!overwrite)
+                throw new DomainException($"'{existing.Name}' already exists. Pass overwrite=true to replace it, or edit it instead.");
+
+            var path = ResolveFilePath(projectId, existing.RelativePath);
+            EnsureWithinProjectDir(path, projectDir);
+            // Write-then-move: a crash mid-write leaves the old file intact
+            // rather than a truncated one.
+            var temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            await File.WriteAllBytesAsync(temp, bytes, ct);
+            File.Move(temp, path, overwrite: true);
+
+            existing.ReplaceContent(bytes.LongLength);
+            await _ctx.SaveChangesAsync(ct);
+            return existing;
+        }
+
+        var fullPath = ResolveFilePath(projectId, sanitized);
+        EnsureWithinProjectDir(fullPath, projectDir);
+        await File.WriteAllBytesAsync(fullPath, bytes, ct);
+
+        var entity = ProjectFile.Create(projectId, sanitized, sanitized, bytes.LongLength, contentType);
+        _ctx.ProjectFiles.Add(entity);
+        await _ctx.SaveChangesAsync(ct);
+        return entity;
+    }
+
     public async Task<string> GetProjectDirectoryAsync(Guid projectId, CancellationToken ct = default)
     {
         await AuthorizeAsync(projectId, ct);

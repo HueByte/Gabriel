@@ -19,6 +19,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<ProjectFile> ProjectFiles => Set<ProjectFile>();
     public DbSet<MemoryEntry> MemoryEntries => Set<MemoryEntry>();
     public DbSet<MetricEntry> MetricEntries => Set<MetricEntry>();
+    public DbSet<AgentTask> AgentTasks => Set<AgentTask>();
+    public DbSet<AgentTaskLogEntry> AgentTaskLogEntries => Set<AgentTaskLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

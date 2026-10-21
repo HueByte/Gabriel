@@ -29,12 +29,15 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `docs_read` | **Self-docs** | `IDocsLookup` | Read one Gabriel doc by path. |
 | `list_project_files` | Project | `IProjectFileService` | List files in the active project's storage. |
 | `read_project_file` | Project | `IProjectFileService` | Read a single project file. |
+| `write_project_file` | Project | `IProjectFileService` | Create a text file in the project's storage; replacing an existing one needs `overwrite: true`. Same name sanitizing, extension allowlist, and size cap as uploads; text types only. |
+| `edit_project_file` | Project | `IProjectFileService` | Exact find-and-replace in a project text file (`file`, `old_text`, `new_text`, `replace_all`). Ambiguous matches fail unless `replace_all`. |
 | `memory_save` | Memory | `IMemoryRepository` | Save a memory at user or project scope. |
 | `memory_list` | Memory | `IMemoryRepository` | List saved memories. |
 | `memory_remove` | Memory | `IMemoryRepository` | Delete a memory by id. |
 | `memory_search` | Memory | `ISemanticMemoryIndex` | Semantic (meaning-based) search over saved memories; Qdrant-backed. Reports unavailable when `SemanticMemory:Enabled=false`. |
 | `todo_write` | Tasks | `IConversationRepository` | Create/replace your working task list for this conversation (Claude Code-style plan). |
 | `todo_read` | Tasks | `IConversationRepository` | Read the persisted task list back (resume support). |
+| `task_checkpoint` | Tasks | `IAgentTaskRepository` | End-of-step report inside an autonomous task: `continue` / `done` (+`summary`) / `blocked` (+`question`). Error outside a running task. See `autonomous-tasks.md`. |
 | `shell_execute` | Shell | none (Process) | Run one shell command with timeout + deny-list. Disabled unless `AgentTools:Shell:Enabled=true`. |
 | `file_info` | Files | `IAgentPathResolver` | Stat a file/dir on the agent host. |
 | `list_dir` | Files | `IAgentPathResolver` | List a directory. |

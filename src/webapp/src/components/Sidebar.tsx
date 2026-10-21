@@ -7,6 +7,7 @@ import {
   HiOutlineEllipsisVertical,
   HiOutlinePencilSquare,
   HiOutlinePlus,
+  HiOutlineRocketLaunch,
   HiOutlineTrash,
   HiOutlineWrenchScrewdriver,
   HiOutlineXMark,
@@ -255,6 +256,11 @@ export function Sidebar() {
     toggleCollapsed();
   };
 
+  const openTasks = () => {
+    navigate('/tasks');
+    toggleCollapsed();
+  };
+
   const openUserSettings = () => {
     navigate('/settings');
     toggleCollapsed();
@@ -318,6 +324,14 @@ export function Sidebar() {
         <button type="button" className="new-chat" onClick={() => void handleNewChat()}>
           <HiOutlinePlus aria-hidden="true" />
           <span>New chat</span>
+        </button>
+        <button
+          type="button"
+          className={`new-chat sidebar-tasks${location.pathname.startsWith('/tasks') ? ' active' : ''}`}
+          onClick={openTasks}
+        >
+          <HiOutlineRocketLaunch aria-hidden="true" />
+          <span>Tasks</span>
         </button>
 
         <div className="sidebar-body">

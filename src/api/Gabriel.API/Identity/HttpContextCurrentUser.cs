@@ -5,20 +5,25 @@ namespace Gabriel.API.Identity;
 
 // Pulls the current user from HttpContext.User. Works across all three auth
 // schemes (Identity cookie, Identity opaque bearer, our minted JWT) because
-// they all populate the same ClaimsPrincipal.
+// they all populate the same ClaimsPrincipal. A CurrentUserOverride set in the
+// scope (background task worker) wins - there is no HttpContext there.
 public class HttpContextCurrentUser : ICurrentUser
 {
     private readonly IHttpContextAccessor _accessor;
+    private readonly CurrentUserOverride _override;
 
-    public HttpContextCurrentUser(IHttpContextAccessor accessor)
+    public HttpContextCurrentUser(IHttpContextAccessor accessor, CurrentUserOverride @override)
     {
         _accessor = accessor;
+        _override = @override;
     }
 
     public Guid? UserId
     {
         get
         {
+            if (_override.UserId is { } overridden) return overridden;
+
             var user = _accessor.HttpContext?.User;
             if (user?.Identity?.IsAuthenticated != true) return null;
 
@@ -31,7 +36,7 @@ public class HttpContextCurrentUser : ICurrentUser
     }
 
     public bool IsAuthenticated
-        => _accessor.HttpContext?.User?.Identity?.IsAuthenticated == true;
+        => _override.UserId is not null || _accessor.HttpContext?.User?.Identity?.IsAuthenticated == true;
 
     public string? Email
         => _accessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Email);

@@ -9,6 +9,7 @@ using Gabriel.Core.Services;
 using Gabriel.Engine.Personality;
 using Gabriel.Engine.Sequence;
 using Gabriel.Engine.Services;
+using Gabriel.Engine.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -27,14 +28,17 @@ public class ConversationsController : ControllerBase
     private readonly IGabrielSequenceService _sequence;
     private readonly IProjectService _projects;
     private readonly PersonalityOptions _personality;
+    private readonly IAgentTaskService _tasks;
 
     public ConversationsController(
         IChatService chat,
         IAgentService agent,
         IGabrielSequenceService sequence,
         IProjectService projects,
-        IOptions<PersonalityOptions> personality)
+        IOptions<PersonalityOptions> personality,
+        IAgentTaskService tasks)
     {
+        _tasks = tasks;
         _chat = chat;
         _agent = agent;
         _sequence = sequence;
@@ -68,7 +72,12 @@ public class ConversationsController : ControllerBase
     {
         var conv = await _chat.GetConversationAsync(id, ct);
         var project = await LoadProjectAsync(conv.ProjectId, ct);
-        return Ok(conv.ToResponse(includeMessages: true, project: project));
+        var task = await _tasks.FindForConversationAsync(id, ct);
+        return Ok(conv.ToResponse(includeMessages: true, project: project) with
+        {
+            TaskId = task?.Id,
+            TaskStatus = task?.Status.ToString().ToLowerInvariant(),
+        });
     }
 
     [HttpPost]
@@ -192,6 +201,7 @@ public class ConversationsController : ControllerBase
         Guid messageId,
         CancellationToken ct)
     {
+        await _tasks.EnsureConversationNotDrivenAsync(id, ct);
         var conv = await _chat.DeleteMessageAsync(id, messageId, ct);
         var project = await LoadProjectAsync(conv.ProjectId, ct);
         return Ok(conv.ToResponse(includeMessages: false, project: project));
@@ -218,6 +228,7 @@ public class ConversationsController : ControllerBase
     [HttpPost("{id:guid}/messages/{messageId:guid}/regenerate")]
     public async Task RegenerateMessage(Guid id, Guid messageId, CancellationToken ct)
     {
+        await _tasks.EnsureConversationNotDrivenAsync(id, ct);
         var stream = await _agent.RegenerateAsync(id, messageId, ct);
         await StreamSseAsync(stream, ct);
     }
@@ -232,6 +243,7 @@ public class ConversationsController : ControllerBase
         [FromBody] SendMessageRequest request,
         CancellationToken ct)
     {
+        await _tasks.EnsureConversationNotDrivenAsync(id, ct);
         var stream = await _agent.EditAndRunAsync(id, messageId, request.Content, ct);
         await StreamSseAsync(stream, ct);
     }
@@ -256,6 +268,7 @@ public class ConversationsController : ControllerBase
         // AgentService.RunAsync awaits the conversation load BEFORE returning the
         // iterator, so a NotFoundException here is raised pre-stream and the
         // global handler can convert it to a clean 404.
+        await _tasks.EnsureConversationNotDrivenAsync(id, ct);
         var stream = await _agent.RunAsync(id, request.Content, ct);
         await StreamSseAsync(stream, ct);
     }

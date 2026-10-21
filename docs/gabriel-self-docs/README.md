@@ -30,6 +30,7 @@ Use this to pick the page to `docs_read` based on what the user asked.
 | Tool system (`ITool`, `IToolRegistry`), the shipped tool list, how to add a tool, SSRF defense, docs lookup itself | `tools.md` |
 | Avatar, pixel grid, frame layers, palette, pattern primitives (plasma/waves/spiral/pulse/shimmer), Live State | `sequence.md` |
 | Regenerate, variant picker, "switch active variant", delete / truncate-from-here, variant grouping | `variants.md` |
+| Delegated long-running work, task contracts, `task_checkpoint`, why a task paused / blocked / failed — or a message starting `[Autonomous task` | `autonomous-tasks.md` |
 | Config sections, environment-variable bindings, defaults, secret loading | `config.md` |
 | Any term you don't recognize that came up in another doc | `glossary.md` |
 

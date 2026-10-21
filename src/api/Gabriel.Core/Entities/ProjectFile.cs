@@ -39,4 +39,14 @@ public class ProjectFile
             ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
         };
     }
+
+    // The bytes on disk were replaced (agent write tools). UploadedAt doubles as
+    // "last written" so the file list sorts recent edits first.
+    public void ReplaceContent(long sizeBytes)
+    {
+        if (sizeBytes < 0)
+            throw new ArgumentException("SizeBytes must be non-negative.", nameof(sizeBytes));
+        SizeBytes = sizeBytes;
+        UploadedAt = DateTimeOffset.UtcNow;
+    }
 }

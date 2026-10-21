@@ -3,6 +3,7 @@ using Gabriel.Engine.Personality;
 using Gabriel.Engine.Personality.Prompts;
 using Gabriel.Engine.Sequence;
 using Gabriel.Engine.Services;
+using Gabriel.Engine.Tasks;
 using Gabriel.Engine.Tools;
 using Gabriel.Engine.Tools.Calc;
 using Gabriel.Engine.Tools.Codecs;
@@ -37,6 +38,15 @@ public static class DependencyInjection
         services.AddScoped<IAgentService, AgentService>();
         services.AddSingleton<IConversationTitleGenerator, ConversationTitleGenerator>();
         services.AddSingleton<IActiveTurnRegistry, ActiveTurnRegistry>();
+
+        // Autonomous tasks: the API side (service), the per-step engine
+        // (runner, driven by AgentTaskWorker in Infrastructure), and the two
+        // tool-less judgement calls they use.
+        services.Configure<AgentTaskOptions>(config.GetSection(AgentTaskOptions.SectionName));
+        services.AddScoped<IAgentTaskService, AgentTaskService>();
+        services.AddScoped<IAgentTaskRunner, AgentTaskRunner>();
+        services.AddSingleton<ITaskContractDrafter, TaskContractDrafter>();
+        services.AddSingleton<ITaskStepReviewer, TaskStepReviewer>();
         services.AddScoped<IToolRegistry, ToolRegistry>();
         services.AddSingleton<ITokenEstimator, NaiveTokenEstimator>();
 
@@ -83,6 +93,8 @@ public static class DependencyInjection
         services.AddScoped<ITool, DocsReadTool>();
         services.AddScoped<ITool, ListProjectFilesTool>();
         services.AddScoped<ITool, ReadProjectFileTool>();
+        services.AddScoped<ITool, WriteProjectFileTool>();
+        services.AddScoped<ITool, EditProjectFileTool>();
 
         // Memory tools — Claude-style. Scope is "user" (cross-project) or
         // "project" (this conversation's project only). memory_search is the
@@ -108,6 +120,7 @@ public static class DependencyInjection
         services.AddScoped<ITool, TodoWriteTool>();
         services.AddScoped<ITool, TodoReadTool>();
         services.AddScoped<ITool, ShellExecuteTool>();
+        services.AddScoped<ITool, TaskCheckpointTool>();
 
         return services;
     }

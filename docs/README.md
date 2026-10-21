@@ -19,6 +19,7 @@ docs/
 │   ├── agent-loop.md             - ReAct loop / streaming / compact / regenerate
 │   ├── personality.md            - state updater / system prompt / post-processor
 │   ├── tools.md                  - ITool model + every registered tool
+│   ├── autonomous-tasks.md       - delegated long-running work: contract, step loop, review, budgets
 │   ├── sequence.md               - avatar engine (Gabriel Sequence)
 │   ├── variants.md               - variant grouping + delete / regen behavior
 │   ├── config.md                 - every options section + env-var bindings

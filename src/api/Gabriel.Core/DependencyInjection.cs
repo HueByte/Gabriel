@@ -1,3 +1,4 @@
+using Gabriel.Core.Identity;
 using Gabriel.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<IMemoryService, MemoryService>();
+        services.AddScoped<CurrentUserOverride>();
         return services;
     }
 }
