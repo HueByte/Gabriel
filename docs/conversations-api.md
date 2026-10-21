@@ -141,6 +141,16 @@ The event union, in the order a typical turn emits them:
 
 ReAct iterations interleave these: a single turn can emit one or more `textDelta` runs, then `toolCall` + `toolResult` pairs, then another `textDelta` run before the final `assistantMessage`. The agent loop bounds iterations at `Agent.MaxIterations` (default 8) — beyond that, the run terminates with whatever text it has, then `done`.
 
+## Stopping a reply
+
+`POST /api/conversations/{id}/messages/stop` stops the conversation's running turn and returns `{ "stopped": true }`. It does **not** close the stream: the turn's own SSE response keeps going and ends normally, persisting whatever text had streamed and sending it as an ordinary `assistantMessage` (with a real `messageId`), then `done`. Clients should keep reading the stream they already have. A tool that was mid-flight is recorded with the observation `Stopped by the user before this tool finished.`, so the history never holds an unanswered tool call.
+
+`{ "stopped": false }` means nothing was running for that conversation — the turn already finished, or the stream hadn't started yet. In that case the client should close its own stream (abort the fetch). Closing the stream is always safe: on disconnect the server persists the partial reply in the same way, it just can't send events about it.
+
+## Editing a sent message
+
+`POST /api/conversations/{id}/messages/{messageId}/edit` with `SendMessageRequest` (`{ "content": "..." }`) is edit-and-resend. It deletes the user message at `messageId` and **everything after it** (same truncation as `DELETE` below), then runs a normal turn with the new content. The response is the same SSE stream as `/messages/stream`, starting with `userMessagePersisted` for the replacement message. Pre-flight errors: `400` for empty content or a non-user message, `404` for an unknown message. History is linear — the old branch is not kept as a variant. If the truncation cuts back past the rolling-compact point, the stale summary is dropped too, and the next turn re-compacts if needed.
+
 ## Regenerating, deleting, and navigating message variants
 
 Conversations support "regenerate this assistant turn", which produces a sibling message that shares a `variantGroupId` with the original. The UI exposes a `< 2/3 >` picker on any message that has siblings.
@@ -149,7 +159,7 @@ Conversations support "regenerate this assistant turn", which produces a sibling
 
 `PATCH /api/conversations/{id}/messages/{messageId}/active` switches which sibling in a variant group is the active one. The response is the full `ConversationResponse` _with_ the `messages` array, so the client can re-render the chat with the chosen variant (and the new history-filter view that goes with it). The agent only ever sees the active sibling — inactive variants stay in the DB but are filtered out of the prompt.
 
-`DELETE /api/conversations/{id}/messages/{messageId}` deletes a message and **all subsequent messages** in the conversation. The service layer anchors on the earliest sibling in the variant group, so deleting one regenerated reply also cleans up the rest of the regenerated turn and everything that came after. Returns `ConversationResponse` without the messages array (the client re-renders against its remaining local state, or refetches). See [Gabriel.Engine/variants-and-history.md](Gabriel.Engine/variants-and-history.md) for the data-model rules these endpoints enforce.
+`DELETE /api/conversations/{id}/messages/{messageId}` deletes a message and **all subsequent messages** in the conversation. The service layer anchors on the earliest sibling in the variant group, so deleting one regenerated reply also cleans up the rest of the regenerated turn and everything that came after. Deleting back past the rolling-compact point also drops the conversation summary (it described messages that no longer exist). Returns `ConversationResponse` without the messages array (the client re-renders against its remaining local state, or refetches). See [Gabriel.Engine/variants-and-history.md](Gabriel.Engine/variants-and-history.md) for the data-model rules these endpoints enforce.
 
 ### Message shape
 
@@ -229,6 +239,8 @@ The controllers don't define their own problem-details middleware; failures bubb
 | `GET` | `/api/conversations/{id}/metrics` | — | `ContextMetricsResponse` | no |
 | `POST` | `/api/conversations/{id}/messages/stream` | `SendMessageRequest` | `text/event-stream` of `AgentEvent` | yes |
 | `POST` | `/api/conversations/{id}/messages/{messageId}/regenerate` | — | `text/event-stream` of `AgentEvent` | yes |
+| `POST` | `/api/conversations/{id}/messages/{messageId}/edit` | `SendMessageRequest` | `text/event-stream` of `AgentEvent` | yes |
+| `POST` | `/api/conversations/{id}/messages/stop` | — | `StopTurnResponse` | no |
 | `PATCH` | `/api/conversations/{id}/messages/{messageId}/active` | — | `ConversationResponse` (with messages) | no |
 | `DELETE` | `/api/conversations/{id}/messages/{messageId}` | — | `ConversationResponse` (no messages) | no |
 | `GET` | `/api/memories?scope=&projectId=` | — | `MemoryDto[]` | no |

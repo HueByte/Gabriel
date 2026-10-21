@@ -10,11 +10,12 @@
 // log the user out cleanly - the in-flight chat send is then a thrown error
 // the caller toasts.
 //
-// Two endpoints share this transport:
-//   - POST /messages/stream      (new turn, body { content })
+// Three endpoints share this transport:
+//   - POST /messages/stream          (new turn, body { content })
+//   - POST /messages/{id}/edit       (edit-and-resend, body { content })
 //   - POST /messages/{id}/regenerate (regenerate variant, no body)
 // The 401-refresh-and-retry path is shared via streamSse(); endpoint-specific
-// helpers (streamChat / streamRegenerate) just construct the URL + body.
+// helpers (streamChat / streamEdit / streamRegenerate) just construct the URL + body.
 
 import { refreshSession, signalSessionExpired } from './authRefresh';
 
@@ -139,6 +140,19 @@ export function streamChat(
   opts: StreamChatOptions = {},
 ): AsyncGenerator<AgentEvent> {
   const url = `/api/conversations/${encodeURIComponent(conversationId)}/messages/stream`;
+  return streamSse(url, { content }, opts);
+}
+
+// Edit-and-resend: replaces the user message at messageId (and everything
+// after it) with `content`, then streams the new turn - same events as
+// streamChat, starting with userMessagePersisted for the replacement.
+export function streamEdit(
+  conversationId: string,
+  messageId: string,
+  content: string,
+  opts: StreamChatOptions = {},
+): AsyncGenerator<AgentEvent> {
+  const url = `/api/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/edit`;
   return streamSse(url, { content }, opts);
 }
 

@@ -219,65 +219,34 @@ public class ConversationsController : ControllerBase
     public async Task RegenerateMessage(Guid id, Guid messageId, CancellationToken ct)
     {
         var stream = await _agent.RegenerateAsync(id, messageId, ct);
-
-        Response.Headers["Content-Type"] = "text/event-stream";
-        Response.Headers["Cache-Control"] = "no-cache";
-        Response.Headers["X-Accel-Buffering"] = "no";
-
-        var rng = Random.Shared;
-        var thinkingDelayMs = rng.Next(_personality.MinThinkingDelayMs, _personality.MaxThinkingDelayMs + 1);
-        var cps = rng.Next(_personality.MinCharsPerSecond, _personality.MaxCharsPerSecond + 1);
-        var msPerChar = 1000.0 / cps;
-        var firstDeltaSent = false;
-        var charsForwarded = 0;
-        var streamStartTicks = 0L;
-
-        try
-        {
-            await foreach (var evt in stream.WithCancellation(ct))
-            {
-                if (evt is AgentTextDelta td)
-                {
-                    if (!firstDeltaSent)
-                    {
-                        await Task.Delay(thinkingDelayMs, ct);
-                        streamStartTicks = Environment.TickCount64;
-                        firstDeltaSent = true;
-                    }
-                    else
-                    {
-                        var elapsedMs = Environment.TickCount64 - streamStartTicks;
-                        var targetMs = (long)(charsForwarded * msPerChar);
-                        var waitMs = targetMs - elapsedMs;
-                        if (waitMs > 0) await Task.Delay((int)waitMs, ct);
-                    }
-                    charsForwarded += td.Delta.Length;
-                }
-
-                var json = JsonSerializer.Serialize<AgentEvent>(evt, SseJsonOpts);
-                await Response.WriteAsync($"data: {json}\n\n", ct);
-                await Response.Body.FlushAsync(ct);
-            }
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch (Exception ex)
-        {
-            var fallback = JsonSerializer.Serialize<AgentEvent>(new AgentError(ex.Message), SseJsonOpts);
-            await Response.WriteAsync($"data: {fallback}\n\n", ct);
-            await Response.Body.FlushAsync(ct);
-        }
+        await StreamSseAsync(stream, ct);
     }
+
+    // Edit-and-resend: replaces the user message at messageId (and drops
+    // everything after it) with the new content, then streams a fresh turn.
+    // Same SSE wire format as /messages/stream.
+    [HttpPost("{id:guid}/messages/{messageId:guid}/edit")]
+    public async Task EditMessage(
+        Guid id,
+        Guid messageId,
+        [FromBody] SendMessageRequest request,
+        CancellationToken ct)
+    {
+        var stream = await _agent.EditAndRunAsync(id, messageId, request.Content, ct);
+        await StreamSseAsync(stream, ct);
+    }
+
+    // Stops the conversation's running turn. The turn's own SSE stream stays
+    // open and finishes normally (partial assistantMessage, then done), so the
+    // client keeps reading it rather than aborting.
+    [HttpPost("{id:guid}/messages/stop")]
+    public ActionResult<StopTurnResponse> StopTurn(Guid id)
+        => Ok(new StopTurnResponse(_agent.StopTurn(id)));
 
     // SSE endpoint - yields AgentEvent JSON frames (textDelta, toolCall, toolResult,
     // assistantMessage, done, error). Each frame is a single `data: ...\n\n` line.
     // Pre-flight validation (empty input, missing conversation) throws before any
     // bytes are written so 4xx/ProblemDetails responses still work.
-    //
-    // Typing-tempo simulation lives here (Personality phase 1): a fixed "thinking"
-    // delay before the first textDelta and a per-character throttle on subsequent
-    // ones, so the wire pace looks like a human typing instead of bursty provider
-    // chunks. Other event types (toolCall / toolResult / assistantMessage / done /
-    // error) bypass the throttle.
     [HttpPost("{id:guid}/messages/stream")]
     public async Task StreamMessage(
         Guid id,
@@ -288,7 +257,19 @@ public class ConversationsController : ControllerBase
         // iterator, so a NotFoundException here is raised pre-stream and the
         // global handler can convert it to a clean 404.
         var stream = await _agent.RunAsync(id, request.Content, ct);
+        await StreamSseAsync(stream, ct);
+    }
 
+    // Writes an agent stream as SSE. Shared by every streaming endpoint.
+    //
+    // Typing-tempo simulation lives here (Personality phase 1): a fixed "thinking"
+    // delay before the first textDelta and a per-character throttle on subsequent
+    // ones, so the wire pace looks like a human typing instead of bursty provider
+    // chunks. Other event types bypass the throttle. The agent stream is pulled,
+    // so the throttle also paces the agent - what it has buffered is roughly what
+    // the client has shown, which is what a stop persists.
+    private async Task StreamSseAsync(IAsyncEnumerable<AgentEvent> stream, CancellationToken ct)
+    {
         Response.Headers["Content-Type"] = "text/event-stream";
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no"; // bypass reverse-proxy buffering

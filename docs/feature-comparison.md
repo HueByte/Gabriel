@@ -12,8 +12,8 @@ Legend: ✅ shipped · 🟡 partial or opt-in · ❌ absent.
 | --- | --- | --- | --- | --- | --- |
 | Streaming replies with visible reasoning | ✅ separate `reasoning_content` and ReAct thought channels | ✅ | ✅ | ✅ | ✅ |
 | Regenerate with variant history | ✅ variant picker, delete-from-here | ✅ | ✅ | ❌ | ✅ |
-| Edit a sent message and re-run | ❌ | ✅ | ✅ | 🟡 rewind | ✅ |
-| Stop a reply mid-stream | ❌ aborts only on conversation switch | ✅ | ✅ | ✅ | ✅ |
+| Edit a sent message and re-run | ✅ inline editor, truncate-and-resend (no branch history) | ✅ | ✅ | 🟡 rewind | ✅ |
+| Stop a reply mid-stream | ✅ partial reply kept, in-flight tools closed out | ✅ | ✅ | ✅ | ✅ |
 | Rich rendering (markdown, code, math, diagrams) | ✅ highlight.js, KaTeX, mermaid | ✅ | ✅ | 🟡 terminal | ✅ |
 | Behavior modes (concise, tutor, critic, …) | ✅ five per-conversation modes | 🟡 personalities | 🟡 styles | ❌ | 🟡 presets |
 | Auto-titled conversations | ✅ from the first message, never overrides a user title | ✅ | ✅ | n/a | ✅ |
@@ -71,17 +71,16 @@ Legend: ✅ shipped · 🟡 partial or opt-in · ❌ absent.
 
 ## What to build next
 
-Gabriel's strengths are real but narrow. The agent loop, memory model, context accounting, and self-documentation are on par with or ahead of the consumer apps. Its identity layer has no equivalent anywhere in the comparison set. The gaps cluster in three places: Gabriel can only think with one vendor's models, it can look but not touch, and it can't take in the documents and images people actually learn from. Ranked by leverage against the mission, roughly cheapest-high-impact first:
+Gabriel's strengths are real but narrow. The agent loop, memory model, context accounting, and self-documentation are on par with or ahead of the consumer apps. Its identity layer has no equivalent anywhere in the comparison set. The gaps cluster in three places: Gabriel can only think with one vendor's models, it can look but not touch, and it can't take in the documents and images people actually learn from. Ranked by leverage against the mission, roughly cheapest-high-impact first (stop, edit-and-resend, and auto-titles shipped 2026-10-21 and are off the list):
 
 1. **OpenAI-compatible provider.** One `IChatProvider` over the `/v1/chat/completions` shape covers OpenAI, OpenRouter, Ollama, LM Studio, and vLLM in one move. Pointed at Ollama, it is also the first real exercise of the emulated tool bridge. This is the single biggest gap against Open WebUI.
-2. **Stop button and edit-and-resend.** Two small UI and loop changes that people expect from every chat app (auto-titles shipped 2026-10-21). The abort plumbing already exists in `Chat.tsx`, it just isn't exposed.
-3. **Per-call tool approval.** A pending-approval state in the loop and an approve/deny card in the UI. This is what makes it safe to turn `shell_execute` on by default, and it is the prerequisite for anything that writes.
-4. **Project-scoped write and edit tools.** `write_file` / `edit_file` behind the same path hardening as the read tools and gated by approval, so Gabriel can produce artifacts instead of pasting them.
-5. **Document ingestion.** Text extraction for PDF and DOCX at upload time, then chunked retrieval through the existing embedding pipeline. That turns semantic memory infrastructure into RAG over project files, which is the core of "learn".
-6. **MCP client.** Mounting MCP servers as `ITool`s buys calendar, email, GitHub, and everything else in the ecosystem without bespoke integrations — the fastest route to personal-assistant reach.
-7. **Image input.** Multimodal message content through providers that support it, so screenshots, diagrams, and photos of homework become first-class.
-8. **Teaching loop.** Building on `tutor` mode with quiz and flashcard tools backed by memory (what the user got wrong, when to revisit). None of the comparison set does spaced repetition well, so this is where Gabriel can lead rather than catch up.
-9. **Scheduled tasks and reminders.** A background runner that starts agent turns on a timer, the piece that makes an assistant proactive.
-10. **Real tokenizer, then prompt caching.** Precision for the compact trigger first, then a cache-friendly prompt order (stable persona ahead of per-turn state) once real-workload cost is measured.
+2. **Per-call tool approval.** A pending-approval state in the loop and an approve/deny card in the UI. This is what makes it safe to turn `shell_execute` on by default, and it is the prerequisite for anything that writes.
+3. **Project-scoped write and edit tools.** `write_file` / `edit_file` behind the same path hardening as the read tools and gated by approval, so Gabriel can produce artifacts instead of pasting them.
+4. **Document ingestion.** Text extraction for PDF and DOCX at upload time, then chunked retrieval through the existing embedding pipeline. That turns semantic memory infrastructure into RAG over project files, which is the core of "learn".
+5. **MCP client.** Mounting MCP servers as `ITool`s buys calendar, email, GitHub, and everything else in the ecosystem without bespoke integrations — the fastest route to personal-assistant reach.
+6. **Image input.** Multimodal message content through providers that support it, so screenshots, diagrams, and photos of homework become first-class.
+7. **Teaching loop.** Building on `tutor` mode with quiz and flashcard tools backed by memory (what the user got wrong, when to revisit). None of the comparison set does spaced repetition well, so this is where Gabriel can lead rather than catch up.
+8. **Scheduled tasks and reminders.** A background runner that starts agent turns on a timer, the piece that makes an assistant proactive.
+9. **Real tokenizer, then prompt caching.** Precision for the compact trigger first, then a cache-friendly prompt order (stable persona ahead of per-turn state) once real-workload cost is measured.
 
 Voice, image generation, sub-agents, and deep research are deliberately left off this list. Each is worth having, but each depends on items above it (provider breadth, approvals, document handling) and none moves the talk / do / learn needle as much per unit of work.

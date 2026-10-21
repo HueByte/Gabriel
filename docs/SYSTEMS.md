@@ -7,7 +7,7 @@ One row per externally meaningful unit — controllers, engine services, provide
 | Controller | Surface | Notes |
 | --- | --- | --- |
 | `AuthController` | `/api/auth/*` | Login/register/refresh; JWT in HttpOnly cookies, refresh rotation |
-| `ConversationsController` | `/api/conversations/*` | CRUD, rename, SSE message stream, regenerate, variants, sequence, metrics — full reference in [conversations-api.md](conversations-api.md) |
+| `ConversationsController` | `/api/conversations/*` | CRUD, rename, SSE message stream, edit-and-resend, stop, regenerate, variants, sequence, metrics — full reference in [conversations-api.md](conversations-api.md) |
 | `ProjectsController` | `/api/projects/*` | Project CRUD, sequence, avatar reroll |
 | `ProjectFilesController` | `/api/projects/{id}/files/*` | List, multipart upload, download, delete |
 | `MemoriesController` | `/api/memories/*` | List/delete saved memories (user + project scope) |
@@ -20,6 +20,7 @@ One row per externally meaningful unit — controllers, engine services, provide
 | System | Role |
 | --- | --- |
 | `AgentService` | The ReAct loop: streams provider events, executes tools (parallel-safe tools concurrently, capped by `Agent:MaxParallelToolCalls`), persists messages, triggers compact, injects semantic memory recall |
+| `ActiveTurnRegistry` | In-process map of running turns so `POST .../messages/stop` can cancel one; the loop then persists the partial reply and ends the stream normally |
 | `ConversationTitleGenerator` | Auto-titles placeholder-titled conversations from the first user message; started by `AgentService` in parallel with the turn, emitted as `titleUpdated` (`Agent:AutoTitle`) |
 | `AgentContext` | Single authority assembling provider history AND the token-metrics breakdown |
 | `GabrielToolBridge` (+ `ToolCallStreamSplitter`, `ToolCallBlockParser`) | Tool-call emulation decorator for text-only providers (`ToolMode: Emulated`) |

@@ -46,6 +46,7 @@ public class AgentService : IAgentService
     private readonly ISystemPromptBuilder _promptBuilder;
     private readonly IResponsePostProcessor _postProcessor;
     private readonly IConversationTitleGenerator _titleGenerator;
+    private readonly IActiveTurnRegistry _turns;
     private readonly AgentOptions _options;
     private readonly ILogger<AgentService> _logger;
     // Held for constructing GabrielToolBridge on demand. The bridge is
@@ -72,6 +73,7 @@ public class AgentService : IAgentService
         ISystemPromptBuilder promptBuilder,
         IResponsePostProcessor postProcessor,
         IConversationTitleGenerator titleGenerator,
+        IActiveTurnRegistry turns,
         IOptions<AgentOptions> options,
         ILogger<AgentService> logger,
         ILogger<GabrielToolBridge> toolBridgeLogger)
@@ -93,6 +95,7 @@ public class AgentService : IAgentService
         _promptBuilder = promptBuilder;
         _postProcessor = postProcessor;
         _titleGenerator = titleGenerator;
+        _turns = turns;
         _options = options.Value;
         _logger = logger;
         _toolBridgeLogger = toolBridgeLogger;
@@ -109,10 +112,57 @@ public class AgentService : IAgentService
             throw new DomainException("Message content cannot be empty.");
 
         var (userId, conversation) = await LoadConversationAsync(conversationId, ct);
+        return await StartUserTurnAsync(userId, conversation, userInput, ct);
+    }
+
+    public async Task<IAsyncEnumerable<AgentEvent>> EditAndRunAsync(
+        Guid conversationId,
+        Guid userMessageId,
+        string newContent,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(newContent))
+            throw new DomainException("Message content cannot be empty.");
+
+        var (userId, conversation) = await LoadConversationAsync(conversationId, ct);
+
+        var target = conversation.Messages.FirstOrDefault(m => m.Id == userMessageId)
+            ?? throw new NotFoundException(nameof(Message), userMessageId);
+        if (target.Role != MessageRole.User)
+            throw new DomainException("Only user messages can be edited.");
 
         _logger.LogInformation(
+            "ReAct edit-and-resend | conv={ConversationId} targetMsg={TargetMessageId}",
+            conversationId, userMessageId);
+
+        // Truncate first, in its own save, so the replacement message below is
+        // appended to a history that no longer contains the old branch.
+        var removed = conversation.TruncateFrom(userMessageId);
+        _conversations.RemoveMessages(removed);
+        _conversations.Update(conversation);
+        await _uow.SaveChangesAsync(ct);
+
+        return await StartUserTurnAsync(userId, conversation, newContent, ct);
+    }
+
+    public bool StopTurn(Guid conversationId)
+    {
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException("Authenticated user required.");
+        return _turns.TryStop(conversationId, userId);
+    }
+
+    // Shared tail of RunAsync and EditAndRunAsync: persist the user message,
+    // resolve model + prompts, and hand back the stream.
+    private async Task<IAsyncEnumerable<AgentEvent>> StartUserTurnAsync(
+        Guid userId,
+        Conversation conversation,
+        string userInput,
+        CancellationToken ct)
+    {
+        _logger.LogInformation(
             "ReAct turn start | conv={ConversationId} project={ProjectId} userId={UserId} inputChars={InputLen} messageCount={MsgCount}",
-            conversationId, conversation.ProjectId, userId, userInput.Length, conversation.Messages.Count);
+            conversation.Id, conversation.ProjectId, userId, userInput.Length, conversation.Messages.Count);
 
         // Persist the user message before starting the stream so the timeline is
         // consistent even if the client disconnects mid-loop. State is updated in
@@ -420,8 +470,33 @@ public class AgentService : IAgentService
             => AgentContext.Build(conversation, PersonaPrompt, ProjectPrompt, MemoryBlock, Tools);
     }
 
-    // pendingTitle: an in-flight auto-title (RunAsync only); applied just
-    // before Done on the two paths that end with an assistant reply.
+    // Observation recorded for a tool call that a stop (or disconnect) cut off,
+    // so every persisted tool_call keeps a matching result - OpenAI-style
+    // providers reject a history with unanswered calls.
+    private const string StoppedObservation = "Stopped by the user before this tool finished.";
+
+    // What the current iteration has produced but not yet persisted, so a turn
+    // cut short still leaves a consistent history behind.
+    private sealed class TurnDraft
+    {
+        public StringBuilder Text { get; } = new();
+        public StringBuilder Reasoning { get; } = new();
+        public List<ChatProviderToolCall> UnansweredCalls { get; } = [];
+        public bool TextCommitted { get; set; }
+
+        public void Reset()
+        {
+            Text.Clear();
+            Reasoning.Clear();
+            TextCommitted = false;
+        }
+    }
+
+    // Wraps the loop with stop support. A stop (IActiveTurnRegistry) winds the
+    // loop down gracefully inside RunLoopAsync. Anything else that ends it
+    // early - the client disconnecting, an exception - lands in the finally,
+    // which persists the partial reply and closes unanswered tool calls.
+    // pendingTitle: an in-flight auto-title (RunAsync only).
     private async IAsyncEnumerable<AgentEvent> RunStreamAsync(
         Conversation conversation,
         Guid? variantGroupIdOverride,
@@ -430,11 +505,49 @@ public class AgentService : IAgentService
         Task<string?>? pendingTitle,
         [EnumeratorCancellation] CancellationToken ct)
     {
+        using var turn = _turns.Begin(conversation.Id, conversation.UserId, ct);
+        var draft = new TurnDraft();
+        var completed = false;
+        try
+        {
+            await foreach (var evt in RunLoopAsync(conversation, variantGroupIdOverride, prompts, selection, pendingTitle, turn, draft, ct))
+            {
+                if (evt is AgentDone) completed = true;
+                yield return evt;
+            }
+        }
+        finally
+        {
+            if (!completed)
+            {
+                try
+                {
+                    // The request token may already be cancelled - this write has to land.
+                    await PersistInterruptedAsync(conversation, draft, variantGroupIdOverride, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not persist interrupted turn | conv={ConversationId}", conversation.Id);
+                }
+            }
+        }
+    }
+
+    private async IAsyncEnumerable<AgentEvent> RunLoopAsync(
+        Conversation conversation,
+        Guid? variantGroupIdOverride,
+        TurnPrompts prompts,
+        ModelSelection selection,
+        Task<string?>? pendingTitle,
+        ActiveTurn turn,
+        TurnDraft draft,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
         // Compact between turns, never mid-iteration - cutting between an
         // assistant's tool_calls and its tool results would orphan them.
         // Runs first so the summarizer's output is in conversation.Summary
         // before AgentContext.Build assembles history for the real turn.
-        await foreach (var evt in MaybeCompactAsync(conversation, prompts, selection, ct))
+        await foreach (var evt in MaybeCompactAsync(conversation, prompts, selection, turn.Token, ct))
         {
             yield return evt;
         }
@@ -452,54 +565,82 @@ public class AgentService : IAgentService
 
         for (var iter = 0; iter < _options.MaxIterations; iter++)
         {
-            var textBuffer = new StringBuilder();
-            var reasoningBuffer = new StringBuilder();
+            draft.Reset();
+            var textBuffer = draft.Text;
+            var reasoningBuffer = draft.Reasoning;
             var pendingCalls = new List<ChatProviderToolCall>();
             FinishReason? finish = null;
+            // A stop that landed while the previous iteration's tools ran.
+            var stopped = turn.StopRequested;
 
             // Provider hiccups land here: finish=Stop with no text, no tool
             // calls, and (usually) no reasoning either. Retry the same history
             // a small bounded number of times before surfacing the error - the
             // HTTP resilience handler can't catch this because the response was
             // a successful 200 stream that just happened to be empty.
-            for (var emptyRetry = 0; emptyRetry <= EmptyStopMaxRetries; emptyRetry++)
+            for (var emptyRetry = 0; !stopped && emptyRetry <= EmptyStopMaxRetries; emptyRetry++)
             {
                 if (emptyRetry > 0)
                 {
-                    textBuffer.Clear();
-                    reasoningBuffer.Clear();
+                    draft.Reset();
                     pendingCalls.Clear();
                     finish = null;
-                    await Task.Delay(EmptyStopRetryDelayMs * emptyRetry, ct);
+                    try
+                    {
+                        await Task.Delay(EmptyStopRetryDelayMs * emptyRetry, turn.Token);
+                    }
+                    catch (OperationCanceledException) when (turn.StopRequested)
+                    {
+                        stopped = true;
+                        break;
+                    }
                 }
 
                 // Rebuild context per iteration - assistant tool_calls and
                 // tool results from the previous iter are now part of the
                 // conversation and need to be in the next provider call.
                 var history = prompts.BuildContext(conversation).ToProviderHistory();
-                await foreach (var evt in provider.StreamAsync(history, prompts.Tools, selection.Name, ct))
+
+                // Enumerated by hand so a stop can be caught around MoveNext -
+                // C# allows no yield inside a try that has a catch.
+                await using (var events = provider.StreamAsync(history, prompts.Tools, selection.Name, turn.Token)
+                    .GetAsyncEnumerator(turn.Token))
                 {
-                    switch (evt)
+                    while (true)
                     {
-                        case TextDeltaEvent td:
-                            textBuffer.Append(td.Delta);
-                            yield return new AgentTextDelta(td.Delta);
+                        try
+                        {
+                            if (!await events.MoveNextAsync()) break;
+                        }
+                        catch (OperationCanceledException) when (turn.StopRequested)
+                        {
+                            stopped = true;
                             break;
+                        }
 
-                        case ReasoningDeltaEvent rd:
-                            reasoningBuffer.Append(rd.Delta);
-                            yield return new AgentReasoningDelta(rd.Delta);
-                            break;
+                        switch (events.Current)
+                        {
+                            case TextDeltaEvent td:
+                                textBuffer.Append(td.Delta);
+                                yield return new AgentTextDelta(td.Delta);
+                                break;
 
-                        case ToolCallReadyEvent tc:
-                            pendingCalls.Add(new ChatProviderToolCall(tc.Id, tc.Name, tc.ArgumentsJson));
-                            break;
+                            case ReasoningDeltaEvent rd:
+                                reasoningBuffer.Append(rd.Delta);
+                                yield return new AgentReasoningDelta(rd.Delta);
+                                break;
 
-                        case FinishEvent fe:
-                            finish = fe.Reason;
-                            break;
+                            case ToolCallReadyEvent tc:
+                                pendingCalls.Add(new ChatProviderToolCall(tc.Id, tc.Name, tc.ArgumentsJson));
+                                break;
+
+                            case FinishEvent fe:
+                                finish = fe.Reason;
+                                break;
+                        }
                     }
                 }
+                if (stopped) break;
 
                 // Only retry when the attempt produced literally nothing the
                 // caller can act on. Partial output (any text delta, any tool
@@ -518,6 +659,25 @@ public class AgentService : IAgentService
                 }
             }
 
+            if (stopped)
+            {
+                // Tool calls the model was still emitting are dropped (never
+                // persisted, so nothing to answer); streamed text is kept.
+                var partial = await PersistInterruptedAsync(conversation, draft, variantGroupIdOverride, ct);
+                _logger.LogInformation(
+                    "ReAct turn stopped by user | conv={ConversationId} iters={Iters} partialChars={PartialLen}",
+                    conversation.Id, iter + 1, partial?.Content?.Length ?? 0);
+
+                if (partial is not null)
+                    yield return new AgentAssistantMessage(partial.Id, partial.Content!, partial.ReasoningContent);
+                await foreach (var evt in ApplyAutoTitleAsync(conversation, pendingTitle, ct))
+                {
+                    yield return evt;
+                }
+                yield return new AgentDone();
+                yield break;
+            }
+
             // Keyed off the calls themselves, not just the finish label: some
             // OpenAI-compatible servers report "stop" alongside tool_calls, and
             // GrokChatProvider maps unknown finish strings to Stop. Length is
@@ -532,6 +692,8 @@ public class AgentService : IAgentService
                 var assistantMessage = conversation.AppendAssistantToolCalls(toolCallsJson, leadingText, variantGroupIdOverride, reasoningForCall);
                 _conversations.AddMessage(assistantMessage);
                 await _uow.SaveChangesAsync(ct);
+                draft.TextCommitted = true;
+                draft.UnansweredCalls.AddRange(pendingCalls);
 
                 _logger.LogInformation(
                     "Iter {Iter}: model requested {ToolCount} tool call(s) | conv={ConversationId} reasoningChars={ReasoningLen}",
@@ -553,14 +715,15 @@ public class AgentService : IAgentService
                 // so the scoped DbContext is only ever touched sequentially.
                 // Observations are persisted + emitted in the model's original
                 // call order regardless of completion order, keeping the
-                // timeline deterministic.
+                // timeline deterministic. Tools get the turn token, so a stop
+                // turns in-flight calls into StoppedObservation results.
                 var parallelGate = new SemaphoreSlim(Math.Max(1, _options.MaxParallelToolCalls));
                 var started = new Task<string>?[pendingCalls.Count];
                 for (var i = 0; i < pendingCalls.Count; i++)
                 {
                     if (_tools.Find(pendingCalls[i].Name) is { IsParallelSafe: true })
                     {
-                        started[i] = ExecuteGatedAsync(parallelGate, pendingCalls[i], conversation.Id, ct);
+                        started[i] = ExecuteGatedAsync(parallelGate, pendingCalls[i], conversation.Id, turn.Token);
                     }
                 }
 
@@ -569,10 +732,14 @@ public class AgentService : IAgentService
                     var call = pendingCalls[i];
                     var observation = started[i] is { } task
                         ? await task
-                        : await ExecuteToolSafelyAsync(call, conversation.Id, ct);
+                        : await ExecuteToolSafelyAsync(call, conversation.Id, turn.Token);
 
                     var toolMessage = conversation.AppendToolResult(call.Id, observation, variantGroupIdOverride);
                     _conversations.AddMessage(toolMessage);
+                    // Answered as soon as it's tracked: if the save below fails,
+                    // the interrupted-turn cleanup flushes this tracked result
+                    // rather than adding a second one.
+                    draft.UnansweredCalls.Remove(call);
                     await _uow.SaveChangesAsync(ct);
 
                     yield return new AgentToolResult(toolMessage.Id, call.Id, observation);
@@ -610,6 +777,7 @@ public class AgentService : IAgentService
                 var assistantMessage = conversation.AppendAssistantText(toPersist, variantGroupIdOverride, reasoningForFinal);
                 _conversations.AddMessage(assistantMessage);
                 await _uow.SaveChangesAsync(ct);
+                draft.TextCommitted = true;
 
                 _logger.LogInformation(
                     "ReAct turn complete | conv={ConversationId} iters={Iters} rawChars={RawLen} cleanChars={CleanLen} reasoningChars={ReasoningLen}",
@@ -624,7 +792,9 @@ public class AgentService : IAgentService
                 yield break;
             }
 
-            // Length / Error / unexpected - bail out.
+            // Length / Error / unexpected - bail out. Whatever streamed is
+            // discarded, matching the "only finished messages" rule.
+            draft.Reset();
             _logger.LogWarning(
                 "Iter {Iter}: provider finished unexpectedly with {Finish} | conv={ConversationId}",
                 iter, finish?.ToString() ?? "no-finish-event", conversation.Id);
@@ -649,6 +819,35 @@ public class AgentService : IAgentService
             yield return evt;
         }
         yield return new AgentDone();
+    }
+
+    // Leaves history consistent after a turn that ended early: every persisted
+    // tool call gets a result, and streamed-but-unsaved text becomes the
+    // assistant reply (raw - the post-processor is for finished answers).
+    // Returns that partial reply, or null when there was no text.
+    private async Task<Message?> PersistInterruptedAsync(
+        Conversation conversation,
+        TurnDraft draft,
+        Guid? variantGroupIdOverride,
+        CancellationToken ct)
+    {
+        foreach (var call in draft.UnansweredCalls)
+        {
+            _conversations.AddMessage(conversation.AppendToolResult(call.Id, StoppedObservation, variantGroupIdOverride));
+        }
+        draft.UnansweredCalls.Clear();
+
+        Message? partial = null;
+        if (!draft.TextCommitted && !string.IsNullOrWhiteSpace(draft.Text.ToString()))
+        {
+            var reasoning = draft.Reasoning.Length > 0 ? draft.Reasoning.ToString() : null;
+            partial = conversation.AppendAssistantText(draft.Text.ToString().TrimEnd(), variantGroupIdOverride, reasoning);
+            _conversations.AddMessage(partial);
+            draft.TextCommitted = true;
+        }
+
+        await _uow.SaveChangesAsync(ct);
+        return partial;
     }
 
     // --- Auto-title --------------------------------------------------------------
@@ -698,10 +897,13 @@ public class AgentService : IAgentService
     // Using the full breakdown rather than the old "summary + post-cut
     // messages" estimate means a heavy project prompt or memory block also
     // counts toward the trigger - matching what the provider actually sees.
+    // callToken (the turn token) governs the summary LLM call so a stop cancels
+    // it; ct stays on persistence.
     private async IAsyncEnumerable<AgentEvent> MaybeCompactAsync(
         Conversation conv,
         TurnPrompts prompts,
         ModelSelection selection,
+        CancellationToken callToken,
         [EnumeratorCancellation] CancellationToken ct)
     {
         if (selection.ContextWindowTokens <= 0) yield break;
@@ -734,7 +936,7 @@ public class AgentService : IAgentService
         Exception? failure = null;
         try
         {
-            newSummary = await GenerateSummaryAsync(conv.Summary, toSummarize, selection, ct);
+            newSummary = await GenerateSummaryAsync(conv.Summary, toSummarize, selection, callToken);
         }
         catch (Exception ex)
         {
@@ -906,6 +1108,13 @@ public class AgentService : IAgentService
             }
             return observation ?? string.Empty;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            _logger.LogInformation(
+                "Tool call STOPPED | conv={ConversationId} tool={Tool} callId={CallId} elapsedMs={ElapsedMs}",
+                conversationId, call.Name, call.Id, sw.ElapsedMilliseconds);
+            return StoppedObservation;
+        }
         catch (Exception ex)
         {
             sw.Stop();
@@ -927,7 +1136,14 @@ public class AgentService : IAgentService
         Guid conversationId,
         CancellationToken ct)
     {
-        await gate.WaitAsync(ct);
+        try
+        {
+            await gate.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return StoppedObservation;
+        }
         try
         {
             return await ExecuteToolSafelyAsync(call, conversationId, ct);

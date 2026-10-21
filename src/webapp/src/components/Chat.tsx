@@ -5,7 +5,9 @@ import {
   HiOutlineBookmarkSquare,
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
+  HiOutlinePencilSquare,
   HiOutlineTrash,
+  HiStop,
 } from 'react-icons/hi2';
 import {
   ApiError,
@@ -15,7 +17,7 @@ import {
   type MessageToolCall,
 } from '../api/generated';
 import { toast } from 'react-toastify';
-import { streamChat, streamRegenerate, type AgentEvent } from '../api/streamChat';
+import { streamChat, streamEdit, streamRegenerate, type AgentEvent } from '../api/streamChat';
 import { notifyConversationTitled } from '../lib/conversationEvents';
 import { notifyError } from '../lib/notify';
 import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
@@ -190,6 +192,12 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   // and the delete/switch refetch round-trip. The buttons and composer all
   // gate on this so we never have two streams in flight.
   const [busy, setBusy] = useState(false);
+  // A send / edit / regenerate stream is open - the composer button becomes
+  // Stop. Narrower than `busy`, which also covers delete/switch round-trips.
+  const [streaming, setStreaming] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  // User message currently open in the inline editor (edit-and-resend).
+  const [editingId, setEditingId] = useState<string | null>(null);
   // Rolling-summary compaction overlay state. Set when the backend emits
   // `compactStart` (carrying how many messages are being folded); cleared on
   // `compactDone` or any terminal event so the swirl never gets stuck on
@@ -380,11 +388,14 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     }
   }, [conversationId]);
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || busy) return;
-
-    setInput('');
+  // One user turn - a fresh send or an edit-and-resend. `trim` shapes the
+  // transcript before the optimistic user entry lands (edit cuts it at the
+  // edited message; a plain send keeps everything).
+  const runUserTurn = async (
+    text: string,
+    open: (signal: AbortSignal) => AsyncGenerator<AgentEvent>,
+    trim: (prev: ChatEntry[]) => ChatEntry[] = prev => prev,
+  ) => {
     setBusy(true);
 
     // Sending always re-engages stick-to-bottom, even if the user was scrolled
@@ -396,13 +407,14 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     // key stays as the optimistic id for the entry's whole lifetime; id will
     // be patched to the real DB id when AgentUserMessagePersisted arrives.
     const userEntry: ChatEntry = { kind: 'text', key: tempUserId, id: tempUserId, role: 'user', content: text };
-    setEntries(prev => [...prev, userEntry]);
+    setEntries(prev => [...trim(prev), userEntry]);
 
     const controller = new AbortController();
     abortRef.current = controller;
+    setStreaming(true);
 
     try {
-      await consumeStream(streamChat(conversationId, text, { signal: controller.signal }));
+      await consumeStream(open(controller.signal));
       // No refetch on the happy path - the stream's userMessagePersisted +
       // assistantMessage events have already patched the optimistic
       // tmp-xxxxx / streaming-xxxxx ids in place with the real DB ids, and
@@ -410,7 +422,8 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
       // also stamped from those events. Avoiding the GET keeps the
       // typewriter from being remounted mid-reveal (id changes ⇒ React
       // remount when the key was tied to id) and saves one round-trip per
-      // turn.
+      // turn. A Stop also lands here: the server ends the stream itself with
+      // the partial reply as a normal assistantMessage.
       //
       // Tradeoff: messagesRef.current is now stale immediately after a
       // successful send - it still reflects the conversation BEFORE this
@@ -419,16 +432,63 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
       // its lookup misses, so this staleness is invisible to the user.
       onMessageSent?.();
     } catch (e: unknown) {
-      // Network failure / pre-flight 4xx - drop the streaming placeholder if any.
-      notifyError(e);
-      setEntries(prev => prev.filter(e2 => !isStreamingAssistant(e2)));
+      if (isAbortError(e)) {
+        // Stop's fallback path (no server-side turn to stop). The server
+        // keeps whatever streamed, so keep it on screen too.
+        finalizeStreaming(setEntries);
+      } else {
+        // Network failure / pre-flight 4xx - drop the streaming placeholder if any.
+        notifyError(e);
+        setEntries(prev => prev.filter(e2 => !isStreamingAssistant(e2)));
+      }
     } finally {
       // Safety net: clear the overlay even if the stream errored mid-compact
       // (the matching `compactDone` would never arrive in that path).
       setCompactingCount(null);
       setBusy(false);
+      setStreaming(false);
+      setStopping(false);
       abortRef.current = null;
     }
+  };
+
+  const send = () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput('');
+    void runUserTurn(text, signal => streamChat(conversationId, text, { signal }));
+  };
+
+  // Asks the server to stop the running turn; the open stream then finishes
+  // on its own. If the server has nothing to stop (the turn hadn't started
+  // streaming, or just ended), close the stream from this side instead.
+  const stop = async () => {
+    if (!streaming || stopping) return;
+    setStopping(true);
+    try {
+      const { stopped } = await ConversationsService.postApiConversationsMessagesStop({ id: conversationId });
+      if (!stopped) abortRef.current?.abort();
+    } catch {
+      abortRef.current?.abort();
+    }
+  };
+
+  // Edit-and-resend: the server replaces the user message and drops every
+  // later message, so the transcript is cut at the edited entry before the
+  // replacement streams in.
+  const handleEditSubmit = (messageId: string, text: string) => {
+    if (busy) return;
+    setEditingId(null);
+    const cut = messagesRef.current.findIndex(m => m.id === messageId);
+    if (cut >= 0) messagesRef.current = messagesRef.current.slice(0, cut);
+    void runUserTurn(
+      text,
+      signal => streamEdit(conversationId, messageId, text, { signal }),
+      prev => {
+        const idx = prev.findIndex(e => e.id === messageId);
+        return idx < 0 ? prev : prev.slice(0, idx);
+      },
+    );
   };
 
   // Opens the "Remember this" modal seeded with the targeted message's text.
@@ -519,6 +579,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
 
     const controller = new AbortController();
     abortRef.current = controller;
+    setStreaming(true);
 
     try {
       await consumeStream(streamRegenerate(conversationId, messageId, { signal: controller.signal }));
@@ -526,7 +587,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
       await refetchConversation();
       onMessageSent?.();
     } catch (e: unknown) {
-      notifyError(e);
+      if (!isAbortError(e)) notifyError(e);
       // On failure, drop any in-flight streaming placeholder and refetch so
       // the UI matches the server state (which may still hold the now-
       // inactive original variant + nothing from the failed regen).
@@ -537,19 +598,21 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
       // failure paths, so clear unconditionally.
       setCompactingCount(null);
       setBusy(false);
+      setStreaming(false);
+      setStopping(false);
       abortRef.current = null;
     }
   }, [busy, conversationId, consumeStream, onMessageSent, refetchConversation]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    void send();
+    send();
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void send();
+      send();
     }
   };
 
@@ -578,6 +641,10 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
               onRegenerate: handleRegenerate,
               onVariantSwitch: handleVariantSwitch,
               onRemember: handleRemember,
+              editingId,
+              onEditStart: setEditingId,
+              onEditCancel: () => setEditingId(null),
+              onEditSubmit: handleEditSubmit,
             }))}
             {/* Thinking indicator - shows once the user has submitted and before
                 the first delta arrives. The condition checks that no assistant
@@ -616,9 +683,22 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
             disabled={busy}
             rows={1}
           />
-          <button type="submit" disabled={busy || input.trim().length === 0} aria-label="Send">
-            <HiOutlineArrowUp aria-hidden="true" />
-          </button>
+          {streaming ? (
+            <button
+              type="button"
+              className="composer-stop"
+              onClick={() => void stop()}
+              disabled={stopping}
+              title="Stop generating"
+              aria-label="Stop generating"
+            >
+              <HiStop aria-hidden="true" />
+            </button>
+          ) : (
+            <button type="submit" disabled={busy || input.trim().length === 0} aria-label="Send">
+              <HiOutlineArrowUp aria-hidden="true" />
+            </button>
+          )}
         </div>
       </form>
       {rememberDraft && (
@@ -645,12 +725,20 @@ function lastIndexWhere<T>(arr: readonly T[], pred: (e: T) => boolean): number {
   return -1;
 }
 
+function isAbortError(e: unknown): boolean {
+  return e instanceof DOMException && e.name === 'AbortError';
+}
+
 interface EntryActions {
   busy: boolean;
   onDelete: (messageId: string) => void;
   onRegenerate: (messageId: string) => void;
   onVariantSwitch: (targetId: string) => void;
   onRemember: (messageId: string) => void;
+  editingId: string | null;
+  onEditStart: (messageId: string) => void;
+  onEditCancel: () => void;
+  onEditSubmit: (messageId: string, text: string) => void;
 }
 
 function renderEntry(e: ChatEntry, actions: EntryActions) {
@@ -674,6 +762,17 @@ function renderEntry(e: ChatEntry, actions: EntryActions) {
       const showActions = isPersisted;
       const canRegenerate = showActions && e.role === 'assistant' && isLatestVariant;
       const hasVariants = !!e.variant && e.variant.variantCount > 1;
+      if (e.role === 'user' && actions.editingId === e.id) {
+        return (
+          <div key={e.key} className="message user editing">
+            <MessageEditor
+              initial={e.content}
+              onCancel={actions.onEditCancel}
+              onSubmit={text => actions.onEditSubmit(e.id, text)}
+            />
+          </div>
+        );
+      }
       return (
         <div key={e.key} className={`message ${e.role}${e.streaming ? ' streaming' : ''}`}>
           {e.role === 'assistant' ? (
@@ -700,6 +799,18 @@ function renderEntry(e: ChatEntry, actions: EntryActions) {
                   onClick={() => actions.onRegenerate(e.id)}
                 >
                   <HiOutlineArrowPath aria-hidden="true" />
+                </button>
+              )}
+              {showActions && e.role === 'user' && (
+                <button
+                  type="button"
+                  className="message-action"
+                  title="Edit and resend"
+                  aria-label="Edit and resend"
+                  disabled={actions.busy}
+                  onClick={() => actions.onEditStart(e.id)}
+                >
+                  <HiOutlinePencilSquare aria-hidden="true" />
                 </button>
               )}
               {showActions && (
@@ -745,6 +856,67 @@ function renderEntry(e: ChatEntry, actions: EntryActions) {
     case 'reasoning':
       return <Reasoning key={e.key} content={e.content} streaming={e.streaming} />;
   }
+}
+
+// Inline editor that replaces a user bubble for edit-and-resend. Enter sends,
+// Shift+Enter breaks a line, Escape cancels. Send stays disabled until the
+// text actually changes - resending identical text would just be a regenerate.
+function MessageEditor({
+  initial,
+  onCancel,
+  onSubmit,
+}: {
+  initial: string;
+  onCancel: () => void;
+  onSubmit: (text: string) => void;
+}) {
+  const [draft, setDraft] = useState(initial);
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  const changed = draft.trim().length > 0 && draft.trim() !== initial.trim();
+
+  useEffect(() => {
+    const ta = ref.current;
+    if (!ta) return;
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }, []);
+
+  useEffect(() => {
+    const ta = ref.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, MAX_COMPOSER_HEIGHT * 2)}px`;
+  }, [draft]);
+
+  const submit = () => {
+    if (changed) onSubmit(draft.trim());
+  };
+
+  return (
+    <div className="message-editor">
+      <textarea
+        ref={ref}
+        value={draft}
+        rows={1}
+        aria-label="Edit message"
+        onChange={ev => setDraft(ev.target.value)}
+        onKeyDown={ev => {
+          if (ev.key === 'Enter' && !ev.shiftKey) {
+            ev.preventDefault();
+            submit();
+          } else if (ev.key === 'Escape') {
+            ev.preventDefault();
+            onCancel();
+          }
+        }}
+      />
+      <div className="message-editor-footer">
+        <span className="message-editor-hint">Replaces this message and everything after it.</span>
+        <button type="button" className="message-editor-cancel" onClick={onCancel}>Cancel</button>
+        <button type="button" className="message-editor-send" onClick={submit} disabled={!changed}>Send</button>
+      </div>
+    </div>
+  );
 }
 
 // `< {n}/{m} >` chrome above an assistant bubble that has more than one

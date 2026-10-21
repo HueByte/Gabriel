@@ -161,11 +161,25 @@ After completion, the variant group has ≥ 2 sibling turn-sequences (old inacti
 
 `RegenerateAsync` does NOT update state — the existing state already reflects the user message being re-answered.
 
+### Stop and interrupted turns
+
+- Every streaming turn registers in `IActiveTurnRegistry` (singleton, in-process) for its whole lifetime. `POST .../messages/stop` → `IAgentService.StopTurn` → the turn's token cancels. Provider calls, tools, the compaction summary call, and the empty-stop backoff all use that **turn token**; persistence keeps the request token.
+- A user stop is graceful: the loop catches the cancellation around the provider stream, persists the streamed text **raw** (no post-processor — it's not a finished answer), yields `AgentAssistantMessage` for it (if any text) + `AgentTitleUpdated` (if pending) + `AgentDone`. The SSE stream stays open throughout.
+- A tool cut off by a stop returns the observation `Stopped by the user before this tool finished.`; the loop then sees the stop at the next iteration and ends without another provider call.
+- Client disconnect or an exception (anything that ends the stream without `AgentDone`): `RunStreamAsync`'s finally persists the partial text and gives every persisted-but-unanswered tool call that same stopped observation, with `CancellationToken.None`. Invariant: a persisted `tool_calls` message always has a result for every call id.
+- If the user's turn really was cut short, the last assistant message in history may be a fragment ending mid-sentence. That's expected — don't apologise for "your previous answer" being incomplete unless the user asks.
+
+### Edit-and-resend
+
+`EditAndRunAsync(conversationId, userMessageId, newContent)`: validates (non-empty, target exists, target is a user message), `Conversation.TruncateFrom(userMessageId)` + save, then the same path as `RunAsync` (new user message, state update, `AgentUserMessagePersisted` first). History stays linear; the old branch is gone, not a variant. `TruncateFrom` drops `Summary` / `SummarizedThroughMessageId` when the cut removes the compaction point.
+
 ## Auto-title
 
 `RunAsync` on a conversation whose title is still the Id placeholder (`Conversation.HasPlaceholderTitle`) starts `IConversationTitleGenerator` **in parallel with the turn**: one tool-less call to the turn's own provider/model with the first user message, text channel only, 15s timeout, sanitized to ≤60 chars. The loop awaits it just before `AgentDone`, persists it via `Conversation.Rename`, and yields `AgentTitleUpdated`. It never fails a turn — a null result leaves the placeholder and the next turn retries. A title the user set is never replaced. `RegenerateAsync` doesn't title. Off switch: `Agent:AutoTitle=false`.
 
 ## INVARIANTS
+
+- Every persisted assistant `tool_calls` message has a tool result for each call id — stops and disconnects fill gaps with the stopped observation.
 
 - Tools flagged `IsParallelSafe` may run concurrently within an iteration's batch; DbContext-backed tools and all persistence stay serial, and observations always persist in the model's call order.
 - Compact never fires mid-iteration; only between turns.

@@ -164,6 +164,17 @@ public class Conversation
 
         var toRemove = _messages.Where(m => m.CreatedAt >= anchor.CreatedAt).ToList();
         foreach (var m in toRemove) _messages.Remove(m);
+
+        // Cutting back past the compaction point leaves a summary of messages
+        // that no longer exist - and AgentContext, not finding the cut id, would
+        // replay the full history WITH that stale summary on top. Drop it; the
+        // next turn re-compacts if the shortened history still needs it.
+        if (SummarizedThroughMessageId is { } cutId && toRemove.Any(m => m.Id == cutId))
+        {
+            Summary = null;
+            SummarizedThroughMessageId = null;
+        }
+
         UpdatedAt = DateTimeOffset.UtcNow;
         return toRemove;
     }

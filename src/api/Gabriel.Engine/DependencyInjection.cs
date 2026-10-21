@@ -36,6 +36,7 @@ public static class DependencyInjection
 
         services.AddScoped<IAgentService, AgentService>();
         services.AddSingleton<IConversationTitleGenerator, ConversationTitleGenerator>();
+        services.AddSingleton<IActiveTurnRegistry, ActiveTurnRegistry>();
         services.AddScoped<IToolRegistry, ToolRegistry>();
         services.AddSingleton<ITokenEstimator, NaiveTokenEstimator>();
 

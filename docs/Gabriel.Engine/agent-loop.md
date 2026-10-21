@@ -4,21 +4,27 @@ The ReAct loop is the heart of `Gabriel.Engine`. Every chat turn flows through i
 
 ## Entry points
 
-`IAgentService` exposes two:
+`IAgentService` exposes three streaming entry points and a stop:
 
 ```csharp
 Task<IAsyncEnumerable<AgentEvent>> RunAsync(
     Guid conversationId, string userInput, CancellationToken ct);
 
+Task<IAsyncEnumerable<AgentEvent>> EditAndRunAsync(
+    Guid conversationId, Guid userMessageId, string newContent, CancellationToken ct);
+
 Task<IAsyncEnumerable<AgentEvent>> RegenerateAsync(
     Guid conversationId, Guid assistantMessageId, CancellationToken ct);
+
+bool StopTurn(Guid conversationId);
 ```
 
-Both return an async stream of `AgentEvent`s. The SSE controller serializes them as `data: ...\n\n` frames, so the wire format and the C# type system see the same shape.
+The streaming ones return an async stream of `AgentEvent`s. The SSE controller serializes them as `data: ...\n\n` frames, so the wire format and the C# type system see the same shape.
 
 | Path | Persists user msg? | Updates state? | Variant grouping |
 | --- | --- | --- | --- |
 | `RunAsync` | Yes | Yes | New `VariantGroupId` = new message id |
+| `EditAndRunAsync` | Yes, after truncating from the edited message | Yes | Same as `RunAsync` - history stays linear, the old branch is deleted rather than kept as a variant |
 | `RegenerateAsync` | No (turn already exists) | No (replay against same state) | Re-uses the original variant's `VariantGroupId` |
 
 Pre-flight validation throws **synchronously** so the API layer can respond with `4xx` / `ProblemDetails` *before* SSE headers are written:
@@ -311,6 +317,16 @@ Tool calls within one iteration are announced up front (one `AgentToolCall` per 
 - Everything else — every tool that transitively touches the request-scoped `AppDbContext` (memory, project files, filesystem-via-resolver, todo) — executes serially on the loop thread, as does all persistence, so the scoped DbContext is never used concurrently.
 
 Observations are persisted and emitted (`AgentToolResult`) in the model's original call order regardless of completion order, keeping the timeline deterministic. The system prompt's agentic fragment teaches the model to batch independent calls to exploit this.
+
+## Stopping and interrupted turns
+
+A turn can end early in two ways, and the loop treats them differently on purpose.
+
+A **stop** is the user pressing Stop. The webapp calls `POST .../messages/stop`, which finds the turn in `IActiveTurnRegistry` and cancels its token. That token is linked to the request's own token and is what the provider call, the tools, the compaction summary call, and the empty-stop backoff all receive. Persistence deliberately keeps the request token. The loop enumerates the provider stream by hand so it can catch the cancellation around `MoveNextAsync` (C# allows no `yield` inside a `try` that has a `catch`). It then persists the streamed text raw, yields an ordinary `AgentAssistantMessage` and `AgentDone`, and returns. Because the SSE connection never closed, the client receives real message ids and the partial bubble gets its actions immediately. The controller's typing-tempo throttle paces the pull-based agent stream, so the persisted text is what the user saw, give or take one in-flight delta.
+
+A **disconnect** (tab closed, network gone) or an unexpected exception gets no events, because nobody is listening. `RunStreamAsync` wraps the loop in a `finally` that runs whenever the stream ends without `AgentDone`. It persists the partial text with `CancellationToken.None`, and it gives every tool call that was persisted but never answered the observation `Stopped by the user before this tool finished.`. That last part matters more than it looks. OpenAI-style providers reject a history in which an assistant `tool_calls` message lacks a result for one of its ids, so a disconnect between announcing a tool call and recording its result used to poison every later turn in the conversation.
+
+Edit-and-resend reuses the same machinery. `EditAndRunAsync` truncates from the edited user message, then hands off to the shared user-turn path. Truncation now also drops the rolling summary when the cut removes the compaction point. Previously `AgentContext` would replay the full remaining history *plus* a summary describing deleted messages.
 
 ## What this loop deliberately does NOT do
 

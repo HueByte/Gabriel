@@ -11,6 +11,23 @@ public interface IAgentService
         string userInput,
         CancellationToken ct = default);
 
+    // Edit-and-resend: removes the given user message and everything after it
+    // (Conversation.TruncateFrom), then runs a normal turn with newContent -
+    // same events as RunAsync, starting with userMessagePersisted for the
+    // replacement message. Pre-flight throws for: empty content, not found,
+    // not a user message.
+    Task<IAsyncEnumerable<AgentEvent>> EditAndRunAsync(
+        Guid conversationId,
+        Guid userMessageId,
+        string newContent,
+        CancellationToken ct = default);
+
+    // Asks the conversation's running turn to stop. The turn ends gracefully on
+    // its own stream: the partial reply is persisted and arrives as a normal
+    // assistantMessage, then done. False when no turn of the current user's is
+    // running for that conversation.
+    bool StopTurn(Guid conversationId);
+
     // Regenerates the assistant reply at the given message id. The existing
     // variant (and any tool aftermath linked to it via tool_call_id) is marked
     // inactive; a new variant is produced and shares the same VariantGroupId
