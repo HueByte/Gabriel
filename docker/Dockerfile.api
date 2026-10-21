@@ -24,11 +24,11 @@ COPY . .
 # SkipOpenAPI=true skips the post-Build target that emits swagger.json into
 # the webapp tree; the webapp isn't part of this build context.
 RUN dotnet publish Gabriel.API/Gabriel.API.csproj \
-        -c Release \
-        -o /app/publish \
-        --no-restore \
-        /p:UseAppHost=false \
-        /p:SkipOpenAPI=true
+    -c Release \
+    -o /app/publish \
+    --no-restore \
+    /p:UseAppHost=false \
+    /p:SkipOpenAPI=true
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
@@ -36,8 +36,15 @@ WORKDIR /app
 
 # Persisted state — mounted by compose so the SQLite DB, uploaded project
 # files, and rolling log files survive container rebuilds.
+#
+# uid 1001, NOT 1000, for two independent reasons:
+#   1. mcr.microsoft.com/dotnet/aspnet:10.0 is Ubuntu-based and already ships a
+#      `ubuntu` user at uid 1000, so `useradd --uid 1000` fails the build with
+#      "UID 1000 is not unique".
+#   2. The deployed gabriel-data / gabriel-projects volumes are already owned by
+#      1001. Changing this uid makes the existing SQLite DB read-only to the app.
 RUN mkdir -p /app/data /app/logs /app/projects-data \
-    && useradd --uid 1000 --no-create-home --shell /usr/sbin/nologin gabriel \
+    && useradd --uid 1001 --no-create-home --shell /usr/sbin/nologin gabriel \
     && chown -R gabriel:gabriel /app
 
 COPY --from=build --chown=gabriel:gabriel /app/publish ./
