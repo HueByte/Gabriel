@@ -147,6 +147,7 @@ public static class DependencyInjection
     //   "ddg"                 -> DuckDuckGo only (default; free, no key).
     //   "brave"               -> Brave only (requires Tools:Web:Brave:ApiKey).
     //   "tavily"              -> Tavily only (requires Tools:Web:Tavily:ApiKey).
+    //   "searxng"             -> self-hosted SearXNG (no key; Tools:Web:Searxng:BaseUrl).
     //   "tavily,brave,ddg"    -> all three, parallel-queried + merged by
     //                            CompositeWebSearch. Cross-provider hits rank
     //                            first. Unknown keys are dropped with a warn.
@@ -213,6 +214,20 @@ public static class DependencyInjection
                     });
                     services.AddSingleton<TavilyWebSearch>();
                     registered.Add((typeof(TavilyWebSearch), "Tavily"));
+                    break;
+
+                case "searxng":
+                    services.Configure<SearxngSearchOptions>(config.GetSection(SearxngSearchOptions.SectionName));
+                    services.AddHttpClient(SearxngWebSearch.HttpClientName, (sp, client) =>
+                    {
+                        var opts = sp.GetRequiredService<IOptions<SearxngSearchOptions>>().Value;
+                        // Trailing slash so the relative "search?..." appends.
+                        client.BaseAddress = new Uri(opts.BaseUrl.EndsWith('/') ? opts.BaseUrl : opts.BaseUrl + "/");
+                        client.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+                        client.DefaultRequestHeaders.Add("Accept", "application/json");
+                    });
+                    services.AddSingleton<SearxngWebSearch>();
+                    registered.Add((typeof(SearxngWebSearch), "SearXNG"));
                     break;
 
                 case "ddg":

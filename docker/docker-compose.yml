@@ -1,10 +1,12 @@
 # Gabriel — local / single-box compose stack.
 #
-# Three services:
+# Four services:
 #   - api     : .NET 10 backend, exposes 8080 inside the network
 #   - webapp  : nginx serving the Vite SPA + reverse-proxying /api/ to the api
 #   - qdrant  : vector store for semantic memory (only used when
 #               SemanticMemory__Enabled=true; harmless when idle)
+#   - searxng : self-hosted metasearch backing web_search when
+#               Tools__Web__Active includes searxng (no API key needed)
 #
 # Persistent state lives in named volumes so the SQLite DB, uploaded project
 # files, and the daily rolling log files survive `docker compose down`.
@@ -90,6 +92,24 @@ services:
       - "6333"
     # ports:
     #   - "6333:6333"
+    networks:
+      - gabriel-net
+
+  searxng:
+    image: searxng/searxng:2026.10.19-81371861f
+    container_name: gabriel-searxng
+    restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-change-me-in-dotenv}
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    # The api reaches it at http://searxng:8080 (Tools__Web__Searxng__BaseUrl).
+    # Published on localhost only so a non-Docker dev API can use it too:
+    #   docker compose -f docker/docker-compose.yml up -d searxng
+    expose:
+      - "8080"
+    ports:
+      - "127.0.0.1:${SEARXNG_PORT:-8888}:8080"
     networks:
       - gabriel-net
 

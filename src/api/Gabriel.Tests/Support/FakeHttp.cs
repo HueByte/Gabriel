@@ -18,7 +18,8 @@ internal sealed class RecordingHandler : HttpMessageHandler
         var body = request.Content is null
             ? null
             : await request.Content.ReadAsStringAsync(cancellationToken);
-        Requests.Add(new RecordedRequest(request.Method, request.RequestUri!.ToString(), body));
+        // AbsoluteUri, not ToString(): the escaped form that actually goes on the wire.
+        Requests.Add(new RecordedRequest(request.Method, request.RequestUri!.AbsoluteUri, body));
         return _responder(request);
     }
 }

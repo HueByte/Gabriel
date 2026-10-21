@@ -1,0 +1,18 @@
+# SearXNG settings for Gabriel's web_search backend (Tools__Web__Active=searxng).
+# Only the overrides live here; everything else comes from SearXNG's defaults.
+use_default_settings: true
+
+server:
+  # Overridden by the SEARXNG_SECRET env var (docker-compose.yml reads it from .env).
+  secret_key: "set-SEARXNG_SECRET-in-.env"
+  # The bot-detection limiter protects public instances and needs Valkey/Redis.
+  # This one is only reachable from the compose network (and localhost), and
+  # its sole client is the Gabriel API.
+  limiter: false
+  image_proxy: false
+
+search:
+  # json is what Gabriel calls; SearXNG ships with it disabled.
+  formats:
+    - html
+    - json

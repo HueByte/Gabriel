@@ -23,7 +23,7 @@ The `ITool` / `IToolRegistry` contract, the full registered tool list, what each
 | `text_transform` | Strings | none | Reshape text case/form (upper/lower/title/snake/camel/pascal/kebab/slug/trim). |
 | `json_format` | Data | none | Validate, pretty-print, or minify JSON (reports error location if invalid). |
 | `color_convert` | Colors | none | Convert a color between hex, rgb(), and hsl() (alpha preserved). |
-| `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `ddg` (default), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
+| `web_search` | Web | `IWebSearch` | Search the public web. Backend selected via `Tools:Web:Active` — one of `searxng` (self-hosted, no key, recommended), `ddg` (default; DuckDuckGo scraping, often bot-blocked, backs off 10 min after a block), `brave`, `tavily`, or any comma-separated subset for parallel-query + merge. |
 | `web_fetch` | Web | `IUrlFetcher` | Fetch + clean a URL's text. |
 | `docs_list` | **Self-docs** | `IDocsLookup` | List Gabriel's official docs. **Primary source = LLM-native `gabriel-self-docs`**. |
 | `docs_read` | **Self-docs** | `IDocsLookup` | Read one Gabriel doc by path. |

@@ -40,6 +40,19 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
     private bool _sessionWarmed;
     private string? _sessionUserAgent;
 
+    // Once DDG serves its bot page, every further query from this IP deepens
+    // the block (and costs three requests: warm-up, html/, lite/). Back off
+    // for a while and fail fast instead - in a multi-provider setup the
+    // composite keeps answering from the others meanwhile.
+    private static readonly TimeSpan BlockCooldown = TimeSpan.FromMinutes(10);
+    private DateTimeOffset _blockedUntil = DateTimeOffset.MinValue;
+
+    private const string BlockedAdvice =
+        "DuckDuckGo's free scraping endpoints rate-limit residential/datacenter IPs aggressively. " +
+        "For reliable web search use a backend that isn't scraped: Tools__Web__Active=searxng " +
+        "(self-hosted, no key - the docker compose stack ships one), or brave / tavily with " +
+        "Tools__Web__Brave__ApiKey / Tools__Web__Tavily__ApiKey. Several can be combined, e.g. searxng,ddg.";
+
     public DuckDuckGoWebSearch(IHttpClientFactory httpFactory, ILogger<DuckDuckGoWebSearch> logger)
     {
         _httpFactory = httpFactory;
@@ -79,6 +92,12 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
 
     public async Task<IReadOnlyList<WebSearchResult>> SearchAsync(string query, int limit, CancellationToken ct)
     {
+        if (DateTimeOffset.UtcNow < _blockedUntil)
+        {
+            throw new InvalidOperationException(
+                $"DuckDuckGo blocked this IP as bot traffic recently; not retrying until {_blockedUntil:HH:mm} UTC. " + BlockedAdvice);
+        }
+
         var http = _httpFactory.CreateClient(HttpClientName);
 
         await EnsureSessionAsync(http, ct);
@@ -127,11 +146,10 @@ public sealed class DuckDuckGoWebSearch : IWebSearch
         if (primaryBlocked || liteBlocked)
         {
             ResetSession();
+            _blockedUntil = DateTimeOffset.UtcNow + BlockCooldown;
             throw new InvalidOperationException(
-                "DuckDuckGo blocked this request as bot traffic (anomaly/CAPTCHA page returned on both html/ and lite/ endpoints). " +
-                "DDG's free scraping endpoints rate-limit residential/datacenter IPs aggressively. " +
-                "For reliable web search, set Tools__Web__Active=brave (or tavily) and supply the matching API key " +
-                "via Tools__Web__Brave__ApiKey (or Tools__Web__Tavily__ApiKey).");
+                "DuckDuckGo blocked this request as bot traffic (anomaly/CAPTCHA page returned on both html/ and lite/ endpoints); " +
+                $"backing off for {BlockCooldown.TotalMinutes:0} minutes. " + BlockedAdvice);
         }
 
         // Both endpoints returned 200 + parseable HTML + zero results. Genuine
