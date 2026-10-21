@@ -13,6 +13,7 @@ import {
 } from 'react-icons/hi2';
 import { ConversationsService, type ConversationResponse, type ProjectResponse } from '../api/generated';
 import { useAuth } from '../auth/AuthContext';
+import { onConversationTitled } from '../lib/conversationEvents';
 import { notifyError } from '../lib/notify';
 import { ProjectPicker, loadActiveProjectId } from './ProjectPicker';
 
@@ -90,6 +91,12 @@ export function Sidebar() {
       });
     return () => { cancelled = true; };
   }, [localRefresh, activeProjectId]);
+
+  // Auto-titles arrive mid-stream from Chat - patch the row in place rather
+  // than refetching the whole list.
+  useEffect(() => onConversationTitled((conversationId, title) => {
+    setConversations(prev => prev.map(c => (c.id === conversationId ? { ...c, title } : c)));
+  }), []);
 
   useEffect(() => {
     if (editingId) editInputRef.current?.select();

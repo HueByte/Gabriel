@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.Configure<AgentToolsOptions>(config.GetSection(AgentToolsOptions.SectionName));
 
         services.AddScoped<IAgentService, AgentService>();
+        services.AddSingleton<IConversationTitleGenerator, ConversationTitleGenerator>();
         services.AddScoped<IToolRegistry, ToolRegistry>();
         services.AddSingleton<ITokenEstimator, NaiveTokenEstimator>();
 

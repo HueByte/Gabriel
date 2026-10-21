@@ -204,6 +204,12 @@ public class Conversation
         if (changed) UpdatedAt = DateTimeOffset.UtcNow;
     }
 
+    // True while the title is still the Id placeholder Create assigns when no
+    // title is given - i.e. nobody (user or auto-titler) has named it yet.
+    // Derived rather than stored, so pre-existing placeholder-titled rows
+    // qualify for auto-titling without a migration.
+    public bool HasPlaceholderTitle => Title == Id.ToString();
+
     public void Rename(string title)
     {
         if (string.IsNullOrWhiteSpace(title))

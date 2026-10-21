@@ -20,6 +20,7 @@ One row per externally meaningful unit — controllers, engine services, provide
 | System | Role |
 | --- | --- |
 | `AgentService` | The ReAct loop: streams provider events, executes tools (parallel-safe tools concurrently, capped by `Agent:MaxParallelToolCalls`), persists messages, triggers compact, injects semantic memory recall |
+| `ConversationTitleGenerator` | Auto-titles placeholder-titled conversations from the first user message; started by `AgentService` in parallel with the turn, emitted as `titleUpdated` (`Agent:AutoTitle`) |
 | `AgentContext` | Single authority assembling provider history AND the token-metrics breakdown |
 | `GabrielToolBridge` (+ `ToolCallStreamSplitter`, `ToolCallBlockParser`) | Tool-call emulation decorator for text-only providers (`ToolMode: Emulated`) |
 | `ModelCatalog` / `IChatProviderRegistry` | Model + provider resolution, `ToolMode` routing |

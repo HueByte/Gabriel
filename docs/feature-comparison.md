@@ -16,7 +16,7 @@ Legend: ✅ shipped · 🟡 partial or opt-in · ❌ absent.
 | Stop a reply mid-stream | ❌ aborts only on conversation switch | ✅ | ✅ | ✅ | ✅ |
 | Rich rendering (markdown, code, math, diagrams) | ✅ highlight.js, KaTeX, mermaid | ✅ | ✅ | 🟡 terminal | ✅ |
 | Behavior modes (concise, tutor, critic, …) | ✅ five per-conversation modes | 🟡 personalities | 🟡 styles | ❌ | 🟡 presets |
-| Auto-titled conversations | ❌ manual rename only | ✅ | ✅ | n/a | ✅ |
+| Auto-titled conversations | ✅ from the first message, never overrides a user title | ✅ | ✅ | n/a | ✅ |
 | Search and export conversations | ❌ | ✅ | ✅ | 🟡 resume | ✅ |
 | Voice input / output | ❌ | ✅ | ✅ | ❌ | ✅ |
 | Image input (vision) | ❌ | ✅ | ✅ | ✅ | ✅ |
@@ -74,7 +74,7 @@ Legend: ✅ shipped · 🟡 partial or opt-in · ❌ absent.
 Gabriel's strengths are real but narrow. The agent loop, memory model, context accounting, and self-documentation are on par with or ahead of the consumer apps. Its identity layer has no equivalent anywhere in the comparison set. The gaps cluster in three places: Gabriel can only think with one vendor's models, it can look but not touch, and it can't take in the documents and images people actually learn from. Ranked by leverage against the mission, roughly cheapest-high-impact first:
 
 1. **OpenAI-compatible provider.** One `IChatProvider` over the `/v1/chat/completions` shape covers OpenAI, OpenRouter, Ollama, LM Studio, and vLLM in one move. Pointed at Ollama, it is also the first real exercise of the emulated tool bridge. This is the single biggest gap against Open WebUI.
-2. **Stop button, edit-and-resend, auto-titles.** Three small UI and loop changes that people expect from every chat app. The abort plumbing already exists in `Chat.tsx`, it just isn't exposed.
+2. **Stop button and edit-and-resend.** Two small UI and loop changes that people expect from every chat app (auto-titles shipped 2026-10-21). The abort plumbing already exists in `Chat.tsx`, it just isn't exposed.
 3. **Per-call tool approval.** A pending-approval state in the loop and an approve/deny card in the UI. This is what makes it safe to turn `shell_execute` on by default, and it is the prerequisite for anything that writes.
 4. **Project-scoped write and edit tools.** `write_file` / `edit_file` behind the same path hardening as the read tools and gated by approval, so Gabriel can produce artifacts instead of pasting them.
 5. **Document ingestion.** Text extraction for PDF and DOCX at upload time, then chunked retrieval through the existing embedding pipeline. That turns semantic memory infrastructure into RAG over project files, which is the core of "learn".

@@ -93,12 +93,13 @@ The agent transforms these into `AgentEvent`s for the SSE wire:
 | --- | --- |
 | `AgentUserMessagePersisted(MessageId)` | First event of every `RunAsync`-driven turn. Carries the real DB id of the just-persisted user message so the client can swap its optimistic `tmp-xxxxx` user-entry id in place — no follow-up "GET conversation" round-trip after the stream ends. Not emitted by `RegenerateAsync` (no new user message there). |
 | `AgentCompactStart(MessageCount, CurrentTokens, ThresholdTokens)` | Before the rolling-summary LLM call, when the pre-compact total has crossed the threshold. Lets the UI swap to a "Compacting…" overlay during the 5-30s the summary call would otherwise burn silently. |
-| `AgentCompactDone(MessageCount, SummaryTokens)` | After a successful summary. Always paired with a preceding `AgentCompactStart`; skipped entirely when summarization fails (the UI then sees a long thinking phase but no `compactDone`, which is fine — the real turn just starts late). |
+| `AgentCompactDone(MessageCount, SummaryTokens)` | Always follows `AgentCompactStart`, so the overlay never gets stuck. `SummaryTokens` is 0 when summarization failed or came back empty, and the turn proceeds uncompacted. |
 | `AgentTextDelta(Delta)` | Every text delta forwarded as-is. |
 | `AgentReasoningDelta(Delta)` | Every reasoning delta forwarded as-is. Surfaces in the UI as a collapsible "thinking" panel. |
 | `AgentToolCall(MessageId, ToolCallId, Name, ArgsJson)` | After persisting the assistant's tool-call message. |
 | `AgentToolResult(MessageId, ToolCallId, Content)` | After tool execution + persistence. |
 | `AgentAssistantMessage(MessageId, Content, ReasoningContent?)` | Final assistant text - carries raw model output (see Save-vs-stream below) plus the accumulated reasoning so reloads stay consistent with the live view. |
+| `AgentTitleUpdated(Title)` | The conversation was auto-titled this turn. The title is generated from the first user message in parallel with the turn and persisted just before `AgentDone`. Only fires while the title is still the Id placeholder. |
 | `AgentError(Message)` | In-stream failure. |
 | `AgentDone()` | Terminal - loop exited. |
 

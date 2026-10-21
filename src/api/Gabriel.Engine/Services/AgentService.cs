@@ -45,6 +45,7 @@ public class AgentService : IAgentService
     private readonly IConversationStateUpdater _stateUpdater;
     private readonly ISystemPromptBuilder _promptBuilder;
     private readonly IResponsePostProcessor _postProcessor;
+    private readonly IConversationTitleGenerator _titleGenerator;
     private readonly AgentOptions _options;
     private readonly ILogger<AgentService> _logger;
     // Held for constructing GabrielToolBridge on demand. The bridge is
@@ -70,6 +71,7 @@ public class AgentService : IAgentService
         IConversationStateUpdater stateUpdater,
         ISystemPromptBuilder promptBuilder,
         IResponsePostProcessor postProcessor,
+        IConversationTitleGenerator titleGenerator,
         IOptions<AgentOptions> options,
         ILogger<AgentService> logger,
         ILogger<GabrielToolBridge> toolBridgeLogger)
@@ -90,6 +92,7 @@ public class AgentService : IAgentService
         _stateUpdater = stateUpdater;
         _promptBuilder = promptBuilder;
         _postProcessor = postProcessor;
+        _titleGenerator = titleGenerator;
         _options = options.Value;
         _logger = logger;
         _toolBridgeLogger = toolBridgeLogger;
@@ -140,6 +143,8 @@ public class AgentService : IAgentService
         // to without having the model fill in the projectId itself.
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
+        var pendingTitle = StartAutoTitle(conversation, selection, ct);
+
         // Compaction runs inside RunStreamAsync so it can yield CompactStart /
         // CompactDone events to the SSE wire - the user sees "Compacting…"
         // instead of staring at a silent HTTP request while a summary LLM
@@ -151,7 +156,7 @@ public class AgentService : IAgentService
         // without doing a "GET conversation" round-trip after the stream
         // ends. RegenerateAsync skips this preamble (no new user message).
         return RunStreamWithUserPreambleAsync(
-            userMessage.Id, conversation, variantGroupIdOverride: null, prompts, selection, ct);
+            userMessage.Id, conversation, variantGroupIdOverride: null, prompts, selection, pendingTitle, ct);
     }
 
     private async IAsyncEnumerable<AgentEvent> RunStreamWithUserPreambleAsync(
@@ -160,10 +165,11 @@ public class AgentService : IAgentService
         Guid? variantGroupIdOverride,
         TurnPrompts prompts,
         ModelSelection selection,
+        Task<string?>? pendingTitle,
         [EnumeratorCancellation] CancellationToken ct)
     {
         yield return new AgentUserMessagePersisted(userMessageId);
-        await foreach (var evt in RunStreamAsync(conversation, variantGroupIdOverride, prompts, selection, ct))
+        await foreach (var evt in RunStreamAsync(conversation, variantGroupIdOverride, prompts, selection, pendingTitle, ct))
         {
             yield return evt;
         }
@@ -208,7 +214,7 @@ public class AgentService : IAgentService
 
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
-        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, prompts, selection, ct);
+        return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, prompts, selection, pendingTitle: null, ct);
     }
 
     private async Task<(Guid UserId, Conversation Conversation)> LoadConversationAsync(
@@ -414,11 +420,14 @@ public class AgentService : IAgentService
             => AgentContext.Build(conversation, PersonaPrompt, ProjectPrompt, MemoryBlock, Tools);
     }
 
+    // pendingTitle: an in-flight auto-title (RunAsync only); applied just
+    // before Done on the two paths that end with an assistant reply.
     private async IAsyncEnumerable<AgentEvent> RunStreamAsync(
         Conversation conversation,
         Guid? variantGroupIdOverride,
         TurnPrompts prompts,
         ModelSelection selection,
+        Task<string?>? pendingTitle,
         [EnumeratorCancellation] CancellationToken ct)
     {
         // Compact between turns, never mid-iteration - cutting between an
@@ -607,6 +616,10 @@ public class AgentService : IAgentService
                     conversation.Id, iter + 1, rawText.Length, toPersist.Length, reasoningForFinal?.Length ?? 0);
 
                 yield return new AgentAssistantMessage(assistantMessage.Id, rawText, reasoningForFinal);
+                await foreach (var evt in ApplyAutoTitleAsync(conversation, pendingTitle, ct))
+                {
+                    yield return evt;
+                }
                 yield return new AgentDone();
                 yield break;
             }
@@ -631,7 +644,46 @@ public class AgentService : IAgentService
         _conversations.AddMessage(giveup);
         await _uow.SaveChangesAsync(ct);
         yield return new AgentAssistantMessage(giveup.Id, giveup.Content!);
+        await foreach (var evt in ApplyAutoTitleAsync(conversation, pendingTitle, ct))
+        {
+            yield return evt;
+        }
         yield return new AgentDone();
+    }
+
+    // --- Auto-title --------------------------------------------------------------
+
+    // Starts titling a still-placeholder-titled conversation from its first
+    // user message, concurrently with the turn. Provider-only (no DbContext),
+    // so it is safe off the loop thread; the generator never throws. Failed
+    // turns simply leave the placeholder, and the next turn tries again.
+    private Task<string?>? StartAutoTitle(Conversation conversation, ModelSelection selection, CancellationToken ct)
+    {
+        if (!_options.AutoTitle || !conversation.HasPlaceholderTitle) return null;
+
+        var firstUserMessage = conversation.Messages
+            .FirstOrDefault(m => m.Role == MessageRole.User && !string.IsNullOrWhiteSpace(m.Content))?.Content;
+        if (firstUserMessage is null) return null;
+
+        var provider = _providerRegistry.Resolve(selection.Provider);
+        return _titleGenerator.GenerateAsync(provider, selection.Name, firstUserMessage, ct);
+    }
+
+    private async IAsyncEnumerable<AgentEvent> ApplyAutoTitleAsync(
+        Conversation conversation,
+        Task<string?>? pendingTitle,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        if (pendingTitle is null) yield break;
+        var title = await pendingTitle;
+        if (title is null) yield break;
+
+        conversation.Rename(title);
+        _conversations.Update(conversation);
+        await _uow.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Auto-titled conversation {ConversationId}: {Title}", conversation.Id, title);
+        yield return new AgentTitleUpdated(title);
     }
 
     // --- Compact / summarization -------------------------------------------------

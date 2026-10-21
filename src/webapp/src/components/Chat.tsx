@@ -16,6 +16,7 @@ import {
 } from '../api/generated';
 import { toast } from 'react-toastify';
 import { streamChat, streamRegenerate, type AgentEvent } from '../api/streamChat';
+import { notifyConversationTitled } from '../lib/conversationEvents';
 import { notifyError } from '../lib/notify';
 import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
 import { StreamingText } from './StreamingText';
@@ -356,7 +357,8 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   }, [busy]);
 
   // Drains one agent stream into the transcript. Compaction events drive the
-  // overlay; everything else goes through applyAgentEvent. Stops at the first
+  // overlay, an auto-title is broadcast to the sidebar; everything else goes
+  // through applyAgentEvent. Stops at the first
   // terminal event - the server sends `error` then `done`, and applyAgentEvent
   // finalizes streaming flags on either, so breaking early is safe.
   const consumeStream = useCallback(async (stream: AsyncGenerator<AgentEvent>) => {
@@ -369,10 +371,14 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
         setCompactingCount(null);
         continue;
       }
+      if (evt.type === 'titleUpdated') {
+        notifyConversationTitled(conversationId, evt.title);
+        continue;
+      }
       applyAgentEvent(evt, setEntries);
       if (evt.type === 'done' || evt.type === 'error') break;
     }
-  }, []);
+  }, [conversationId]);
 
   const send = async () => {
     const text = input.trim();

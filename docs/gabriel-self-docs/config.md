@@ -40,7 +40,8 @@ Every options POCO bound from `appsettings*.json`, its section name, defaults, a
     "MaxIterations": 8,           // ReAct loop ceiling
     "CompactThreshold": 0.8,      // fire compact at θ × W
     "CompactKeepLast": 6,         // keep ≥ this many messages post-cut
-    "MaxParallelToolCalls": 4     // concurrent cap for IsParallelSafe tools; 1 = sequential
+    "MaxParallelToolCalls": 4,    // concurrent cap for IsParallelSafe tools; 1 = sequential
+    "AutoTitle": true             // name placeholder-titled conversations from their first message
   }
 }
 ```

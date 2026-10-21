@@ -13,6 +13,7 @@ namespace Gabriel.Engine.Services;
 [JsonDerivedType(typeof(AgentAssistantMessage), "assistantMessage")]
 [JsonDerivedType(typeof(AgentCompactStart), "compactStart")]
 [JsonDerivedType(typeof(AgentCompactDone), "compactDone")]
+[JsonDerivedType(typeof(AgentTitleUpdated), "titleUpdated")]
 [JsonDerivedType(typeof(AgentError), "error")]
 [JsonDerivedType(typeof(AgentDone), "done")]
 public abstract record AgentEvent;
@@ -60,6 +61,11 @@ public sealed record AgentCompactStart(int MessageCount, int CurrentTokens, int 
 public sealed record AgentCompactDone(int MessageCount, int SummaryTokens) : AgentEvent;
 
 // In-stream error (lookup failures throw before streaming starts and surface as HTTP 4xx/5xx).
+// The conversation was auto-titled during this turn (see AgentOptions.AutoTitle).
+// Emitted just before Done, after the title is persisted, so the client can
+// update its conversation list without refetching it.
+public sealed record AgentTitleUpdated(string Title) : AgentEvent;
+
 public sealed record AgentError(string Message) : AgentEvent;
 
 // Terminal event - the loop has finished and the SSE stream will close.

@@ -34,6 +34,9 @@ export type AgentEvent =
   // later `compactDone` (even on summary failure, so the overlay always clears).
   | { type: 'compactStart'; messageCount: number; currentTokens: number; thresholdTokens: number }
   | { type: 'compactDone'; messageCount: number; summaryTokens: number }
+  // The conversation was auto-named this turn (server already persisted it).
+  // Arrives just before `done`, only while the title is still the placeholder.
+  | { type: 'titleUpdated'; title: string }
   | { type: 'error'; message: string }
   | { type: 'done' };
 

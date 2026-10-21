@@ -21,4 +21,10 @@ public class AgentOptions : IConfigSection<AgentOptions>
     // DbContext-backed tools always run serially regardless of this value.
     // 1 = fully sequential (the pre-parallel behavior).
     public int MaxParallelToolCalls { get; set; } = 4;
+
+    // Name conversations from their opening message (one small side call to
+    // the turn's own model, run in parallel with the turn). Only touches
+    // conversations still carrying the Id placeholder title - a title the
+    // user typed is never overwritten.
+    public bool AutoTitle { get; set; } = true;
 }

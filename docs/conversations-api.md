@@ -129,12 +129,13 @@ The event union, in the order a typical turn emits them:
 | --- | --- | --- |
 | `userMessagePersisted` | `messageId` | Always first. Lets the client swap its optimistic `tmp-xxx` user-message id for the real DB id without a follow-up round-trip. |
 | `compactStart` | `messageCount`, `currentTokens`, `thresholdTokens` | Only when the user's turn would cross the compact threshold — the UI shows a "compacting…" overlay while the rolling summary is generated. |
-| `compactDone` | `messageCount`, `summaryTokens` | Pairs with `compactStart`. Skipped if the summary call fails (the agent falls back to truncation, which the UI sees as a long thinking phase with no compact pair). |
+| `compactDone` | `messageCount`, `summaryTokens` | Always follows `compactStart`, so the overlay can always clear. `summaryTokens` is `0` when the summary call failed or returned nothing; the turn then proceeds uncompacted. |
 | `reasoningDelta` | `delta` | Provider chain-of-thought tokens (Grok 4 `reasoning_content`, DeepSeek-R1, OpenAI o-series). Accumulated client-side into the reasoning panel. Missing entirely for providers that don't expose a reasoning channel. |
 | `textDelta` | `delta` | Assistant text tokens. Concatenate to render the streaming bubble. Subject to the typewriter throttle. |
 | `toolCall` | `messageId`, `toolCallId`, `name`, `argumentsJson` | The model requested a tool. The assistant message with `messageId` already exists in the DB; `toolCallId` ties the future `toolResult` back to this call. `argumentsJson` is a raw JSON string (not a parsed object) — the schema varies per tool. |
 | `toolResult` | `messageId`, `toolCallId`, `content` | Tool finished; its observation is its own tool-role message at `messageId`. |
 | `assistantMessage` | `messageId`, `content`, `reasoningContent` | Final reconciled assistant turn. `content` is the post-processed text (AI-ism strip + length cap applied); use it as the canonical message body and discard the delta-built draft. `reasoningContent` carries the accumulated reasoning for the same turn, or `null` if no reasoning channel was active. |
+| `titleUpdated` | `title` | The conversation was auto-named from its first user message (only while its title is still the Id placeholder; never replaces a user-set title). Already persisted. Arrives after `assistantMessage`, just before `done`. Disable with `Agent:AutoTitle=false`. |
 | `error` | `message` | Mid-stream failure. Headers are already sent at this point, so a `5xx` isn't possible — the agent emits this frame instead and closes the stream. |
 | `done` | _(none)_ | Terminal event. The stream closes immediately after. Clients should not assume any further frames will arrive. |
 

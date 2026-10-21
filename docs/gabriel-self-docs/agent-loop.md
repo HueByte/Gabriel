@@ -51,7 +51,8 @@ In-stream failures cannot change HTTP status; they emit a final `AgentError` eve
    - `IChatProvider.StreamAsync(history, tools)` yields a stream of `ChatProviderEvent`. When `ToolMode == Emulated`, the registered provider is wrapped by `GabrielToolBridge`, which translates between the model's XML-tagged-JSON tool transport and the same `ChatProviderEvent` shape the native path uses — the loop sees no difference.
    - Forward text/reasoning deltas to the caller as `AgentEvent`.
    - On `FinishEvent.ToolCalls`: persist assistant tool-calls msg, announce every call, then execute — parallel-safe tools concurrently (capped by `Agent:MaxParallelToolCalls`), DbContext-backed tools serially — persist each result in call order, continue loop.
-   - On `FinishEvent.Stop`: run `IResponsePostProcessor.Clean`, persist assistant text, yield `AgentAssistantMessage` + `AgentDone`, exit.
+   - On tool calls with a `ToolCalls` **or** `Stop` finish (some OpenAI-compatible servers report `stop` alongside tool_calls): execute them as above.
+   - On `FinishEvent.Stop` with no calls: run `IResponsePostProcessor.Clean`, persist assistant text, yield `AgentAssistantMessage`, then `AgentTitleUpdated` if an auto-title is pending, then `AgentDone`, exit.
    - On `FinishEvent.Length` / `Error` / unexpected: yield `AgentError` + `AgentDone`, exit.
 10. If max iterations hit without `Stop`: persist `"(stopped after N tool iterations)"`, yield `AgentDone`.
 
@@ -72,12 +73,13 @@ Agent forwards as `AgentEvent` to the SSE wire:
 | --- | --- |
 | `AgentUserMessagePersisted(MessageId)` | First event of every `RunAsync`-driven turn. Carries the real DB id of the just-persisted user message so the client can swap its optimistic `tmp-xxxxx` id in place. Not emitted by `RegenerateAsync` (no new user message). |
 | `AgentCompactStart(MessageCount, CurrentTokens, ThresholdTokens)` | Before the rolling-summary LLM call, when the pre-compact total has crossed the threshold. Lets the UI swap to a "Compacting…" overlay. |
-| `AgentCompactDone(MessageCount, SummaryTokens)` | After the summary call returns successfully. Always paired with a preceding `AgentCompactStart`; skipped entirely when summarization fails (the UI then sees a long thinking phase but no compact pair, which is fine). |
+| `AgentCompactDone(MessageCount, SummaryTokens)` | Always follows `AgentCompactStart`, so the overlay never sticks. `SummaryTokens` is 0 when summarization failed or came back empty — the turn then proceeds uncompacted. |
 | `AgentTextDelta(Delta)` | Each text delta, unmodified. |
 | `AgentReasoningDelta(Delta)` | Each reasoning delta. |
 | `AgentToolCall(MessageId, ToolCallId, Name, ArgsJson)` | After persisting the assistant's tool-call msg. |
 | `AgentToolResult(MessageId, ToolCallId, Content)` | After tool execution + persistence. |
 | `AgentAssistantMessage(MessageId, Content, ReasoningContent?)` | Final assistant text. |
+| `AgentTitleUpdated(Title)` | Only when the conversation still had its placeholder (Id) title: the auto-title generated from the first user message, already persisted. Just before `AgentDone`, on turns that end with an assistant reply. |
 | `AgentError(Message)` | In-stream failure. |
 | `AgentDone()` | Terminal. |
 
@@ -120,7 +122,7 @@ Cut-point: walk back from the end keeping ≥ `CompactKeepLast` messages, then k
 
 Summarization uses the provider with an empty tool list and a fixed system prompt. Result stored on `Conversation.Summary` and `Conversation.SummarizedThroughMessageId`. Failure or empty summary → log warning and skip; retried next turn.
 
-Compaction runs **inside** `RunStreamAsync` (not before it) so it can yield `AgentCompactStart` / `AgentCompactDone` events to the SSE wire. The UI then shows a "Compacting…" overlay while the summarization LLM call burns its 5-30s before the real turn starts, instead of staring at a silent HTTP request. The pair always brackets the work: `AgentCompactStart` first, `AgentCompactDone` only on success — failure paths skip `AgentCompactDone` and the loop continues without a fresh summary.
+Compaction runs **inside** `RunStreamAsync` (not before it) so it can yield `AgentCompactStart` / `AgentCompactDone` events to the SSE wire. The UI then shows a "Compacting…" overlay while the summarization LLM call burns its 5-30s before the real turn starts, instead of staring at a silent HTTP request. The pair always brackets the work: `AgentCompactStart` first, `AgentCompactDone` always after it — with `SummaryTokens = 0` when the summary call failed, in which case the loop continues without a fresh summary.
 
 Never compacts mid-iteration.
 
@@ -158,6 +160,10 @@ If a provider stream completes with `FinishEvent.Stop`, no text, no reasoning, n
 After completion, the variant group has ≥ 2 sibling turn-sequences (old inactive, new active).
 
 `RegenerateAsync` does NOT update state — the existing state already reflects the user message being re-answered.
+
+## Auto-title
+
+`RunAsync` on a conversation whose title is still the Id placeholder (`Conversation.HasPlaceholderTitle`) starts `IConversationTitleGenerator` **in parallel with the turn**: one tool-less call to the turn's own provider/model with the first user message, text channel only, 15s timeout, sanitized to ≤60 chars. The loop awaits it just before `AgentDone`, persists it via `Conversation.Rename`, and yields `AgentTitleUpdated`. It never fails a turn — a null result leaves the placeholder and the next turn retries. A title the user set is never replaced. `RegenerateAsync` doesn't title. Off switch: `Agent:AutoTitle=false`.
 
 ## INVARIANTS
 
