@@ -35,7 +35,7 @@ public sealed class DocsReadTool : ITool
           "properties": {
             "path": {
               "type": "string",
-              "description": "Path relative to the doc source's root. For LLM-NATIVE pages: 'README.md', 'architecture.md', 'agent-loop.md', etc. For GitHub pages: 'Gabriel.Engine/architecture.md', 'README.md', etc. Use docs_list to discover valid paths."
+              "description": "Path exactly as docs_list shows it. Bare names are LLM-NATIVE pages: 'README.md', 'architecture.md', 'agent-loop.md'. Folder-prefixed paths are human-prose pages: 'Gabriel.Engine/architecture.md'. Never prefix 'docs/'."
             }
           },
           "required": ["path"]

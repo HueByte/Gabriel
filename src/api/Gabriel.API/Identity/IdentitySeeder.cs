@@ -15,7 +15,7 @@ namespace Gabriel.API.Identity;
 //     which Identity hashes via the registered PasswordHasher.
 public static class IdentitySeeder
 {
-    public static async Task SeedAsync(IServiceProvider services, CancellationToken ct = default)
+    public static async Task SeedAsync(IServiceProvider services)
     {
         var auth = services.GetRequiredService<IOptions<AuthOptions>>().Value;
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Gabriel.IdentitySeeder");

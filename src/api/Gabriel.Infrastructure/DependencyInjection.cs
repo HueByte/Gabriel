@@ -159,6 +159,9 @@ public static class DependencyInjection
         var requested = raw
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(s => s.ToLowerInvariant())
+            // Collapse aliases BEFORE de-duplicating, or "ddg,duckduckgo"
+            // registers DuckDuckGo twice and every search hits it twice.
+            .Select(s => s == "duckduckgo" ? "ddg" : s)
             .Distinct()
             .ToList();
 
@@ -167,6 +170,14 @@ public static class DependencyInjection
         // + display name so we can wrap it in InstrumentedWebSearch when
         // building the final IWebSearch.
         var registered = new List<(Type ConcreteType, string DisplayName)>(requested.Count);
+
+        void AddDuckDuckGo()
+        {
+            ConfigureDdgHttpClient(services);
+            services.AddSingleton<DuckDuckGoWebSearch>();
+            registered.Add((typeof(DuckDuckGoWebSearch), "DuckDuckGo"));
+        }
+
         foreach (var key in requested)
         {
             switch (key)
@@ -199,10 +210,7 @@ public static class DependencyInjection
                     break;
 
                 case "ddg":
-                case "duckduckgo":
-                    ConfigureDdgHttpClient(services);
-                    services.AddSingleton<DuckDuckGoWebSearch>();
-                    registered.Add((typeof(DuckDuckGoWebSearch), "DuckDuckGo"));
+                    AddDuckDuckGo();
                     break;
 
                 default:
@@ -216,9 +224,7 @@ public static class DependencyInjection
         // tool keeps working instead of throwing at first call.
         if (registered.Count == 0)
         {
-            ConfigureDdgHttpClient(services);
-            services.AddSingleton<DuckDuckGoWebSearch>();
-            registered.Add((typeof(DuckDuckGoWebSearch), "DuckDuckGo"));
+            AddDuckDuckGo();
         }
 
         if (registered.Count == 1)

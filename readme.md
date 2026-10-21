@@ -10,7 +10,7 @@ _An agent with a little pixel-grid soul._
 [![ASP.NET Core](https://img.shields.io/badge/ASP.NET%20Core-API-512BD4?logo=dotnet&logoColor=white)](https://learn.microsoft.com/aspnet/core)
 [![EF Core](https://img.shields.io/badge/EF%20Core-SQLite-003B57?logo=sqlite&logoColor=white)](https://learn.microsoft.com/ef/core/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Vite 7](https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Vite 8](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-R3F-000000?logo=three.js&logoColor=white)](https://threejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -114,16 +114,16 @@ Dependencies flow inward - `Core` knows nothing about EF, HTTP, or React; `Infra
 | ----------- | --------------------------------------------------------------------------------------------------------- |
 | Backend     | .NET 10 · ASP.NET Core · EF Core 10 (SQLite) · ASP.NET Identity + JWT · Serilog · Swashbuckle · Infisical |
 | Engine      | Custom agent loop · tool registry · personality state · pulse-sequence generator                          |
-| Providers   | Grok chat provider · Mock chat provider · Brave & DuckDuckGo web search · GitHub docs lookup              |
-| Frontend    | React 19 · TypeScript 5 · Vite 7 · React Router 7 · Axios                                                 |
-| 3D / pixels | Three.js · `@react-three/fiber` · `@react-three/drei`                                                     |
+| Providers   | Grok chat provider · Mock chat provider · Tavily, Brave & DuckDuckGo web search · local + GitHub docs     |
+| Frontend    | React 19 · TypeScript 7 · Vite 8 · React Router 7 · Axios                                                 |
+| 3D / pixels | Three.js · `@react-three/fiber`                                                                           |
 | Content     | react-markdown · remark-gfm · remark-math · rehype-katex · rehype-highlight · mermaid                     |
 | Codegen     | `openapi-typescript-codegen` - typed Axios client from `swagger.json`                                     |
 | Prototype   | Vanilla Node.js + a single HTML preview page                                                              |
 
 ## Requirements
 
-You'll need the **.NET 10 SDK**, **Node.js 20+** with **npm**, and a modern browser (the avatar uses WebGL via Three.js). An [Infisical](https://infisical.com/) project and token are optional - skip them and the app falls back to `appsettings.Development.json`. A Grok API key is also optional; without one, the `Mock` provider keeps the loop working offline.
+You'll need the **.NET 10 SDK**, **Node.js 22.12+** with **npm** (CI and Docker use Node 24 LTS), and a modern browser (the avatar uses WebGL via Three.js). An [Infisical](https://infisical.com/) project and token are optional - skip them and the app falls back to `appsettings.Development.json`. A Grok API key is also optional; without one, the `Mock` provider keeps the loop working offline.
 
 ## Installation
 

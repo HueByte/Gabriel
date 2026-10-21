@@ -16,6 +16,13 @@ public class GitHubDocsOptions : IConfigSection<GitHubDocsOptions>
     // under this prefix.
     public string DocsPath { get; set; } = "docs";
 
+    // Sub-folder of DocsPath holding the LLM-native self-docs - the same tree
+    // LocalDocsLookup serves from disk. Pages under it are exposed by bare name
+    // (`architecture.md`) exactly like the local source does, so a path from
+    // docs_list resolves the same way whichever source ends up answering.
+    // Everything else stays DocsPath-relative (`Gabriel.Engine/tools.md`).
+    public string SelfDocsPath { get; set; } = "gabriel-self-docs";
+
     // Optional personal access token. Unauthenticated GitHub API has a 60 req/h
     // per-IP limit which is plenty for a docs lookup tool, but a PAT raises it
     // to 5000/h. Supply via Infisical (TOOLS__DOCS__GITHUB__TOKEN) if needed.

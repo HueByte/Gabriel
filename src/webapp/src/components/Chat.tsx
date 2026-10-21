@@ -15,7 +15,7 @@ import {
   type MessageToolCall,
 } from '../api/generated';
 import { toast } from 'react-toastify';
-import { streamChat, streamRegenerate } from '../api/streamChat';
+import { streamChat, streamRegenerate, type AgentEvent } from '../api/streamChat';
 import { notifyError } from '../lib/notify';
 import { useHideThinking, useHideToolCalls, useHideToolResults } from '../lib/userPrefs';
 import { StreamingText } from './StreamingText';
@@ -24,6 +24,7 @@ import { CompactingOverlay } from './CompactingOverlay';
 import { MemoryQuickSave } from './MemoryQuickSave';
 import { ModeSelector } from './ModeSelector';
 import type { GabrielMode } from '../api/conversationMode';
+import type { RGB } from '../pulse/palettes';
 
 // Chat entries are heterogeneous - text bubbles (user/assistant), individual
 // tool calls, tool results, and the model's "thoughts" (reasoning text that
@@ -70,6 +71,21 @@ function variantMetaOf(m: MessageResponse): VariantMeta {
     variantCount: m.variantCount,
     variantSiblingIds: m.variantSiblingIds,
   };
+}
+
+// A just-streamed message is always a singleton variant (its own group, count
+// 1) until a regenerate adds siblings - the follow-up refetch brings those.
+function singletonVariant(messageId: string): VariantMeta {
+  return {
+    variantGroupId: messageId,
+    variantIndex: 0,
+    variantCount: 1,
+    variantSiblingIds: [messageId],
+  };
+}
+
+function isStreamingAssistant(e: ChatEntry | undefined): e is Extract<ChatEntry, { kind: 'text' }> {
+  return !!e && e.kind === 'text' && e.role === 'assistant' && !!e.streaming;
 }
 
 function historyToEntries(messages: MessageResponse[]): ChatEntry[] {
@@ -127,7 +143,7 @@ function toolCallEntry(messageId: string, tc: MessageToolCall): ChatEntry {
   return {
     kind: 'toolCall',
     key: k,
-    id: `${messageId}-call-${tc.id}`,
+    id: k,
     toolCallId: tc.id,
     name: tc.name,
     argumentsJson: tc.argumentsJson,
@@ -143,7 +159,7 @@ interface ChatProps {
   /** Optional server-driven palette stops. When provided, the thinking pulse
    *  recolors its bars from this instead of the seed-derived palette so the
    *  indicator matches the active Gabriel Sequence's actual colors. */
-  paletteStops?: readonly import('../pulse/palettes').RGB[] | null;
+  paletteStops?: readonly RGB[] | null;
   onMessageSent?: () => void;
   onBusyChange?: (busy: boolean) => void;
   // Fired once per conversation switch as soon as the conversation metadata is
@@ -169,6 +185,9 @@ const PIN_SLOP_PX = 80;
 export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, onBusyChange, onConversationLoaded, onConversationMissing }: ChatProps) {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState('');
+  // Single source of truth for "is the chat busy" - covers send, regenerate,
+  // and the delete/switch refetch round-trip. The buttons and composer all
+  // gate on this so we never have two streams in flight.
   const [busy, setBusy] = useState(false);
   // Rolling-summary compaction overlay state. Set when the backend emits
   // `compactStart` (carrying how many messages are being folded); cleared on
@@ -210,13 +229,6 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
   // state. Updated on initial load, every refetch, and PATCH /active responses.
   // Not used during streaming - the entries layer owns the live tail.
   const messagesRef = useRef<MessageResponse[]>([]);
-
-  // Single source of truth for "is the chat busy" - covers the regular send
-  // path, regenerate, and the delete/switch refetch round-trip. The buttons
-  // and composer all gate on this so we never have two streams in flight.
-  const setBusyState = useCallback((value: boolean) => {
-    setBusy(value);
-  }, []);
 
   // Apply a fresh ConversationResponse to local state - swaps the entries and
   // re-seeds messagesRef. Used by the initial load, refetch, and variant
@@ -343,12 +355,31 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     prevBusyRef.current = busy;
   }, [busy]);
 
+  // Drains one agent stream into the transcript. Compaction events drive the
+  // overlay; everything else goes through applyAgentEvent. Stops at the first
+  // terminal event - the server sends `error` then `done`, and applyAgentEvent
+  // finalizes streaming flags on either, so breaking early is safe.
+  const consumeStream = useCallback(async (stream: AsyncGenerator<AgentEvent>) => {
+    for await (const evt of stream) {
+      if (evt.type === 'compactStart') {
+        setCompactingCount(evt.messageCount);
+        continue;
+      }
+      if (evt.type === 'compactDone') {
+        setCompactingCount(null);
+        continue;
+      }
+      applyAgentEvent(evt, setEntries);
+      if (evt.type === 'done' || evt.type === 'error') break;
+    }
+  }, []);
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
 
     setInput('');
-    setBusyState(true);
+    setBusy(true);
 
     // Sending always re-engages stick-to-bottom, even if the user was scrolled
     // up reading older content. The ResizeObserver below will scroll on the
@@ -365,18 +396,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     abortRef.current = controller;
 
     try {
-      for await (const evt of streamChat(conversationId, text, { signal: controller.signal })) {
-        if (evt.type === 'compactStart') {
-          setCompactingCount(evt.messageCount);
-          continue;
-        }
-        if (evt.type === 'compactDone') {
-          setCompactingCount(null);
-          continue;
-        }
-        applyAgentEvent(evt, setEntries);
-        if (evt.type === 'done' || evt.type === 'error') break;
-      }
+      await consumeStream(streamChat(conversationId, text, { signal: controller.signal }));
       // No refetch on the happy path - the stream's userMessagePersisted +
       // assistantMessage events have already patched the optimistic
       // tmp-xxxxx / streaming-xxxxx ids in place with the real DB ids, and
@@ -395,12 +415,12 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     } catch (e: unknown) {
       // Network failure / pre-flight 4xx - drop the streaming placeholder if any.
       notifyError(e);
-      setEntries(prev => prev.filter(e2 => !(e2.kind === 'text' && e2.role === 'assistant' && e2.streaming)));
+      setEntries(prev => prev.filter(e2 => !isStreamingAssistant(e2)));
     } finally {
       // Safety net: clear the overlay even if the stream errored mid-compact
       // (the matching `compactDone` would never arrive in that path).
       setCompactingCount(null);
-      setBusyState(false);
+      setBusy(false);
       abortRef.current = null;
     }
   };
@@ -425,7 +445,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     );
     if (!ok) return;
 
-    setBusyState(true);
+    setBusy(true);
     try {
       await ConversationsService.deleteApiConversationsMessages({
         id: conversationId,
@@ -435,16 +455,16 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     } catch (e: unknown) {
       notifyError(e);
     } finally {
-      setBusyState(false);
+      setBusy(false);
     }
-  }, [busy, conversationId, refetchConversation, setBusyState]);
+  }, [busy, conversationId, refetchConversation]);
 
   // Switch the active variant inside a group. The PATCH response carries the
   // conversation with the new active message set - we replace entries from it
   // directly (no extra GET round-trip).
   const handleVariantSwitch = useCallback(async (targetId: string) => {
     if (busy) return;
-    setBusyState(true);
+    setBusy(true);
     try {
       const conv = await ConversationsService.patchApiConversationsMessagesActive({
         id: conversationId,
@@ -454,9 +474,9 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     } catch (e: unknown) {
       notifyError(e);
     } finally {
-      setBusyState(false);
+      setBusy(false);
     }
-  }, [busy, conversationId, applyConversation, setBusyState]);
+  }, [busy, conversationId, applyConversation]);
 
   // Regenerate the assistant turn at messageId. Server-side: the existing
   // variant group is deactivated and a new sibling turn streams in. Locally:
@@ -482,7 +502,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     }
     const groupId = target.variantGroupId;
 
-    setBusyState(true);
+    setBusy(true);
     isAtBottomRef.current = true;
 
     // Drop messages in the target's variant group and rebuild entries from
@@ -495,18 +515,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
     abortRef.current = controller;
 
     try {
-      for await (const evt of streamRegenerate(conversationId, messageId, { signal: controller.signal })) {
-        if (evt.type === 'compactStart') {
-          setCompactingCount(evt.messageCount);
-          continue;
-        }
-        if (evt.type === 'compactDone') {
-          setCompactingCount(null);
-          continue;
-        }
-        applyAgentEvent(evt, setEntries);
-        if (evt.type === 'done' || evt.type === 'error') break;
-      }
+      await consumeStream(streamRegenerate(conversationId, messageId, { signal: controller.signal }));
       // Refetch so variantCount + sibling ids land on the new bubble.
       await refetchConversation();
       onMessageSent?.();
@@ -515,16 +524,16 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
       // On failure, drop any in-flight streaming placeholder and refetch so
       // the UI matches the server state (which may still hold the now-
       // inactive original variant + nothing from the failed regen).
-      setEntries(prev => prev.filter(e2 => !(e2.kind === 'text' && e2.role === 'assistant' && e2.streaming)));
+      setEntries(prev => prev.filter(e2 => !isStreamingAssistant(e2)));
       await refetchConversation();
     } finally {
       // Safety net (see send()): the matching compactDone won't arrive on
       // failure paths, so clear unconditionally.
       setCompactingCount(null);
-      setBusyState(false);
+      setBusy(false);
       abortRef.current = null;
     }
-  }, [busy, conversationId, onMessageSent, refetchConversation, setBusyState]);
+  }, [busy, conversationId, consumeStream, onMessageSent, refetchConversation]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -618,8 +627,7 @@ export function Chat({ conversationId, avatarSeed, paletteStops, onMessageSent, 
 }
 
 function hasActiveAssistantStream(entries: ChatEntry[]): boolean {
-  const last = entries[entries.length - 1];
-  return !!(last && last.kind === 'text' && last.role === 'assistant' && last.streaming);
+  return isStreamingAssistant(entries[entries.length - 1]);
 }
 
 // Array.prototype.findLastIndex exists but lacks the type narrowing we want;
@@ -783,23 +791,29 @@ function VariantPicker({
   );
 }
 
+// First line + "+N lines" hint for the collapsed <details> summaries below.
+function linePreview(content: string, emptyLabel: string): { preview: string; extraLines: number } {
+  const lines = content.split('\n');
+  return { preview: lines[0] || emptyLabel, extraLines: lines.length - 1 };
+}
+
+function ExtraLines({ count, className }: { count: number; className: string }) {
+  if (count <= 0) return null;
+  return <span className={className}>+{count} {count === 1 ? 'line' : 'lines'}</span>;
+}
+
 // Dedicated reasoning-stream panel. Distinct badge ("thinking") so the user
 // can tell a true chain-of-thought stream from `thought` (pre-tool reasoning
 // text emitted on the regular content channel). Same collapsed disclosure
 // pattern so long monologues don't dominate the chat.
 function Reasoning({ content, streaming }: { content: string; streaming?: boolean }) {
-  const lines = content.length > 0 ? content.split('\n') : [''];
-  const firstLine = lines[0];
-  const extraLines = lines.length - 1;
-  const preview = firstLine.length > 0 ? firstLine : (streaming ? '(thinking…)' : '(no reasoning)');
+  const { preview, extraLines } = linePreview(content, streaming ? '(thinking…)' : '(no reasoning)');
   return (
     <details className="react-step reasoning" open={streaming}>
       <summary>
         <span className="tool-badge reasoning-badge">thinking</span>
         <span className="thought-preview">{preview}</span>
-        {extraLines > 0 && (
-          <span className="thought-lines">+{extraLines} {extraLines === 1 ? 'line' : 'lines'}</span>
-        )}
+        <ExtraLines count={extraLines} className="thought-lines" />
       </summary>
       <div className="thought-body">{content}</div>
     </details>
@@ -810,18 +824,13 @@ function Reasoning({ content, streaming }: { content: string; streaming?: boolea
 // pattern as ToolResult - collapsed by default so the chat doesn't fill up
 // with chain-of-thought monologues, expandable when the user wants to peek.
 function Thought({ content }: { content: string }) {
-  const lines = content.length > 0 ? content.split('\n') : [''];
-  const firstLine = lines[0];
-  const extraLines = lines.length - 1;
-  const preview = firstLine.length > 0 ? firstLine : '(thinking…)';
+  const { preview, extraLines } = linePreview(content, '(thinking…)');
   return (
     <details className="react-step thought">
       <summary>
         <span className="tool-badge thought-badge">thought</span>
         <span className="thought-preview">{preview}</span>
-        {extraLines > 0 && (
-          <span className="thought-lines">+{extraLines} {extraLines === 1 ? 'line' : 'lines'}</span>
-        )}
+        <ExtraLines count={extraLines} className="thought-lines" />
       </summary>
       <div className="thought-body">{content}</div>
     </details>
@@ -833,18 +842,13 @@ function Thought({ content }: { content: string }) {
 // full content capped at 30 lines with internal scroll (styles.css). Uses
 // the native <details>/<summary> pattern for accessibility + zero JS state.
 function ToolResult({ content }: { content: string }) {
-  const lines = content.length > 0 ? content.split('\n') : [''];
-  const firstLine = lines[0];
-  const extraLines = lines.length - 1;
-  const preview = firstLine.length > 0 ? firstLine : '(empty result)';
+  const { preview, extraLines } = linePreview(content, '(empty result)');
   return (
     <details className="react-step tool-result">
       <summary>
         <span className="tool-badge observation-badge">observation</span>
         <span className="tool-result-preview">{preview}</span>
-        {extraLines > 0 && (
-          <span className="tool-result-lines">+{extraLines} {extraLines === 1 ? 'line' : 'lines'}</span>
-        )}
+        <ExtraLines count={extraLines} className="tool-result-lines" />
       </summary>
       <pre>{content}</pre>
     </details>
@@ -860,16 +864,23 @@ function prettyArgs(json: string): string {
   }
 }
 
+// Turn is over - make sure no entry is still marked streaming.
+function finalizeStreaming(setEntries: React.Dispatch<React.SetStateAction<ChatEntry[]>>) {
+  setEntries(prev => prev.map(e =>
+    (e.kind === 'text' || e.kind === 'reasoning') && e.streaming ? { ...e, streaming: false } : e,
+  ));
+}
+
 // Mutates the entries array based on a single streamed agent event.
 function applyAgentEvent(
-  evt: import('../api/streamChat').AgentEvent,
+  evt: AgentEvent,
   setEntries: React.Dispatch<React.SetStateAction<ChatEntry[]>>,
 ) {
   switch (evt.type) {
     case 'textDelta':
       setEntries(prev => {
         const last = prev[prev.length - 1];
-        if (last?.kind === 'text' && last.role === 'assistant' && last.streaming) {
+        if (isStreamingAssistant(last)) {
           // Append to the active streaming bubble.
           const updated: ChatEntry = { ...last, content: last.content + evt.delta };
           return [...prev.slice(0, -1), updated];
@@ -936,13 +947,10 @@ function applyAgentEvent(
         // calling a tool). Keep its key/id stable so any in-flight StreamingText
         // doesn't remount.
         const last = frozenReasoning[frozenReasoning.length - 1];
-        const head = (last && last.kind === 'text' && last.role === 'assistant' && last.streaming)
-          ? frozenReasoning.slice(0, -1)
-          : frozenReasoning;
-        const thoughtFromStreaming: ChatEntry[] = (last && last.kind === 'text' && last.role === 'assistant' && last.streaming)
-          ? (last.content.trim().length > 0
-              ? [{ kind: 'thought', key: last.key, id: last.id, content: last.content }]
-              : [])
+        const streamingLast = isStreamingAssistant(last);
+        const head = streamingLast ? frozenReasoning.slice(0, -1) : frozenReasoning;
+        const thoughtFromStreaming: ChatEntry[] = streamingLast && last.content.trim().length > 0
+          ? [{ kind: 'thought', key: last.key, id: last.id, content: last.content }]
           : [];
         return [
           ...head,
@@ -986,12 +994,7 @@ function applyAgentEvent(
         const updated: ChatEntry = {
           ...existing,
           id: evt.messageId,
-          variant: {
-            variantGroupId: evt.messageId,
-            variantIndex: 0,
-            variantCount: 1,
-            variantSiblingIds: [evt.messageId],
-          },
+          variant: singletonVariant(evt.messageId),
         };
         return [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
       });
@@ -1025,28 +1028,19 @@ function applyAgentEvent(
         }
 
         const last = next[next.length - 1];
-        if (last?.kind === 'text' && last.role === 'assistant' && last.streaming) {
+        if (isStreamingAssistant(last)) {
           // Patch the streaming entry in place: key stays the synthetic
           // streaming id (so React doesn't remount and the typewriter keeps
           // running) but id gets stamped with the real DB id + the canonical
-          // content + singleton variant metadata. The `streaming: false` flag
-          // is left ON intentionally - the StreamingText is still revealing
-          // chars even though the network stream has stopped; the `done` case
-          // below flips streaming once the iter is fully over. Actually -
-          // current behaviour is to flip on assistantMessage, keep that since
-          // streaming refers to "model is still producing" not "typewriter
-          // is still revealing".
+          // content + singleton variant metadata. `streaming` means "the model
+          // is still producing", not "the typewriter is still revealing", so
+          // it flips off here; StreamingText keeps revealing on its own.
           const updated: ChatEntry = {
             ...last,
             id: evt.messageId,
             content: evt.content,
             streaming: false,
-            variant: {
-              variantGroupId: evt.messageId,
-              variantIndex: 0,
-              variantCount: 1,
-              variantSiblingIds: [evt.messageId],
-            },
+            variant: singletonVariant(evt.messageId),
           };
           return [...next.slice(0, -1), updated];
         }
@@ -1060,12 +1054,7 @@ function applyAgentEvent(
             id: evt.messageId,
             role: 'assistant',
             content: evt.content,
-            variant: {
-              variantGroupId: evt.messageId,
-              variantIndex: 0,
-              variantCount: 1,
-              variantSiblingIds: [evt.messageId],
-            },
+            variant: singletonVariant(evt.messageId),
           },
         ];
       });
@@ -1073,17 +1062,15 @@ function applyAgentEvent(
 
     case 'error':
       // In-stream error - surface via toast. Pre-flight errors are caught at
-      // the top of send() and toasted there.
+      // the top of send() and toasted there. The consumer stops reading at
+      // `error`, so the trailing `done` never arrives - finalize here too or
+      // a partial reply stays "streaming" forever.
       toast.error(evt.message);
+      finalizeStreaming(setEntries);
       break;
 
     case 'done':
-      // Loop finished - just make sure no entry is still marked streaming.
-      setEntries(prev => prev.map(e => {
-        if (e.kind === 'text' && e.streaming) return { ...e, streaming: false };
-        if (e.kind === 'reasoning' && e.streaming) return { ...e, streaming: false };
-        return e;
-      }));
+      finalizeStreaming(setEntries);
       break;
   }
 }

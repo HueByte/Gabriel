@@ -105,11 +105,7 @@ public class AgentService : IAgentService
         if (string.IsNullOrWhiteSpace(userInput))
             throw new DomainException("Message content cannot be empty.");
 
-        var userId = _currentUser.UserId
-            ?? throw new UnauthorizedAccessException("Authenticated user required.");
-
-        var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
-            ?? throw new NotFoundException(nameof(Conversation), conversationId);
+        var (userId, conversation) = await LoadConversationAsync(conversationId, ct);
 
         _logger.LogInformation(
             "ReAct turn start | conv={ConversationId} project={ProjectId} userId={UserId} inputChars={InputLen} messageCount={MsgCount}",
@@ -178,11 +174,7 @@ public class AgentService : IAgentService
         Guid assistantMessageId,
         CancellationToken ct = default)
     {
-        var userId = _currentUser.UserId
-            ?? throw new UnauthorizedAccessException("Authenticated user required.");
-
-        var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
-            ?? throw new NotFoundException(nameof(Conversation), conversationId);
+        var (userId, conversation) = await LoadConversationAsync(conversationId, ct);
 
         _logger.LogInformation(
             "ReAct regenerate | conv={ConversationId} project={ProjectId} userId={UserId} targetMsg={TargetMessageId}",
@@ -217,6 +209,18 @@ public class AgentService : IAgentService
         _toolContext.Set(conversation.Id, userId, conversation.ProjectId);
 
         return RunStreamAsync(conversation, variantGroupIdOverride: variantGroupId, prompts, selection, ct);
+    }
+
+    private async Task<(Guid UserId, Conversation Conversation)> LoadConversationAsync(
+        Guid conversationId, CancellationToken ct)
+    {
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException("Authenticated user required.");
+
+        var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
+            ?? throw new NotFoundException(nameof(Conversation), conversationId);
+
+        return (userId, conversation);
     }
 
     // Centralised resolution: every entry point goes through this so a user
@@ -280,7 +284,7 @@ public class AgentService : IAgentService
         var query = conversation.Messages
             .LastOrDefault(m => m.Role == MessageRole.User && m.IsActiveVariant)?.Content;
 
-        var recalled = new List<(Core.Entities.MemoryEntry Entry, float Score)>();
+        var recalled = new List<(MemoryEntry Entry, float Score)>();
         if (!string.IsNullOrWhiteSpace(query))
         {
             var hits = await _memoryIndex.SearchAsync(
@@ -299,7 +303,7 @@ public class AgentService : IAgentService
         return BuildSemanticMemoryBlock(entries, recalled);
     }
 
-    private static string BuildFullMemoryBlock(IReadOnlyList<Core.Entities.MemoryEntry> entries)
+    private static string BuildFullMemoryBlock(IReadOnlyList<MemoryEntry> entries)
     {
         var sb = new StringBuilder();
         sb.AppendLine("[Saved memories]");
@@ -325,8 +329,8 @@ public class AgentService : IAgentService
     }
 
     private static string BuildSemanticMemoryBlock(
-        IReadOnlyList<Core.Entities.MemoryEntry> entries,
-        IReadOnlyList<(Core.Entities.MemoryEntry Entry, float Score)> recalled)
+        IReadOnlyList<MemoryEntry> entries,
+        IReadOnlyList<(MemoryEntry Entry, float Score)> recalled)
     {
         var sb = new StringBuilder();
         sb.AppendLine("[Saved memories]");
@@ -351,7 +355,7 @@ public class AgentService : IAgentService
         return sb.ToString().TrimEnd();
     }
 
-    private static void AppendMemory(StringBuilder sb, Core.Entities.MemoryEntry m)
+    private static void AppendMemory(StringBuilder sb, MemoryEntry m)
     {
         sb.Append("### [").Append(m.Type.ToString().ToLowerInvariant()).Append("] ").AppendLine(m.Name);
         sb.AppendLine(m.Description);
@@ -387,6 +391,16 @@ public class AgentService : IAgentService
         return new TurnPrompts(personaPrompt, projectPrompt, memoryBlock, tools);
     }
 
+    // The compact trigger, shared by MaybeCompactAsync and GetContextMetricsAsync
+    // so the UI's "trigger line" lands on exactly the number the backend trips on.
+    // Ratio is the per-model CompactThreshold when set, else the global default.
+    private (double Ratio, int ThresholdTokens) ComputeCompactThreshold(ModelSelection selection)
+    {
+        var ratio = selection.CompactThreshold ?? _options.CompactThreshold;
+        var window = selection.ContextWindowTokens;
+        return (ratio, window > 0 ? (int)(window * ratio) : 0);
+    }
+
     // Bundle of per-turn prompt inputs used to construct AgentContext. Private
     // because callers shouldn't reach in and reorder the pieces - assembly
     // happens in AgentContext.Build.
@@ -394,7 +408,11 @@ public class AgentService : IAgentService
         string PersonaPrompt,
         string? ProjectPrompt,
         string? MemoryBlock,
-        IReadOnlyList<ToolDescriptor> Tools);
+        IReadOnlyList<ToolDescriptor> Tools)
+    {
+        public AgentContext BuildContext(Conversation conversation)
+            => AgentContext.Build(conversation, PersonaPrompt, ProjectPrompt, MemoryBlock, Tools);
+    }
 
     private async IAsyncEnumerable<AgentEvent> RunStreamAsync(
         Conversation conversation,
@@ -449,13 +467,7 @@ public class AgentService : IAgentService
                 // Rebuild context per iteration - assistant tool_calls and
                 // tool results from the previous iter are now part of the
                 // conversation and need to be in the next provider call.
-                var context = AgentContext.Build(
-                    conversation,
-                    prompts.PersonaPrompt,
-                    prompts.ProjectPrompt,
-                    prompts.MemoryBlock,
-                    prompts.Tools);
-                var history = context.ToProviderHistory();
+                var history = prompts.BuildContext(conversation).ToProviderHistory();
                 await foreach (var evt in provider.StreamAsync(history, prompts.Tools, selection.Name, ct))
                 {
                     switch (evt)
@@ -497,7 +509,11 @@ public class AgentService : IAgentService
                 }
             }
 
-            if (finish == FinishReason.ToolCalls && pendingCalls.Count > 0)
+            // Keyed off the calls themselves, not just the finish label: some
+            // OpenAI-compatible servers report "stop" alongside tool_calls, and
+            // GrokChatProvider maps unknown finish strings to Stop. Length is
+            // excluded - a truncated stream may carry truncated arguments.
+            if (pendingCalls.Count > 0 && finish is FinishReason.ToolCalls or FinishReason.Stop)
             {
                 var toolCallsJson = SerializeToolCalls(pendingCalls);
                 // OpenAI/xAI allow assistant messages to carry both text and tool_calls;
@@ -636,13 +652,10 @@ public class AgentService : IAgentService
         ModelSelection selection,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        var window = selection.ContextWindowTokens;
-        if (window <= 0) yield break;
-        var ratio = selection.CompactThreshold ?? _options.CompactThreshold;
-        var threshold = (int)(window * ratio);
+        if (selection.ContextWindowTokens <= 0) yield break;
+        var (_, threshold) = ComputeCompactThreshold(selection);
 
-        var context = AgentContext.Build(
-            conv, prompts.PersonaPrompt, prompts.ProjectPrompt, prompts.MemoryBlock, prompts.Tools);
+        var context = prompts.BuildContext(conv);
         var currentTokens = context.ComputeBreakdown(_tokens).Total;
         if (currentTokens < threshold) yield break;
 
@@ -769,27 +782,18 @@ public class AgentService : IAgentService
         Guid conversationId,
         CancellationToken ct = default)
     {
-        var userId = _currentUser.UserId
-            ?? throw new UnauthorizedAccessException("Authenticated user required.");
-
-        var conversation = await _conversations.GetByIdWithMessagesAsync(conversationId, userId, ct)
-            ?? throw new NotFoundException(nameof(Conversation), conversationId);
+        var (userId, conversation) = await LoadConversationAsync(conversationId, ct);
 
         var selection = await ResolveModelSelectionAsync(ct);
-        var window = selection.ContextWindowTokens;
-        // Match MaybeCompactAsync's calculation exactly so the UI's "trigger
-        // line" lands on the same number the backend would actually trip on.
-        var ratio = selection.CompactThreshold ?? _options.CompactThreshold;
-        var thresholdTokens = window > 0 ? (int)(window * ratio) : 0;
+        var (ratio, thresholdTokens) = ComputeCompactThreshold(selection);
 
         var prompts = await LoadTurnPromptsAsync(conversation, userId, selection, ct);
-        var context = AgentContext.Build(
-            conversation, prompts.PersonaPrompt, prompts.ProjectPrompt, prompts.MemoryBlock, prompts.Tools);
+        var context = prompts.BuildContext(conversation);
         var breakdown = context.ComputeBreakdown(_tokens);
 
         return new ContextMetrics(
             CurrentTokens: breakdown.Total,
-            ContextWindowTokens: window,
+            ContextWindowTokens: selection.ContextWindowTokens,
             CompactThresholdTokens: thresholdTokens,
             CompactThresholdRatio: ratio,
             MessagesAfterCut: context.Messages.Count,

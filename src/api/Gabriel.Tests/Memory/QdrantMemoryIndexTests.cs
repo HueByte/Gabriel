@@ -4,6 +4,7 @@ using System.Text.Json;
 using Gabriel.Core.Configuration;
 using Gabriel.Core.Entities;
 using Gabriel.Infrastructure.Memory;
+using Gabriel.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -28,7 +29,7 @@ public class QdrantMemoryIndexTests
         var options = Options.Create(new SemanticMemoryOptions { Enabled = true });
         var embeddings = new MockEmbeddingProvider(Options.Create(new EmbeddingOptions()));
         return new QdrantMemoryIndex(
-            new FakeHttpClientFactory(handler),
+            new FakeHttpClientFactory(handler, "http://localhost:6333/"),
             embeddings,
             options,
             NullLogger<QdrantMemoryIndex>.Instance);
@@ -123,36 +124,4 @@ public class QdrantMemoryIndexTests
     {
         Content = new StringContent(json, Encoding.UTF8, "application/json"),
     };
-
-    private sealed record RecordedRequest(HttpMethod Method, string Url, string? Body);
-
-    private sealed class RecordingHandler : HttpMessageHandler
-    {
-        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
-        public List<RecordedRequest> Requests { get; } = [];
-
-        public RecordingHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
-            => _responder = responder;
-
-        protected override async Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            var body = request.Content is null
-                ? null
-                : await request.Content.ReadAsStringAsync(cancellationToken);
-            Requests.Add(new RecordedRequest(request.Method, request.RequestUri!.ToString(), body));
-            return _responder(request);
-        }
-    }
-
-    private sealed class FakeHttpClientFactory : IHttpClientFactory
-    {
-        private readonly HttpMessageHandler _handler;
-        public FakeHttpClientFactory(HttpMessageHandler handler) => _handler = handler;
-
-        public HttpClient CreateClient(string name) => new(_handler, disposeHandler: false)
-        {
-            BaseAddress = new Uri("http://localhost:6333/"),
-        };
-    }
 }

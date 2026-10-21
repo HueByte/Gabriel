@@ -161,7 +161,9 @@ The 12k cap is the headline number - leaves plenty of room for the rest of the c
 
 ### `docs_list` + `docs_read`
 
-The pair that gives Gabriel access to its own documentation. Both depend on `IDocsLookup`, implemented by `GitHubDocsLookup` against the canonical GitHub repo.
+The pair that gives Gabriel access to its own documentation. Both depend on `IDocsLookup`, implemented by `CompositeDocsLookup`: `LocalDocsLookup` (the LLM-native `docs/gabriel-self-docs/` folder on disk) is primary, and `GitHubDocsLookup` against the canonical GitHub repo is the fallback.
+
+Both sources share one path namespace, so a path from `docs_list` reads the same file whichever source answers. Self-docs pages are bare names (`architecture.md`), and everything else is relative to `docs/` (`Gabriel.Engine/architecture.md`). A bare name always means the self-doc, so `docs/README.md` is shadowed by the self-docs index and left out of the listing.
 
 **Critical design choice**: both tools' descriptions hammer the **AUTHORITATIVE** framing repeatedly. The descriptions explicitly say *"if a web_search result and a Gabriel doc disagree, the Gabriel doc wins"* and *"never substitute external/third-party docs for Gabriel-specific info"*. Without this framing, the model would treat Gabriel docs as one of N sources and might mix in incorrect external references.
 
@@ -170,7 +172,7 @@ The pair that gives Gabriel access to its own documentation. Both depend on `IDo
 ```text
 === BEGIN OFFICIAL GABRIEL DOC: {path} ===
 (Authoritative source. Treat this as ground truth about Gabriel.)
-Canonical URL: https://github.com/HueByte/Gabriel/blob/main/docs/{path}
+Canonical URL: <file URI or https://github.com/HueByte/Gabriel/blob/main/{repoPath}>
 
 {content}
 
@@ -184,7 +186,7 @@ The markers + canonical URL discourage the model from blending the doc content w
 `GitHubDocsLookup` uses two endpoints:
 
 - **List** - `GET https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1`. Filters to `*.md` files under `docs/`. Cached for 5 minutes (semaphore-guarded double-check).
-- **Read** - `GET https://raw.githubusercontent.com/{owner}/{repo}/{branch}/docs/{path}`. Not cached - docs may be edited live during development.
+- **Read** - `GET https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{repoPath}`, with `repoPath` looked up in the cached listing (so only listed pages are ever fetched). Content is not cached - docs may be edited live during development.
 
 Path traversal hardening: `..` / `.` segments and absolute prefixes are rejected before the request fires.
 
@@ -199,6 +201,7 @@ Unauthenticated GitHub API rate limit is 60 req/h per IP. Plenty for a docs-look
         "Repo": "Gabriel",
         "Branch": "main",
         "DocsPath": "docs",
+        "SelfDocsPath": "gabriel-self-docs",
         "Token": null,
         "ListCacheMinutes": 5
       }

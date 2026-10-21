@@ -136,7 +136,7 @@ Backed by a `CompositeDocsLookup` that fans across (in priority order):
 1. **`LocalDocsLookup`** — reads from `docs/gabriel-self-docs/` on disk. **PRIMARY SOURCE.** These pages are written specifically for you (the LLM) and treated as ground truth.
 2. **`GitHubDocsLookup`** — falls back to GitHub raw for the human-prose docs under `docs/Gabriel.Engine/`.
 
-`docs_list` returns the union with the LLM-native folder presented first. Each entry has a `Source` tag (`local-llm-native` or `github`) so you can tell which file you're picking. Paths returned for local entries are relative to `docs/gabriel-self-docs/` (e.g., `README.md`, `architecture.md`). Paths for GitHub entries are relative to `docs/` (e.g., `Gabriel.Engine/architecture.md`).
+`docs_list` returns the union with the LLM-native folder presented first. Each entry has a `Source` tag (`local-llm-native` or `github`) so you can tell which file you're picking. Both sources share **one path namespace**: a bare name (`README.md`, `architecture.md`) is always an LLM-native self-docs page, and a folder-prefixed path (`Gabriel.Engine/architecture.md`) is a human-prose doc relative to `docs/`. So a path means the same file whichever source answers — when the local folder is missing, GitHub serves the same bare names from `docs/gabriel-self-docs/`. The one casualty is `docs/README.md` (the human docs map): it is shadowed by the self-docs `README.md` and not listed.
 
 `docs_read` resolves the path against the local source first, then GitHub. The returned content is wrapped:
 
@@ -152,7 +152,7 @@ Path traversal hardening: `.` and `..` segments and absolute prefixes are reject
 
 **GitHub backend** (`GitHubDocsLookup`) endpoints:
 - List: `GET https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1`. Cached for `ListCacheMinutes` (default 5).
-- Read: `GET https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{docsPath}/{path}`. Not cached.
+- Read: `GET https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{repoPath}`, where `repoPath` comes from the cached listing (bare name → `{docsPath}/{selfDocsPath}/{path}`, prefixed → `{docsPath}/{path}`). A path the listing doesn't show returns not-found without a fetch; if the listing itself is unavailable, the bare-name self-docs mapping is assumed. Content not cached.
 
 Rate limit: 60 req/h per IP unauthenticated; `Tools:Docs:GitHub:Token` PAT bumps to 5000/h.
 
@@ -321,7 +321,7 @@ Registry picks the new tool up automatically.
 - "Why didn't `web_search` find a Gabriel doc?" — because Gabriel's docs aren't on the public web; `docs_list` / `docs_read` is the right tool.
 - DDG can return *genuinely* zero results when its HTML drifts or both endpoints' parsers come up empty on a real query — distinct from the bot-block path, which now throws with a specific error message. If the tool returns `Error: web search failed - DuckDuckGo blocked this request as bot traffic…`, the deployment's IP has been flagged; a Brave or Tavily key is the actual fix. If it returns the bare `No results for: …` string, DDG answered cleanly with nothing; try rephrasing or check logs for `"DuckDuckGo html/ returned 0 parseable results"` / `"DuckDuckGo lite/ returned 0 parseable results"` (each logs the first 200 chars of the response so you can see what the parser couldn't match).
 - The GitHub docs list is cached for 5 minutes — newly-added docs won't appear immediately.
-- `docs_read` paths are relative to the source root, not absolute or repo-relative.
+- `docs_read` paths are namespace paths (bare name = self-doc, `Gabriel.Engine/...` = human doc), not absolute or repo-relative — never prefix `docs/` or `gabriel-self-docs/`.
 
 ## SEE ALSO
 

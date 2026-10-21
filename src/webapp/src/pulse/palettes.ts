@@ -65,20 +65,10 @@ export function rgbToCss([r, g, b]: RGB, alpha = 1): string {
   return alpha >= 1 ? `rgb(${r} ${g} ${b})` : `rgb(${r} ${g} ${b} / ${alpha})`;
 }
 
-// Pick the brightest stop of a palette as a single "accent" color. Used where
-// a gradient isn't appropriate (e.g. solid glow color, link tint).
-export function paletteAccent(palette: Palette): RGB {
-  return brightestStop(palette.stops);
-}
-
-export function paletteGradientCss(palette: Palette): string {
-  return gradientCssFromStops(palette.stops);
-}
-
-// ----- stop-array variants -----
-// For palettes that don't come from PALETTES (e.g. server-driven Gabriel
-// Sequence palettes), operate on a bare RGB[] directly. Used by App.tsx when
-// the sequence response arrives.
+// ----- stop-array helpers -----
+// Operate on a bare RGB[] so they serve curated PALETTES and server-driven
+// Gabriel Sequence palettes alike. Used by App.tsx when the sequence response
+// arrives.
 
 export function brightestStop(stops: readonly RGB[]): RGB {
   // Sum-of-channels is a cheap proxy for luminance and produces sensible

@@ -59,7 +59,7 @@ try
     });
 
     // Pull secrets from Infisical before service registration so config-bound
-    // values (e.g. Providers[0]:ApiKey, Jwt:SigningKey) see the live values
+    // values (e.g. Providers:Grok:ApiKey, Jwt:SigningKey) see the live values
     // by the time the catalog + IOptions bindings read them below.
     builder.Configuration.AddInfisical(opts =>
         builder.Configuration.GetSection(InfisicalOptions.SectionName).Bind(opts));
@@ -161,7 +161,9 @@ try
     Log.Information("Gabriel API starting up - environment={Environment}", app.Environment.EnvironmentName);
     app.Run();
 }
-catch (Exception ex)
+// HostAbortedException is the swagger CLI / dotnet-ef stopping the host on
+// purpose once they have the service provider - not a crash worth a FATAL line.
+catch (Exception ex) when (ex is not HostAbortedException)
 {
     Log.Fatal(ex, "Gabriel API host terminated unexpectedly");
     throw;

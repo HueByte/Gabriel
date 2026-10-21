@@ -11,6 +11,12 @@ namespace Gabriel.Infrastructure.Tools.Docs;
 //   - List   : api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1
 //   - Read   : raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}
 //
+// Paths share one namespace with LocalDocsLookup: self-docs pages (under
+// GitHubDocsOptions.SelfDocsPath) are bare names, everything else is relative to
+// DocsPath. A bare name always means the self-doc - so `README.md` is the
+// self-docs index, never docs/README.md (the human docs map, which is dropped
+// from the listing rather than shown under a name that reads a different file).
+//
 // The list response is cached for GitHubDocsOptions.ListCacheMinutes (default 5)
 // to keep request counts inside the unauthenticated rate-limit budget. Reads
 // pass through because individual docs may be edited live during development.
@@ -27,7 +33,14 @@ public sealed class GitHubDocsLookup : IDocsLookup
     private readonly ILogger<GitHubDocsLookup> _logger;
 
     private readonly SemaphoreSlim _listLock = new(1, 1);
-    private (DateTimeOffset Until, IReadOnlyList<DocsEntry> Entries)? _listCache;
+    private Listing? _listCache;
+
+    // Entries in docs_list order plus the namespace-path -> repo-path map reads
+    // resolve through, so a read can only fetch a page the listing shows.
+    private sealed record Listing(
+        DateTimeOffset Until,
+        IReadOnlyList<DocsEntry> Entries,
+        IReadOnlyDictionary<string, string> RepoPaths);
 
     public GitHubDocsLookup(
         IHttpClientFactory httpFactory,
@@ -40,17 +53,20 @@ public sealed class GitHubDocsLookup : IDocsLookup
     }
 
     public async Task<IReadOnlyList<DocsEntry>> ListAsync(CancellationToken ct)
+        => (await GetListingAsync(ct)).Entries;
+
+    private async Task<Listing> GetListingAsync(CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         if (_listCache is { } cached && cached.Until > now)
-            return cached.Entries;
+            return cached;
 
         await _listLock.WaitAsync(ct);
         try
         {
             // Re-check after acquiring the lock - another caller may have filled the cache.
             if (_listCache is { } recheck && recheck.Until > now)
-                return recheck.Entries;
+                return recheck;
 
             var http = _httpFactory.CreateClient(ApiHttpClientName);
             var url = $"repos/{_options.Owner}/{_options.Repo}/git/trees/{_options.Branch}?recursive=1";
@@ -66,8 +82,10 @@ public sealed class GitHubDocsLookup : IDocsLookup
             var json = await response.Content.ReadAsStringAsync(ct);
             using var doc = JsonDocument.Parse(json);
 
-            var prefix = _options.DocsPath.TrimEnd('/') + "/";
-            var entries = new List<DocsEntry>();
+            var docsPrefix = _options.DocsPath.Trim('/') + "/";
+            var selfPrefix = docsPrefix + _options.SelfDocsPath.Trim('/') + "/";
+            var selfDocs = new List<(string Name, string RepoPath)>();
+            var humanDocs = new List<(string Name, string RepoPath)>();
 
             if (doc.RootElement.TryGetProperty("tree", out var tree))
             {
@@ -77,16 +95,27 @@ public sealed class GitHubDocsLookup : IDocsLookup
                     if (type != "blob") continue;
 
                     var path = node.GetProperty("path").GetString();
-                    if (path is null || !path.StartsWith(prefix, StringComparison.Ordinal)) continue;
-                    if (!path.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (path is null || !path.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) continue;
 
-                    var rel = path[prefix.Length..];
-                    entries.Add(new DocsEntry(rel, null, DocsSources.GitHub));
+                    if (path.StartsWith(selfPrefix, StringComparison.Ordinal))
+                        selfDocs.Add((path[selfPrefix.Length..], path));
+                    else if (path.StartsWith(docsPrefix, StringComparison.Ordinal))
+                        humanDocs.Add((path[docsPrefix.Length..], path));
                 }
             }
 
-            _listCache = (now.AddMinutes(_options.ListCacheMinutes), entries);
-            return entries;
+            // Self-docs first; TryAdd then drops any human doc whose name a
+            // self-doc already claimed.
+            var repoPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var entries = new List<DocsEntry>();
+            foreach (var (name, repoPath) in selfDocs.Concat(humanDocs))
+            {
+                if (repoPaths.TryAdd(name, repoPath))
+                    entries.Add(new DocsEntry(name, null, DocsSources.GitHub));
+            }
+
+            _listCache = new Listing(now.AddMinutes(_options.ListCacheMinutes), entries, repoPaths);
+            return _listCache;
         }
         finally
         {
@@ -98,9 +127,12 @@ public sealed class GitHubDocsLookup : IDocsLookup
     {
         ValidatePath(path);
 
+        var repoPath = await ResolveRepoPathAsync(path, ct);
+        if (repoPath is null) return null;
+
         var http = _httpFactory.CreateClient(RawHttpClientName);
         // Absolute URL - overrides any BaseAddress on the named client.
-        var url = $"https://raw.githubusercontent.com/{_options.Owner}/{_options.Repo}/{_options.Branch}/{_options.DocsPath}/{path}";
+        var url = $"https://raw.githubusercontent.com/{_options.Owner}/{_options.Repo}/{_options.Branch}/{repoPath}";
 
         using var response = await http.GetAsync(url, ct);
         if (response.StatusCode == HttpStatusCode.NotFound)
@@ -113,8 +145,25 @@ public sealed class GitHubDocsLookup : IDocsLookup
         }
 
         var content = await response.Content.ReadAsStringAsync(ct);
-        var canonicalUrl = $"https://github.com/{_options.Owner}/{_options.Repo}/blob/{_options.Branch}/{_options.DocsPath}/{path}";
+        var canonicalUrl = $"https://github.com/{_options.Owner}/{_options.Repo}/blob/{_options.Branch}/{repoPath}";
         return new DocsContent(path, content, canonicalUrl, DocsSources.GitHub);
+    }
+
+    // Falls back to the self-docs-first guess if the listing itself is
+    // unavailable - the bare-name form the self-docs index tells the model to use.
+    private async Task<string?> ResolveRepoPathAsync(string path, CancellationToken ct)
+    {
+        var normalized = path.Replace('\\', '/');
+        try
+        {
+            var listing = await GetListingAsync(ct);
+            return listing.RepoPaths.GetValueOrDefault(normalized);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "GitHub docs list unavailable while resolving '{Path}'; assuming a self-docs page.", path);
+            return $"{_options.DocsPath.Trim('/')}/{_options.SelfDocsPath.Trim('/')}/{normalized}";
+        }
     }
 
     private static void ValidatePath(string path)

@@ -2,7 +2,7 @@
 
 Architectural and behavioral documentation for the Gabriel codebase — the durable, committed reference.
 
-Quick pointers: [SYSTEMS.md](SYSTEMS.md) is the systems inventory (kept current by rule), [scripts.md](scripts.md) documents the repeatable-operation scripts, [conversations-api.md](conversations-api.md) is the full conversations API reference.
+Quick pointers: [SYSTEMS.md](SYSTEMS.md) is the systems inventory (kept current by rule), [scripts.md](scripts.md) documents the repeatable-operation scripts, [conversations-api.md](conversations-api.md) is the full conversations API reference. [feature-comparison.md](feature-comparison.md) maps Gabriel against other assistants and agents, with the prioritized gap list.
 
 There are **two** documentation surfaces under `docs/`:
 

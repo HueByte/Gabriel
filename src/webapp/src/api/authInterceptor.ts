@@ -12,10 +12,6 @@ import { refreshSession, signalSessionExpired } from './authRefresh';
 
 const AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/refresh', '/api/auth/logout'];
 
-// Re-exported so existing imports keep working. New code should pull this from
-// './authRefresh' directly.
-export { SESSION_EXPIRED_EVENT } from './authRefresh';
-
 export function installAuthInterceptor() {
   axios.interceptors.response.use(
     response => response,

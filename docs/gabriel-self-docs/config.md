@@ -177,6 +177,7 @@ Typing-tempo knobs are consumed by the SSE controller in `Gabriel.API`, not Engi
         "Repo": "Gabriel",
         "Branch": "main",
         "DocsPath": "docs",
+        "SelfDocsPath": "gabriel-self-docs",  // under DocsPath; served by bare name, same as the local source
         "Token": null,                       // PAT raises rate limit 60 → 5000 req/h
         "ListCacheMinutes": 5
       }

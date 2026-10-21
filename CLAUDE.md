@@ -19,6 +19,8 @@ src/
 ├── api/
 │   ├── Gabriel.slnx              # THE solution file (lives in src/api, not root)
 │   ├── dotnet-tools.json         # THE tool manifest: swagger CLI + dotnet-ef, pinned
+│   ├── Directory.Packages.props  # THE NuGet version list (Central Package Management; csproj refs carry no versions)
+│   ├── Directory.Build.props     # shared TargetFramework / Nullable / ImplicitUsings
 │   ├── Gabriel.Core/             # domain entities, repositories' interfaces, configuration types
 │   ├── Gabriel.Engine/           # the agent: AgentService (ReAct loop), IChatProvider + ToolBridge
 │   │                             #   (tool-call emulation), ITool registry + tools, Gabriel Sequence
@@ -37,7 +39,7 @@ Reference docs: `docs/SYSTEMS.md` (systems inventory), `docs/gabriel-self-docs/`
 
 - Backend: .NET 10, ASP.NET Core, EF Core 10 (SQLite), ASP.NET Identity + JWT cookies, Serilog; Qdrant (REST) + pluggable embeddings (Mock / local ONNX all-MiniLM-L6-v2 / OpenAI) for semantic memory
 - Agent: xAI Grok provider + Mock provider; tool-call emulation bridge for text-only models (`ToolMode: Native | Emulated | None`)
-- Frontend: Vite, React 19, TypeScript, Three.js, react-markdown + shiki, mermaid
+- Frontend: Vite 8, React 19, TypeScript 7, Three.js (`@react-three/fiber`), react-markdown + rehype-highlight (highlight.js) + KaTeX, mermaid
 - Infra: Docker + compose (`docker/`), BuildKit named contexts; CI via GitHub Actions (`.github/workflows/`)
 
 ## Key Design Principles

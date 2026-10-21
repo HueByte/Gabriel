@@ -8,9 +8,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy only the csproj/sln first so `dotnet restore` can be cached independently
-# of source changes.
-COPY Gabriel.slnx ./
+# Copy only the csproj/sln (+ the central build/package props they depend on)
+# first so `dotnet restore` can be cached independently of source changes.
+COPY Gabriel.slnx Directory.Build.props Directory.Packages.props ./
 COPY Gabriel.API/Gabriel.API.csproj            Gabriel.API/
 COPY Gabriel.Core/Gabriel.Core.csproj          Gabriel.Core/
 COPY Gabriel.Engine/Gabriel.Engine.csproj      Gabriel.Engine/

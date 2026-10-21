@@ -63,7 +63,7 @@ Tools declare `ITool.IsParallelSafe`; the loop runs flagged tools from one batch
 | System | Role |
 | --- | --- |
 | `Chat.tsx` + `streamChat.ts` | Chat UI + hand-rolled SSE consumer (event union in [conversations-api.md](conversations-api.md)) |
-| `Markdown.tsx` / `Mermaid.tsx` | Markdown pipeline (shiki, mermaid + maximize modal, copy affordances) |
+| `Markdown.tsx` / `Mermaid.tsx` | Markdown pipeline (rehype-highlight, KaTeX, mermaid + maximize modal, copy affordances) |
 | `ContextStats.tsx` | Context-window grid breakdown (per-category token buckets) |
 | `Sidebar.tsx` + `ProjectPicker` | Project-scoped conversation navigation |
 | Generated API client (`src/api/generated/`) | Regenerated from OpenAPI on every API build — never hand-edited |

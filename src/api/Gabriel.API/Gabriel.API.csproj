@@ -1,19 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <RootNamespace>Gabriel.API</RootNamespace>
     <UserSecretsId>9fb8962a-8240-45f5-a0a7-7501a10250f9</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
     <!--
       Serilog stack — replaces the default Microsoft.Extensions.Logging providers.
       `Serilog.AspNetCore` brings the host hookup + request logging middleware;
@@ -21,16 +18,16 @@
       Console sink ships with Serilog itself; File + Thread enricher are pulled
       in explicitly so the names in appsettings.Serilog.WriteTo can resolve.
     -->
-    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.File" />
     <!--
       Sinks.Map is wrapped around the File sink so we can vary the filename
       per LogEvent (keyed off the LogDate property). Without it the file sink's
       hardcoded yyyyMMdd format is the only option for daily filenames.
     -->
-    <PackageReference Include="Serilog.Sinks.Map" Version="2.0.0" />
-    <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
-    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <PackageReference Include="Serilog.Sinks.Map" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.Enrichers.Thread" />
   </ItemGroup>
 
   <ItemGroup>

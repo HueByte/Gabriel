@@ -1,10 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import {
-  ApiError,
-  AuthService,
-  type MeResponse,
-} from '../api/generated';
+import { AuthService, type MeResponse } from '../api/generated';
 import { SESSION_EXPIRED_EVENT } from '../api/authRefresh';
+import { formatError } from '../lib/notify';
 
 export interface AuthState {
   // undefined  → still resolving the initial /me call (avoid flicker)
@@ -22,15 +19,6 @@ export function useAuth(): AuthState {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
   return ctx;
-}
-
-function formatError(e: unknown, fallback: string): string {
-  if (e instanceof ApiError) {
-    const detail = (e.body as { detail?: string; title?: string } | undefined)?.detail;
-    return detail ?? e.message ?? fallback;
-  }
-  if (e instanceof Error) return e.message;
-  return fallback;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

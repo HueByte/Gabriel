@@ -12,5 +12,3 @@ export function formatError(e: unknown, fallback = 'Something went wrong.'): str
 }
 
 export const notifyError = (e: unknown, fallback?: string) => toast.error(formatError(e, fallback));
-export const notifySuccess = (msg: string) => toast.success(msg);
-export const notifyInfo = (msg: string) => toast.info(msg);
